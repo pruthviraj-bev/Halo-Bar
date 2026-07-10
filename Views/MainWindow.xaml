@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Window
+    x:Class="DynamicIsland.Views.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:local="using:DynamicIsland.Views"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    Title="DynamicIsland"
+    mc:Ignorable="d">
+
+    <Grid x:Name="RootGrid"
+          Background="Transparent"
+          PointerPressed="RootGrid_PointerPressed"
+          PointerEntered="RootGrid_PointerEntered"
+          PointerExited="RootGrid_PointerExited"
+          AutomationProperties.Name="Dynamic Island Container">
+
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- 1. Expanded Dashboard (Row 0) -->
+        <Border Grid.Row="0"
+                x:Name="DashboardBorder"
+                Background="{ThemeResource IslandBackgroundBrush}"
+                BorderBrush="Transparent"
+                BorderThickness="0"
+                CornerRadius="20"
+                Margin="0,0,0,8"
+                Visibility="{x:Bind BoolToVisibility(ViewModel.IsExpanded), Mode=OneWay}">
+            <ContentControl
+                x:Name="DashboardHost"
+                Content="{x:Bind ViewModel.Dashboard, Mode=OneWay}"
+                HorizontalContentAlignment="Stretch"
+                VerticalContentAlignment="Stretch" />
+        </Border>
+
+        <!-- 2. Collapsed Widget (Row 1) inside taskbar -->
+        <Border Grid.Row="1"
+                x:Name="PillBorder"
+                Background="Transparent"
+                BorderBrush="Transparent"
+                BorderThickness="0"
+                CornerRadius="24"
+                HorizontalAlignment="Stretch"
+                VerticalAlignment="Stretch"
+                Margin="0"
+                AutomationProperties.Name="Dynamic Island Pill">
+
+            <!-- Inside the collapsed capsule, center the active content vertically -->
+            <Grid Padding="10,0,10,0">
+                <ContentControl
+                    x:Name="WidgetHost"
+                    Content="{x:Bind GetTaskbarContent(ViewModel.IsExpanded, ViewModel.ActiveWidget), Mode=OneWay}"
+                    HorizontalContentAlignment="Stretch"
+                    VerticalContentAlignment="Center"
+                    AutomationProperties.Name="Widget Host" />
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

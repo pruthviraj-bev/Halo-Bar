@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<UserControl
+    x:Class="DynamicIsland.Widgets.WeatherCollapsedWidget"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <Grid VerticalAlignment="Center" HorizontalAlignment="Center" Height="28">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <!-- Weather Icon (Segoe MDL2 Assets Sun-behind-cloud) -->
+        <FontIcon Grid.Column="0" 
+                  Glyph="&#xE706;" 
+                  FontFamily="Segoe MDL2 Assets" 
+                  FontSize="15" 
+                  Foreground="#FFFFD700" 
+                  Margin="0,0,8,0" 
+                  VerticalAlignment="Center"/>
+
+        <TextBlock Grid.Column="1" 
+                   VerticalAlignment="Center" 
+                   FontSize="11" 
+                   Foreground="{ThemeResource TextPrimaryBrush}">
+            <Run Text="28°C" FontWeight="SemiBold"/>
+            <Run Text="  Partly Cloudy" Foreground="{ThemeResource TextSecondaryBrush}"/>
+        </TextBlock>
+    </Grid>
+</UserControl>

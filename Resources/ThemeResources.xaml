@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <ResourceDictionary.ThemeDictionaries>
+        <!-- Dark Theme (Default) -->
+        <ResourceDictionary x:Key="Default">
+            <!-- Completely transparent container backgrounds so native DesktopAcrylic backdrop does all the work -->
+            <SolidColorBrush x:Key="IslandBackgroundBrush" Color="Transparent" /> 
+            <SolidColorBrush x:Key="IslandBorderBrush" Color="Transparent" /> 
+            <SolidColorBrush x:Key="TextPrimaryBrush" Color="#FFFFFFFF" />
+            <SolidColorBrush x:Key="TextSecondaryBrush" Color="#B3FFFFFF" />
+        </ResourceDictionary>
+
+        <!-- Light Theme -->
+        <ResourceDictionary x:Key="Light">
+            <SolidColorBrush x:Key="IslandBackgroundBrush" Color="Transparent" /> 
+            <SolidColorBrush x:Key="IslandBorderBrush" Color="Transparent" /> 
+            <SolidColorBrush x:Key="TextPrimaryBrush" Color="#FF1A1A1A" />
+            <SolidColorBrush x:Key="TextSecondaryBrush" Color="#99000000" />
+        </ResourceDictionary>
+    </ResourceDictionary.ThemeDictionaries>
+
+    <!-- App Accent Colors (shared across themes) -->
+    <Color x:Key="AccentColor">#FF8B5CF6</Color>
+    <SolidColorBrush x:Key="AccentBrush" Color="{StaticResource AccentColor}" />
+
+</ResourceDictionary>
