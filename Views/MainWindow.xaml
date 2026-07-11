@@ -16,6 +16,7 @@
           PointerExited="RootGrid_PointerExited"
           AutomationProperties.Name="Dynamic Island Container">
 
+
         <Grid.RowDefinitions>
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />

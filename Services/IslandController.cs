@@ -80,6 +80,15 @@ public class IslandController
         Push(defaultWidget, defaultWidget);
     }
 
+    /// <summary>
+    /// Called by WindowService (150ms timer thread) when the width tier changes.
+    /// Routes the update to the MediaWidget on the UI thread.
+    /// </summary>
+    public void SetMediaWidgetTier(int tier)
+    {
+        _dispatcherQueue.TryEnqueue(() => _mediaWidget?.SetTier(tier));
+    }
+
     // ── Interaction signals (from MainWindow) ─────────────────────────────
 
     /// <summary>
@@ -186,6 +195,7 @@ public class IslandController
 
     private void Pop(IIslandWidget widget, UserControl control)
     {
+        Helpers.Logger.Info($"[DEBUG_EVENT] IslandController.Pop: Widget={widget.GetType().Name} at {DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}");
         int idx = _stack.FindIndex(e => e.Widget == widget);
         if (idx < 0) return; // Already removed — safe to ignore.
 
@@ -243,7 +253,7 @@ public class IslandController
     /// then applies it — but only if it differs from the last applied profile.
     /// This prevents duplicate animation calls from rapid state changes.
     /// </summary>
-    private void ApplyWindowProfile()
+    public void ApplyWindowProfile()
     {
         if (App.WindowService == null) return;
 

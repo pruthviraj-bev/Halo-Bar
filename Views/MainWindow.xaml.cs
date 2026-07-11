@@ -69,9 +69,8 @@ public sealed partial class MainWindow : Window
 
     private void MainWindow_Activated(object sender, WindowActivatedEventArgs e)
     {
-        Helpers.Logger.Info($"[DEBUG_EVENT] MainWindow_Activated: State={e.WindowActivationState} at {DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}");
-        if (e.WindowActivationState == WindowActivationState.Deactivated)
-            App.IslandController.NotifyFocusLost();
+        bool configActive = _configuration != null ? _configuration.IsInputActive : false;
+        Helpers.Logger.Info($"[DEBUG_EVENT] MainWindow_Activated: State={e.WindowActivationState}, IsInputActive={configActive} at {DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}");
     }
 
     // ── Click to expand/collapse ───────────────────────────────────────────
@@ -84,6 +83,14 @@ public sealed partial class MainWindow : Window
             App.IslandController.NotifyIslandClick();
             e.Handled = true;
         }
+    }
+
+    // SetFullscreenSuppressed: actual hide/show is handled by WindowService.ForceAboveTaskbar
+    // via AppWindow.Hide() / AppWindow.Show() so the acrylic surface is also removed.
+    // This method is kept for future use (e.g. additional UI state on suppression).
+    public void SetFullscreenSuppressed(bool suppress)
+    {
+        Helpers.Logger.Info($"[DEBUG_EVENT] MainWindow.SetFullscreenSuppressed: suppress={suppress}");
     }
 
     // ── Hover tracking (for auto-collapse) ────────────────────────────────

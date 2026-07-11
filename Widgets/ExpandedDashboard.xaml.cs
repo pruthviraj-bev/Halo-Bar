@@ -490,7 +490,14 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
 
     private async void PairBluetoothDevice_Click(object sender, RoutedEventArgs e)
     {
-        await Windows.System.Launcher.LaunchUriAsync(new Uri("ms-settings:bluetooth"));
+        try
+        {
+            await Windows.System.Launcher.LaunchUriAsync(new Uri("ms-settings:bluetooth"));
+        }
+        catch (Exception ex)
+        {
+            Helpers.Logger.Error("Failed to launch Bluetooth settings page", ex);
+        }
     }
 
     private void DeviceToggle_Click(object sender, RoutedEventArgs e)

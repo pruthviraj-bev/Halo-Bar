@@ -61,24 +61,45 @@ public partial class MediaWidgetViewModel : ObservableObject
         if (thumbRef == null)
         {
             Helpers.Logger.Info("[DEBUG] MediaWidgetViewModel: Thumbnail reference is null");
-            Thumbnail = null;
+            _dispatcherQueue.TryEnqueue(() =>
+            {
+                Thumbnail = null;
+            });
             return;
         }
 
         try
         {
             Helpers.Logger.Info("[DEBUG] MediaWidgetViewModel: Opening thumbnail read stream...");
-            using var stream = await thumbRef.OpenReadAsync();
+            var stream = await thumbRef.OpenReadAsync();
             Helpers.Logger.Info($"[DEBUG] MediaWidgetViewModel: Stream opened successfully. Size: {stream.Size} bytes");
-            var bitmap = new BitmapImage();
-            await bitmap.SetSourceAsync(stream);
-            Thumbnail = bitmap;
-            Helpers.Logger.Info("[DEBUG] MediaWidgetViewModel: Thumbnail BitmapImage created and set successfully");
+
+            _dispatcherQueue.TryEnqueue(async () =>
+            {
+                try
+                {
+                    using (stream)
+                    {
+                        var bitmap = new BitmapImage();
+                        await bitmap.SetSourceAsync(stream);
+                        Thumbnail = bitmap;
+                        Helpers.Logger.Info("[DEBUG] MediaWidgetViewModel: Thumbnail BitmapImage created and set successfully");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Helpers.Logger.Error("[DEBUG] MediaWidgetViewModel: Failed to decode stream on UI thread", ex);
+                    Thumbnail = null;
+                }
+            });
         }
         catch (Exception ex)
         {
             Helpers.Logger.Error("[DEBUG] MediaWidgetViewModel: Failed to load thumbnail stream in view-model", ex);
-            Thumbnail = null;
+            _dispatcherQueue.TryEnqueue(() =>
+            {
+                Thumbnail = null;
+            });
         }
     }
 

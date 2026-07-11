@@ -118,6 +118,7 @@ public class VolumeService
             // Read immediately to update state
             var current = ReadCurrentState();
             _lastState = current;
+            Logger.Info($"VolumeService: changed to {current.VolumePercent}% (muted={current.IsMuted}) via SetVolume");
         }
         catch (Exception ex)
         {
@@ -135,6 +136,7 @@ public class VolumeService
             // Read immediately to update state
             var current = ReadCurrentState();
             _lastState = current;
+            Logger.Info($"VolumeService: changed to {current.VolumePercent}% (muted={current.IsMuted}) via SetMute");
         }
         catch (Exception ex)
         {

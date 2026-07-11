@@ -68,6 +68,14 @@ public partial class App : Application
         WindowService = new WindowService(Window);
         WindowService.InitializeWindow(220, 40);
 
+        WindowService.FullscreenStateChanged += (s, isFullscreen) =>
+        {
+            Window.DispatcherQueue.TryEnqueue(() =>
+            {
+                Window.SetFullscreenSuppressed(isFullscreen);
+            });
+        };
+
         Window.Activate();
         WindowService.ApplyDwmAttributes(DispatcherQueue);
     }

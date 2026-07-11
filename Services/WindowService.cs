@@ -1,4 +1,5 @@
 using System;
+using System.Text;
 using System.Runtime.InteropServices;
 using Microsoft.UI;
 using Microsoft.UI.Dispatching;
@@ -44,9 +45,29 @@ public class WindowService
     private bool _isAnimating = false;
     private readonly System.Diagnostics.Stopwatch _stopwatch = new();
 
-    // Repeating timer that re-asserts HWND_TOPMOST every 150 ms.
-    // This is the most reliable way to stay above the taskbar in WinUI 3.
     private DispatcherQueueTimer? _zOrderTimer;
+    private int _lastCloakedState = -1;
+    private WinEventDelegate? _winEventDelegate;
+    private IntPtr _hWinEventHook = IntPtr.Zero;
+
+    public event EventHandler<bool>? FullscreenStateChanged;
+    private bool _lastFullscreenActive = false;
+    private bool _isHiddenForFullscreen = false;
+
+    // -1 = unchecked, 0 = full (320 DIPs), 1 = moderate (260 DIPs, artist hidden), 2 = heavy (180 DIPs, both hidden)
+    private int _lastWidthTier = -1;
+
+    /// <summary>
+    /// The current layout tier resolved from taskbar available width.
+    /// 0 = full (both text visible), 1 = moderate (artist hidden), 2 = heavy (both hidden).
+    /// Set every 150ms by the z-order guard timer. MediaWidget reads this instead of
+    /// re-deriving the tier from the oscillating spring width, which would cause flickering.
+    /// </summary>
+    public static int CurrentWidthTier { get; private set; } = 0;
+
+#if DEBUG
+    public static double AvailableWidthOverride { get; set; } = -1;
+#endif
 
     public PointInt32 HomePosition { get; set; }
 
@@ -59,6 +80,15 @@ public class WindowService
         public int Top;
         public int Right;
         public int Bottom;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MONITORINFO
+    {
+        public int cbSize;
+        public RECT rcMonitor;
+        public RECT rcWork;
+        public uint dwFlags;
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -80,6 +110,9 @@ public class WindowService
     [DllImport("dwmapi.dll")]
     private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int pvAttribute, int cbAttribute);
 
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmGetWindowAttribute(IntPtr hwnd, int attribute, out int pvAttribute, int cbAttribute);
+
     [DllImport("user32.dll")]
     private static extern uint GetDpiForWindow(IntPtr hwnd);
 
@@ -91,6 +124,47 @@ public class WindowService
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
+
+    [DllImport("user32.dll", EntryPoint = "SetWindowLongPtr", SetLastError = true)]
+    private static extern IntPtr SetWindowLongPtr(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
+
+    [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    private static extern IntPtr FindWindow(string lpClassName, string? lpWindowName);
+
+    [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    private static extern IntPtr FindWindowEx(IntPtr hwndParent, IntPtr hwndChildAfter, string? lpszClass, string? lpszWindow);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern IntPtr SetWinEventHook(
+        uint eventMin, uint eventMax, IntPtr hmodWinEventProc,
+        WinEventDelegate lpfnWinEventProc, uint idProcess, uint idThread, uint dwFlags);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool UnhookWinEvent(IntPtr hWinEventHook);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
+
+    [DllImport("shell32.dll")]
+    private static extern int SHQueryUserNotificationState(out int pquns);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint dwFlags);
+
+    [DllImport("user32.dll", CharSet = CharSet.Auto)]
+    private static extern bool GetMonitorInfo(IntPtr hMonitor, ref MONITORINFO lpmi);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+
+    [DllImport("user32.dll")]
+    private static extern short GetAsyncKeyState(int vKey);
+
+    private delegate void WinEventDelegate(
+        IntPtr hWinEventHook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint dwEventThread, uint dwmsEventTime);
 
     // ── Constants ──────────────────────────────────────────────────────────
 
@@ -107,6 +181,13 @@ public class WindowService
     private const int DWMWCP_ROUND  = 2;
     private const int DWMWA_BORDER_COLOR = 34;
     private const int DWMWA_COLOR_NONE   = -2;
+    private const int DWMWA_CLOAKED = 14;
+    private const uint EVENT_SYSTEM_FOREGROUND = 0x0003;
+    private const uint WINEVENT_OUTOFCONTEXT = 0x0000;
+
+    private const uint MONITOR_DEFAULTTONEAREST = 2;
+    private const int QUNS_RUNNING_D3D_FULL_SCREEN = 3;
+    private const int QUNS_PRESENTATION_MODE = 4;
 
     // Suppress DWM drop shadow
     private const int DWMWA_NCRENDERING_POLICY = 2;
@@ -141,7 +222,8 @@ public class WindowService
 
     private void AppWindow_Changed(AppWindow sender, AppWindowChangedEventArgs args)
     {
-        if (args.DidPositionChange || args.DidSizeChange)
+        Logger.Info($"[DEBUG_EVENT] AppWindow_Changed: PositionChanged={args.DidPositionChange}, SizeChanged={args.DidSizeChange}, VisibilityChanged={args.DidVisibilityChange} at {DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}");
+        if ((args.DidPositionChange || args.DidSizeChange) && !_isAnimating)
         {
             _cachedScale = GetScaleFactor();
             _cachedDisplayArea = DisplayArea.GetFromWindowId(_appWindow.Id, DisplayAreaFallback.Primary);
@@ -205,6 +287,22 @@ public class WindowService
         SuppressBorder();
         SuppressShadow();
         ApplyToolWindowStyle();
+
+        // Anchor to the taskbar window as its owner so we always render on top of it.
+        IntPtr taskbarHwnd = FindWindow("Shell_TrayWnd", null);
+        if (taskbarHwnd != IntPtr.Zero)
+        {
+            SetWindowLongPtr(_hwnd, -8, taskbarHwnd); // GWLP_HWNDPARENT = -8
+            Logger.Info($"SetWindowLongPtr owner to taskbar (0x{taskbarHwnd.ToInt64():X}) succeeded.");
+        }
+
+        // Initialize WinEvent hook for foreground window changes
+        _winEventDelegate = new WinEventDelegate(WinEventProc);
+        _hWinEventHook = SetWinEventHook(
+            EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND,
+            IntPtr.Zero, _winEventDelegate, 0, 0, WINEVENT_OUTOFCONTEXT);
+        Logger.Info("WinEventHook (EVENT_SYSTEM_FOREGROUND) registered successfully.");
+
         StartZOrderGuard(dispatcherQueue);
         ForceAboveTaskbar(); // Immediate push to top of TOPMOST z-order.
     }
@@ -265,8 +363,135 @@ public class WindowService
 
     private void ForceAboveTaskbar()
     {
-        // SWP_NOACTIVATE prevents this SetWindowPos call from stealing focus.
-        SetWindowPos(_hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+        bool success = SetWindowPos(_hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+        int error = System.Runtime.InteropServices.Marshal.GetLastWin32Error();
+        
+        // Query DWM cloaked attribute
+        int hr = DwmGetWindowAttribute(_hwnd, DWMWA_CLOAKED, out int cloaked, sizeof(int));
+        if (hr == 0)
+        {
+            if (cloaked != _lastCloakedState)
+            {
+                Logger.Info($"[DEBUG_EVENT] DWMWA_CLOAKED changed: {_lastCloakedState} → {cloaked} (1=App, 2=Shell, 4=Inherited) at {DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}");
+                _lastCloakedState = cloaked;
+            }
+        }
+        else
+        {
+            Logger.Error($"[DEBUG_EVENT] DwmGetWindowAttribute failed with HRESULT 0x{hr:X8} (GetLastError={System.Runtime.InteropServices.Marshal.GetLastWin32Error()})");
+        }
+
+#if DEBUG
+        // Check testing hotkeys in debug builds
+        if ((GetAsyncKeyState(0x78) & 0x8000) != 0) // F9
+        {
+            if (AvailableWidthOverride != -1)
+            {
+                AvailableWidthOverride = -1;
+                Logger.Info("[TEST_OVERRIDE] Available taskbar width reset to auto.");
+                App.IslandController.ApplyWindowProfile();
+            }
+        }
+        else if ((GetAsyncKeyState(0x79) & 0x8000) != 0) // F10
+        {
+            if (AvailableWidthOverride != 240)
+            {
+                AvailableWidthOverride = 240;
+                Logger.Info("[TEST_OVERRIDE] Available taskbar width overridden to 240 DIPs (Moderate crowding).");
+                App.IslandController.ApplyWindowProfile();
+            }
+        }
+        else if ((GetAsyncKeyState(0x7A) & 0x8000) != 0) // F11
+        {
+            if (AvailableWidthOverride != 180)
+            {
+                AvailableWidthOverride = 180;
+                Logger.Info("[TEST_OVERRIDE] Available taskbar width overridden to 180 DIPs (Heavy crowding).");
+                App.IslandController.ApplyWindowProfile();
+            }
+        }
+#endif
+
+        // Evaluate fullscreen mode state changes — hide/show AppWindow directly so the acrylic surface is fully removed
+        bool isFullscreen = IsFullscreenModeActive();
+        if (isFullscreen != _lastFullscreenActive)
+        {
+            _lastFullscreenActive = isFullscreen;
+            Logger.Info($"[DEBUG_EVENT] Fullscreen state changed: isFullscreen={isFullscreen} at {DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}");
+            if (isFullscreen)
+            {
+                Logger.Info("[DEBUG_EVENT] Hiding AppWindow for fullscreen suppression.");
+                _isHiddenForFullscreen = true;
+                _appWindow.Hide();
+            }
+            else
+            {
+                Logger.Info("[DEBUG_EVENT] Showing AppWindow after fullscreen exit.");
+                _isHiddenForFullscreen = false;
+                _appWindow.Show();
+                // Re-assert TOPMOST after Show(), since Show() may reset Z-order
+                SetWindowPos(_hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+            }
+            FullscreenStateChanged?.Invoke(this, isFullscreen);
+        }
+
+        // Skip width tier check and SetWindowPos when hidden — window is not visible
+        if (_isHiddenForFullscreen) return;
+
+        // ── Continuous available-width tier tracking ──────────────────────
+        // Run every 150ms tick so opening/closing taskbar apps is immediately reflected.
+        if (App.MediaService.CurrentState != null &&
+            !string.IsNullOrEmpty(App.MediaService.CurrentState.Title))
+        {
+            double availW = GetAvailableWidthDips();
+            // Use hysteresis: separate up/down thresholds to prevent oscillation at boundaries.
+            // Down-shift thresholds (tightening): 330 / 260
+            // Up-shift thresholds  (loosening):  350 / 280  (20 DIP dead-band each side)
+            int tier;
+            if (_lastWidthTier <= 0)
+                tier = availW < 330 ? 1 : 0;            // was full or unitialized → tighten at 330
+            else if (_lastWidthTier == 1)
+                tier = availW < 260 ? 2 : availW >= 350 ? 0 : 1;  // hysteresis both ways
+            else
+                tier = availW >= 280 ? 1 : 2;           // was heavy → loosen at 280
+
+            if (tier != _lastWidthTier)
+            {
+                Logger.Info($"[WIDTH_TIER] availWidth={availW:F1} DIPs → tier={tier} ({(tier==0?"full":tier==1?"moderate":"heavy")}), prev={_lastWidthTier} — calling ApplyWindowProfile");
+                _lastWidthTier = tier;
+                CurrentWidthTier = tier;
+                // Push text animation immediately, independently of window spring settling
+                App.IslandController.SetMediaWidgetTier(tier);
+                App.IslandController.ApplyWindowProfile();
+            }
+        }
+        else
+        {
+            // No media active — reset tier so next media session starts fresh
+            _lastWidthTier = -1;
+            CurrentWidthTier = 0;
+        }
+    }
+
+    private void WinEventProc(IntPtr hWinEventHook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint dwEventThread, uint dwmsEventTime)
+    {
+        if (eventType == EVENT_SYSTEM_FOREGROUND)
+        {
+            var sb = new StringBuilder(256);
+            GetClassName(hwnd, sb, sb.Capacity);
+            string className = sb.ToString();
+            Logger.Info($"[DEBUG_EVENT] Foreground window changed to: {className} (HWND: 0x{hwnd.ToInt64():X}) at {DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}");
+            
+            ForceAboveTaskbar();
+        }
+    }
+
+    ~WindowService()
+    {
+        if (_hWinEventHook != IntPtr.Zero)
+        {
+            UnhookWinEvent(_hWinEventHook);
+        }
     }
 
     public void SetAlwaysOnTop(bool alwaysOnTop)
@@ -330,6 +555,10 @@ public class WindowService
 
         if (!_isAnimating)
         {
+            _cachedScale = GetScaleFactor();
+            _cachedDisplayArea = DisplayArea.GetFromWindowId(_appWindow.Id, DisplayAreaFallback.Primary);
+            _taskbarHeightDips = ComputeTaskbarHeightDips();
+
             Logger.Info($"Animation started → {targetWidth}×{targetHeight}");
             _isAnimating = true;
             _stopwatch.Restart();
@@ -347,10 +576,23 @@ public class WindowService
         switch (profile)
         {
             case WindowProfile.Collapsed:
-                // Collapsed dimensions matching the taskbar height (usually 48 DIPs) and 320 width when playing
+                // Collapsed dimensions matching the taskbar height.
+                // Each tier uses a discrete target width well inside the tier's range,
+                // so the spring never oscillates across a tier boundary during settling.
                 bool isMediaActive = App.MediaService.CurrentState != null && 
                                      !string.IsNullOrEmpty(App.MediaService.CurrentState.Title);
-                width  = isMediaActive ? 320 : 160;
+                if (isMediaActive)
+                {
+                    // Tier 0 (full): 320 DIPs — both text elements visible
+                    // Tier 1 (moderate): 250 DIPs — artist hidden, title shown
+                    // Tier 2 (heavy): 170 DIPs — both hidden
+                    int tier = CurrentWidthTier;
+                    width = tier == 0 ? 320 : tier == 1 ? 250 : 170;
+                }
+                else
+                {
+                    width = 160;
+                }
                 height = _taskbarHeightDips;
                 break;
 
@@ -431,5 +673,125 @@ public class WindowService
     {
         uint dpi = GetDpiForWindow(_hwnd);
         return dpi / 96.0;
+    }
+
+    private bool IsFullscreenModeActive()
+    {
+        // 1. Check user notification state (direct system signal for gaming/presentations)
+        int hr = SHQueryUserNotificationState(out int qState);
+        if (hr == 0) // S_OK
+        {
+            if (qState == QUNS_RUNNING_D3D_FULL_SCREEN || qState == QUNS_PRESENTATION_MODE)
+            {
+                return true;
+            }
+        }
+
+        // 2. Fallback check for borderless windowed fullscreen (e.g. browser video)
+        IntPtr fgHwnd = GetForegroundWindow();
+        if (fgHwnd != IntPtr.Zero)
+        {
+            // Do not treat taskbar or desktop as fullscreen
+            StringBuilder sb = new StringBuilder(256);
+            GetClassName(fgHwnd, sb, sb.Capacity);
+            string className = sb.ToString();
+            if (className == "Shell_TrayWnd" || className == "Progman" || className == "WorkerW")
+            {
+                return false;
+            }
+
+            IntPtr hMonitor = MonitorFromWindow(fgHwnd, MONITOR_DEFAULTTONEAREST);
+            if (hMonitor != IntPtr.Zero)
+            {
+                var mi = new MONITORINFO();
+                mi.cbSize = Marshal.SizeOf(typeof(MONITORINFO));
+                if (GetMonitorInfo(hMonitor, ref mi))
+                {
+                    if (GetWindowRect(fgHwnd, out RECT fgRect))
+                    {
+                        bool matchOrExceed = fgRect.Left <= mi.rcMonitor.Left &&
+                                             fgRect.Top <= mi.rcMonitor.Top &&
+                                             fgRect.Right >= mi.rcMonitor.Right &&
+                                             fgRect.Bottom >= mi.rcMonitor.Bottom;
+                        if (matchOrExceed)
+                        {
+                            int style = GetWindowLong(fgHwnd, -16); // GWL_STYLE = -16
+                            // WS_CAPTION = 0x00C00000. If WS_CAPTION is missing, it is borderless.
+                            bool hasNoCaption = (style & 0x00C00000) == 0;
+                            if (hasNoCaption)
+                            {
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+
+
+
+    /// <summary>
+    /// Returns the left edge of the Windows taskbar icon list (MSTaskListWClass) in DIPs.
+    /// This represents the available width between the left screen edge (or start menu area)
+    /// and the taskbar buttons. As more apps are opened, the task list shifts left, reducing this value.
+    /// </summary>
+    public double GetAvailableWidthDips()
+    {
+#if DEBUG
+        if (AvailableWidthOverride > 0)
+        {
+            return AvailableWidthOverride;
+        }
+#endif
+
+        IntPtr trayHwnd = FindWindow("Shell_TrayWnd", null);
+        if (trayHwnd != IntPtr.Zero)
+        {
+            IntPtr targetHwnd = FindChildWindow(trayHwnd, "MSTaskListWClass");
+            if (targetHwnd == IntPtr.Zero)
+            {
+                targetHwnd = FindChildWindow(trayHwnd, "MSTaskSwWClass");
+            }
+
+            if (targetHwnd != IntPtr.Zero && GetWindowRect(targetHwnd, out RECT rect))
+            {
+                double leftDips = rect.Left / _cachedScale;
+                Logger.Info($"[WIDTH_DBG] Found task list: left={rect.Left}px ({leftDips:F1}dip)");
+                if (leftDips > 50)
+                {
+                    return leftDips;
+                }
+            }
+            else
+            {
+                Logger.Info("[WIDTH_DBG] Task list window not found under Shell_TrayWnd");
+            }
+        }
+        else
+        {
+            Logger.Info("[WIDTH_DBG] Shell_TrayWnd not accessible — using WorkArea fallback");
+        }
+
+        // Fallback: return full work area width
+        var da = _cachedDisplayArea ?? DisplayArea.GetFromWindowId(_appWindow.Id, DisplayAreaFallback.Primary);
+        return da.WorkArea.Width / _cachedScale;
+    }
+
+    private IntPtr FindChildWindow(IntPtr parent, string className)
+    {
+        string? nullStr = null;
+        IntPtr child = FindWindowEx(parent, IntPtr.Zero, className, nullStr);
+        if (child != IntPtr.Zero) return child;
+
+        IntPtr current = IntPtr.Zero;
+        while ((current = FindWindowEx(parent, current, nullStr, nullStr)) != IntPtr.Zero)
+        {
+            IntPtr found = FindChildWindow(current, className);
+            if (found != IntPtr.Zero) return found;
+        }
+        return IntPtr.Zero;
     }
 }

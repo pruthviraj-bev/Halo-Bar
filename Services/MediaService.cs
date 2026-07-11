@@ -38,24 +38,31 @@ public class MediaService
 
     private void UpdateCurrentSession()
     {
-        if (_currentSession != null)
+        try
         {
-            _currentSession.MediaPropertiesChanged -= OnMediaPropertiesChanged;
-            _currentSession.PlaybackInfoChanged -= OnPlaybackInfoChanged;
-        }
+            if (_currentSession != null)
+            {
+                _currentSession.MediaPropertiesChanged -= OnMediaPropertiesChanged;
+                _currentSession.PlaybackInfoChanged -= OnPlaybackInfoChanged;
+            }
 
-        _currentSession = _sessionManager?.GetCurrentSession();
+            _currentSession = _sessionManager?.GetCurrentSession();
 
-        if (_currentSession != null)
-        {
-            _currentSession.MediaPropertiesChanged += OnMediaPropertiesChanged;
-            _currentSession.PlaybackInfoChanged += OnPlaybackInfoChanged;
-            TriggerStateUpdate();
+            if (_currentSession != null)
+            {
+                _currentSession.MediaPropertiesChanged += OnMediaPropertiesChanged;
+                _currentSession.PlaybackInfoChanged += OnPlaybackInfoChanged;
+                TriggerStateUpdate();
+            }
+            else
+            {
+                // Reset to empty state when no active player session exists
+                UpdateState(new MediaState("", "", null, false));
+            }
         }
-        else
+        catch (Exception ex)
         {
-            // Reset to empty state when no active player session exists
-            UpdateState(new MediaState("", "", null, false));
+            Helpers.Logger.Error("MediaService: Error during UpdateCurrentSession", ex);
         }
     }
 

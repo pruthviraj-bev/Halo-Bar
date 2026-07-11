@@ -36,68 +36,91 @@ public class ClipboardService
 
     private async Task QueryAsync()
     {
-        try
+        int retryCount = 0;
+        const int maxRetries = 1;
+
+        while (true)
         {
-            var data = Clipboard.GetContent();
-            if (data == null) return;
-
-            ClipboardItem? item = null;
-
-            if (data.Contains(StandardDataFormats.Text))
+            try
             {
-                string text = await data.GetTextAsync();
-                if (string.IsNullOrEmpty(text)) return;
+                var data = Clipboard.GetContent();
+                if (data == null) return;
 
-                // Suppress duplicate text copies
-                if (CurrentItem?.Type == ClipboardItemType.Text && CurrentItem.RawText == text) return;
+                ClipboardItem? item = null;
 
-                item = new ClipboardItem
+                if (data.Contains(StandardDataFormats.Text))
                 {
-                    Type = ClipboardItemType.Text,
-                    RawText = text,
-                    Title = text.Length > 40 ? text[..40].TrimEnd() + "…" : text,
-                    Detail = $"{text.Length} characters"
-                };
-            }
-            else if (data.Contains(StandardDataFormats.StorageItems))
-            {
-                var files = await data.GetStorageItemsAsync();
-                if (files == null || files.Count == 0) return;
+                    string text = await data.GetTextAsync();
+                    if (string.IsNullOrEmpty(text)) return;
 
-                string names = string.Join(", ", files.Select(f => f.Name));
-                if (CurrentItem?.Type == ClipboardItemType.Files && CurrentItem.Detail == names) return;
+                    // Suppress duplicate text copies
+                    if (CurrentItem?.Type == ClipboardItemType.Text && CurrentItem.RawText == text) return;
 
-                string title = files.Count == 1 ? files[0].Name : $"{files.Count} files";
-                item = new ClipboardItem
+                    item = new ClipboardItem
+                    {
+                        Type = ClipboardItemType.Text,
+                        RawText = text,
+                        Title = text.Length > 40 ? text[..40].TrimEnd() + "…" : text,
+                        Detail = $"{text.Length} characters"
+                    };
+                }
+                else if (data.Contains(StandardDataFormats.StorageItems))
                 {
-                    Type = ClipboardItemType.Files,
-                    Title = title,
-                    Detail = names
-                };
-            }
-            else if (data.Contains(StandardDataFormats.Bitmap))
-            {
-                var bmpRef = await data.GetBitmapAsync();
-                if (bmpRef == null) return;
+                    var files = await data.GetStorageItemsAsync();
+                    if (files == null || files.Count == 0) return;
 
-                item = new ClipboardItem
+                    string names = string.Join(", ", files.Select(f => f.Name));
+                    if (CurrentItem?.Type == ClipboardItemType.Files && CurrentItem.Detail == names) return;
+
+                    string title = files.Count == 1 ? files[0].Name : $"{files.Count} files";
+                    item = new ClipboardItem
+                    {
+                        Type = ClipboardItemType.Files,
+                        Title = title,
+                        Detail = names
+                    };
+                }
+                else if (data.Contains(StandardDataFormats.Bitmap))
                 {
-                    Type = ClipboardItemType.Image,
-                    Title = "Image",
-                    Detail = "Bitmap image",
-                    ImageStreamRef = bmpRef
-                };
-            }
+                    var bmpRef = await data.GetBitmapAsync();
+                    if (bmpRef == null) return;
 
-            if (item != null)
-            {
-                CurrentItem = item;
-                ClipboardChanged?.Invoke(this, item);
+                    item = new ClipboardItem
+                    {
+                        Type = ClipboardItemType.Image,
+                        Title = "Image",
+                        Detail = "Bitmap image",
+                        ImageStreamRef = bmpRef
+                    };
+                }
+
+                if (item != null)
+                {
+                    CurrentItem = item;
+                    ClipboardChanged?.Invoke(this, item);
+                    Helpers.Logger.Info($"ClipboardService: successfully queried item. Type={item.Type}, Title='{item.Title}', Detail='{item.Detail}'");
+                }
+
+                break; // Success, exit retry loop
             }
-        }
-        catch (Exception ex)
-        {
-            Helpers.Logger.Error("ClipboardService: error reading clipboard", ex);
+            catch (System.Runtime.InteropServices.COMException ex) when ((uint)ex.HResult == 0x800401D0)
+            {
+                if (retryCount < maxRetries)
+                {
+                    retryCount++;
+                    Helpers.Logger.Info($"ClipboardService: Clipboard busy (0x800401D0). Retrying query in 100ms... (Attempt {retryCount}/{maxRetries})");
+                    await Task.Delay(100);
+                    continue;
+                }
+
+                Helpers.Logger.Error("ClipboardService: error reading clipboard after retry", ex);
+                break;
+            }
+            catch (Exception ex)
+            {
+                Helpers.Logger.Error("ClipboardService: error reading clipboard", ex);
+                break;
+            }
         }
     }
 
