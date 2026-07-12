@@ -54,6 +54,11 @@ public sealed partial class MainWindow : Window
         return value ? Visibility.Visible : Visibility.Collapsed;
     }
 
+    public Visibility BoolToVisibilityInverse(bool value)
+    {
+        return value ? Visibility.Collapsed : Visibility.Visible;
+    }
+
     private UserControl? _expandedTaskbarAnchor;
 
     public UserControl? GetTaskbarContent(bool isExpanded, UserControl? activeWidget)

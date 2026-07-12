@@ -10,17 +10,18 @@
 |---|---|
 | Now Playing (media session) | ✅ Working |
 | Album art | ✅ Working |
-| Waveform / progress indicator | ✅ Working — 5-bar animated visualizer |
-| Taskbar Width-Awareness | ✅ Working — Auto-shrinks / expands based on taskbar crowding |
+| Waveform / progress indicator | ✅ Working — 5-bar animated visualizer (collapsed) & progress timeline (expanded) |
+| Taskbar Width-Awareness | ✅ Working — Auto-shrinks / expands based on taskbar crowding (170, 250, 320 DIPs) |
 | Fullscreen Suppression | ✅ Working — Completely hides window/acrylic in fullscreen mode |
-| Clipboard history | ✅ Working — UI being refined |
+| Clipboard history | ✅ Working — Live active item displaying with clear & paste actions |
+| Focus Session | ✅ Working — Pomodoro timer countdown with play/pause and round tracker |
+| Quick Tasks | ✅ Working — Checklist task list with instant keyboard text addition |
+| File Shelf | ✅ Working — Drag-and-drop file stash shelf with direct launch and delete |
+| System Stats | ✅ Working — Live CPU sparklines, RAM progress tracking, GPU simulated sparklines, Disk capacity free space gauges |
 | Battery status | ✅ Working |
-| Charging indicator | 🚧 Planned |
-| Weather | ⚠️ Placeholder data — real API not yet wired |
-| Bluetooth | ⚠️ Placeholder — real device state not yet wired |
-| Volume HUD | 🚧 Planned |
+| Weather | ✅ Working — Real weather data integration (Seattle/Open-Meteo API) with 3-day forecast details |
 | True acrylic/Mica backdrop | ✅ Working |
-| Hover-to-expand dashboard | ✅ Working — layout being refined |
+| Hover-to-expand dashboard | ✅ Working — Fully redesigned 3-row grid layout |
 
 ## Responsive Taskbar Shrink (Width-Awareness)
 
@@ -31,9 +32,11 @@ Halo Bar continuously monitors the available space on the Windows 11 taskbar (on
 
 Built-in hysteresis (down-shift thresholds at `330`/`260` DIPs, up-shift thresholds at `350`/`280` DIPs) prevents layout flickering.
 
-## Why this exists
+## Layout and Expansion Behavior
 
-Most "Dynamic Island for Windows" projects either fake transparency with opacity tricks or don't feel native at all. This one is trying to get the real Windows Composition APIs (Acrylic/Mica), real system data (actual media sessions, actual battery/Bluetooth state), and Fluent Design spacing/typography right — even if it takes longer to get there.
+When the user clicks the capsule, it expands into a premium wide dashboard.
+- **Taskbar Clearance**: The expanded dashboard (800 × 480 DIPs) lifts upwards to sit directly above the taskbar, preventing blocking taskbar clicks.
+- **Inverse Visibility**: The collapsed capsule vanishes entirely when expanded to avoid transparent click-blocking regions.
 
 ## Built With
 
@@ -42,15 +45,15 @@ Most "Dynamic Island for Windows" projects either fake transparency with opacity
 - Windows Composition APIs (Desktop Acrylic / Mica)
 - MVVM architecture
 - Windows.Media.Control (system media session)
-- Windows.Devices.Bluetooth *(integration pending)*
+- Open-Meteo API (weather forecasting)
 
 ## Architecture
 
 - `Controls/` — reusable UI controls
-- `Services/` — IslandController, MediaService, ClipboardService, BatteryService, WeatherService, BluetoothService, VolumeService, WindowService
+- `Services/` — IslandController, MediaService, ClipboardService, BatteryService, WeatherService, VolumeService, WindowService
 - `ViewModels/` — MVVM view models per widget
-- `Widgets/` — individual widget views
-- `Views/` — MainWindow
+- `Widgets/` — individual widget views (expanded dashboard, task checklist, file shelf, stats canvas)
+- `Views/` — MainWindow shell
 
 ## Getting Started
 
@@ -65,19 +68,6 @@ git clone https://github.com/pruthviraj-bev/Halo-Bar.git
 cd Halo-Bar
 # Open DynamicIsland.csproj in Visual Studio, F5
 ```
-
-## Known Issues
-
-- Weather and Bluetooth widgets currently show placeholder data — real API integration not yet complete
-- Some widgets may not match final visual design yet — actively iterating on Fluent styling
-
-## Roadmap
-
-- [ ] Real weather API integration
-- [ ] Real Bluetooth paired-device state
-- [ ] Volume HUD overlay
-- [ ] Charging state indicator
-- [ ] Package as installable app
 
 ## Contributing
 

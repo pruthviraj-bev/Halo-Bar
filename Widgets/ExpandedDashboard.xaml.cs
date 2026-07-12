@@ -90,6 +90,13 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
         set { _cpuPercentText = value; OnPropertyChanged(); }
     }
 
+    private string _gpuPercentText = "42%";
+    public string GpuPercentText
+    {
+        get => _gpuPercentText;
+        set { _gpuPercentText = value; OnPropertyChanged(); }
+    }
+
     private string _batteryPercentText = "82%";
     public string BatteryPercentText
     {
@@ -136,8 +143,15 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
     public int StoragePercent
     {
         get => _storagePercent;
-        set { _storagePercent = value; OnPropertyChanged(); }
+        set 
+        { 
+            _storagePercent = value; 
+            OnPropertyChanged(); 
+            OnPropertyChanged(nameof(StoragePercentText));
+        }
     }
+
+    public string StoragePercentText => $"{_storagePercent}%";
 
     // ── Volume Slider Integration ──────────────────────────────────────────
 
@@ -173,12 +187,27 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
     public string ForecastDay3Glyph { get; private set; } = "\uE706";
     public string ForecastDay3Temp { get; private set; } = "—";
 
-    // ── Real Bluetooth Properties ──────────────────────────────────────────
+    // ── Focus Session Properties ───────────────────────────────────────────
 
-    public Visibility BtAvailableVisibility { get; private set; } = Visibility.Collapsed;
-    public Visibility BtUnavailableVisibility { get; private set; } = Visibility.Visible;
-    public string BtStatusText { get; private set; } = "Initializing Bluetooth...";
-    public ObservableCollection<BluetoothDeviceUiModel> BtDevices { get; } = new();
+    private int _focusSecondsRemaining = 1492; // 24:52 as shown in the mockup
+    private bool _focusIsRunning = false;
+    private int _focusRound = 2;
+    private int _focusTotalRounds = 4;
+
+    public string FocusTimerText => $"{_focusSecondsRemaining / 60:D2}:{_focusSecondsRemaining % 60:D2}";
+    public string FocusRoundText => $"Round {_focusRound}/{_focusTotalRounds}";
+    public string FocusPlayPauseGlyph => _focusIsRunning ? "\uE769" : "\uE768"; // Pause / Play glyphs
+
+    // ── Quick Tasks Properties ─────────────────────────────────────────────
+
+    public ObservableCollection<TaskItem> Tasks { get; } = new();
+
+    // ── File Shelf Properties ──────────────────────────────────────────────
+
+    public ObservableCollection<StashedFile> StashedFiles { get; } = new();
+
+    public Visibility DropZoneVisibility => StashedFiles.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility StashedFilesVisibility => StashedFiles.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
 
     // ── Win32 RAM structure ───────────────────────────────────────────────
 
@@ -215,14 +244,21 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
         // Initial query
         UpdateStats();
         InitializeCpuGraph();
+        InitializeGpuGraph();
+
+        // Initialize sample tasks
+        Tasks.Add(new TaskItem { Text = "Review PR #42", IsCompleted = false });
+        Tasks.Add(new TaskItem { Text = "Sync design tokens", IsCompleted = false });
+
+        // Initialize sample stashed files
+        StashedFiles.Add(new StashedFile { Name = "hero_shot.png", Path = "mock_path_hero_shot.png" });
 
         // Subscribe to real service updates
         App.WeatherService.WeatherUpdated += OnWeatherUpdated;
-        App.BluetoothService.BluetoothUpdated += OnBluetoothUpdated;
 
         // Force initial update calls to load values immediately
         OnWeatherUpdated(null, EventArgs.Empty);
-        OnBluetoothUpdated(null, EventArgs.Empty);
+
 
         // Timer for system stats and play time updates (1s)
         _updateTimer = new DispatcherTimer();
@@ -286,45 +322,7 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
         });
     }
 
-    // ── Bluetooth Service handler ─────────────────────────────────────────
 
-    private void OnBluetoothUpdated(object? sender, EventArgs e)
-    {
-        _dispatcherQueue.TryEnqueue(() =>
-        {
-            var bs = App.BluetoothService;
-            bool available = bs.IsBluetoothAvailable && bs.IsBluetoothEnabled;
-            
-            BtAvailableVisibility = (available && bs.Devices.Count > 0) ? Visibility.Visible : Visibility.Collapsed;
-            BtUnavailableVisibility = (!available || bs.Devices.Count == 0) ? Visibility.Visible : Visibility.Collapsed;
-
-            if (!bs.IsBluetoothAvailable)
-                BtStatusText = "Bluetooth Adapter Not Found";
-            else if (!bs.IsBluetoothEnabled)
-                BtStatusText = "Bluetooth Is Turned Off";
-            else
-                BtStatusText = "No Paired Devices Found";
-
-            // Sync paired devices list cleanly
-            BtDevices.Clear();
-            foreach (var dev in bs.Devices)
-            {
-                BtDevices.Add(new BluetoothDeviceUiModel
-                {
-                    Id = dev.Id,
-                    Name = dev.Name,
-                    Glyph = dev.Glyph,
-                    IsConnected = dev.IsConnected,
-                    BatteryPercent = dev.BatteryPercent
-                });
-            }
-
-            OnPropertyChanged(nameof(BtAvailableVisibility));
-            OnPropertyChanged(nameof(BtUnavailableVisibility));
-            OnPropertyChanged(nameof(BtStatusText));
-            OnPropertyChanged(nameof(BtDevices));
-        });
-    }
 
     // ── Audio visualizer tick ──────────────────────────────────────────────
 
@@ -342,7 +340,28 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
 
     private void UpdateStats()
     {
-        // 1. Playback time
+        // 1. Focus Session Timer
+        if (_focusIsRunning)
+        {
+            if (_focusSecondsRemaining > 0)
+            {
+                _focusSecondsRemaining--;
+            }
+            else
+            {
+                _focusRound++;
+                if (_focusRound > _focusTotalRounds)
+                {
+                    _focusRound = 1;
+                }
+                _focusSecondsRemaining = 1500; // Reset to 25 mins
+
+            }
+            OnPropertyChanged(nameof(FocusTimerText));
+            OnPropertyChanged(nameof(FocusRoundText));
+        }
+
+        // 2. Playback time
         if (MediaViewModel.IsPlaying)
         {
             _playbackSecs++;
@@ -353,7 +372,7 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
         TotalPlaybackTimeText = $"{_totalSecs / 60}:{_totalSecs % 60:D2}";
         OnPropertyChanged(nameof(PlaybackProgressValue));
 
-        // 2. RAM
+        // 3. RAM
         if (GetPerformanceInfo(out var info, Marshal.SizeOf<PERFORMANCE_INFORMATION>()))
         {
             ulong pageSize = info.PageSize.ToUInt64();
@@ -367,12 +386,17 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
             RamPercentText = $"{RamPercent}%";
         }
 
-        // 3. CPU
+        // 4. CPU
         _cpuVal = Math.Clamp(_cpuVal + _rand.Next(-4, 5), 5, 75);
         CpuPercentText = $"{_cpuVal}%";
         AddCpuDataPoint(_cpuVal);
 
-        // 4. Battery
+        // 5. GPU (Simulated)
+        _gpuVal = Math.Clamp(_gpuVal + _rand.Next(-5, 6), 5, 85);
+        GpuPercentText = $"{_gpuVal}%";
+        AddGpuDataPoint(_gpuVal);
+
+        // 6. Battery
         var bat = App.BatteryService.CurrentState;
         BatteryPercentText = $"{bat.ChargePercent}%";
         BatteryStatusText = bat.IsCharging ? "Charging" : "Discharging";
@@ -385,16 +409,8 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
         else if (bat.ChargePercent > 30) BatteryGlyph = "\uE83C";
         else BatteryGlyph = "\uE83B";
 
-        if (bat.IsCharging)
-        {
-            try { PulseStoryboard?.Begin(); } catch {}
-        }
-        else
-        {
-            try { PulseStoryboard?.Stop(); } catch {}
-        }
 
-        // 5. Storage
+        // 7. Storage
         try
         {
             var drive = new System.IO.DriveInfo("C");
@@ -431,6 +447,8 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
     // ── CPU Sparkline graph ────────────────────────────────────────────────
 
     private readonly Queue<double> _cpuHistory = new();
+    private readonly Queue<double> _gpuHistory = new();
+    private double _gpuVal = 42;
 
     private void InitializeCpuGraph()
     {
@@ -486,87 +504,146 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
         App.VolumeService.SetMute(!current.IsMuted);
     }
 
-    // ── Bluetooth interaction click handlers ───────────────────────────────
+    // ── GPU Sparkline graph ────────────────────────────────────────────────
 
-    private async void PairBluetoothDevice_Click(object sender, RoutedEventArgs e)
+    private void InitializeGpuGraph()
     {
-        try
-        {
-            await Windows.System.Launcher.LaunchUriAsync(new Uri("ms-settings:bluetooth"));
-        }
-        catch (Exception ex)
-        {
-            Helpers.Logger.Error("Failed to launch Bluetooth settings page", ex);
-        }
+        for (int i = 0; i < 30; i++)
+            _gpuHistory.Enqueue(15);
+        
+        RedrawGpuGraph();
     }
 
-    private void DeviceToggle_Click(object sender, RoutedEventArgs e)
+    private void AddGpuDataPoint(double val)
     {
-        if (sender is Button btn && btn.Tag is string deviceId)
+        _gpuHistory.Enqueue(val);
+        if (_gpuHistory.Count > 30)
+            _gpuHistory.Dequeue();
+
+        RedrawGpuGraph();
+    }
+
+    private void RedrawGpuGraph()
+    {
+        if (GpuGraphLine != null)
         {
-            var dev = BtDevices.FirstOrDefault(d => d.Id == deviceId);
-            if (dev != null)
+            GpuGraphLine.Points.Clear();
+            int idx = 0;
+            foreach (var val in _gpuHistory)
             {
-                // Toggle connected state visually
-                dev.IsConnected = !dev.IsConnected;
-                if (!dev.IsConnected)
-                    dev.BatteryPercent = null;
-                else
-                    dev.BatteryPercent = 90;
+                double x = idx * 5.1; // ~153px width
+                double y = 22 - (val / 100.0 * 22);
+                GpuGraphLine.Points.Add(new Windows.Foundation.Point(x, y));
+                idx++;
             }
         }
     }
-}
 
-// ── Bluetooth Device UI View Model ─────────────────────────────────────────
+    // ── Focus Session click handlers ───────────────────────────────────────
 
-public class BluetoothDeviceUiModel : INotifyPropertyChanged
-{
-    private bool _isConnected;
-    private int? _batteryPercent;
-
-    public string Id { get; set; } = "";
-    public string Name { get; set; } = "";
-    public string Glyph { get; set; } = "";
-
-    public bool IsConnected
+    private void FocusPlayPause_Click(object sender, RoutedEventArgs e)
     {
-        get => _isConnected;
-        set
+        _focusIsRunning = !_focusIsRunning;
+        OnPropertyChanged(nameof(FocusPlayPauseGlyph));
+    }
+
+    private void FocusReset_Click(object sender, RoutedEventArgs e)
+    {
+        _focusIsRunning = false;
+        _focusSecondsRemaining = 1500; // Reset to 25 mins
+        _focusRound = 1;
+        OnPropertyChanged(nameof(FocusTimerText));
+        OnPropertyChanged(nameof(FocusRoundText));
+        OnPropertyChanged(nameof(FocusPlayPauseGlyph));
+    }
+
+    // ── Quick Tasks checklist handlers ─────────────────────────────────────
+
+    private void AddTaskTextBox_KeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
+    {
+        if (e.Key == Windows.System.VirtualKey.Enter && sender is TextBox textBox)
         {
-            _isConnected = value;
-            RaisePropertyChanged(nameof(IsConnected));
-            RaisePropertyChanged(nameof(ConnectedText));
-            RaisePropertyChanged(nameof(ConnectedColor));
-            RaisePropertyChanged(nameof(ButtonText));
+            string text = textBox.Text.Trim();
+            if (!string.IsNullOrEmpty(text))
+            {
+                Tasks.Add(new TaskItem { Text = text, IsCompleted = false });
+                textBox.Text = "";
+            }
         }
     }
 
-    public int? BatteryPercent
+    // ── File Shelf drag-and-drop handlers ──────────────────────────────────
+
+    private void FileDropZone_DragOver(object sender, DragEventArgs e)
     {
-        get => _batteryPercent;
-        set
+        e.AcceptedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Copy;
+        e.DragUIOverride.Caption = "Stash file";
+        e.DragUIOverride.IsCaptionVisible = true;
+    }
+
+    private async void FileDropZone_Drop(object sender, DragEventArgs e)
+    {
+        if (e.DataView.Contains(Windows.ApplicationModel.DataTransfer.StandardDataFormats.StorageItems))
         {
-            _batteryPercent = value;
-            RaisePropertyChanged(nameof(BatteryPercent));
-            RaisePropertyChanged(nameof(BatteryText));
-            RaisePropertyChanged(nameof(BatteryVisibility));
+            var items = await e.DataView.GetStorageItemsAsync();
+            foreach (var item in items)
+            {
+                StashedFiles.Add(new StashedFile 
+                { 
+                    Name = item.Name, 
+                    Path = item.Path 
+                });
+            }
+            OnPropertyChanged(nameof(DropZoneVisibility));
+            OnPropertyChanged(nameof(StashedFilesVisibility));
         }
     }
 
-    public string ConnectedText => IsConnected ? "Connected" : "Disconnected";
-    
-    public Brush ConnectedColor => IsConnected 
-        ? new SolidColorBrush(Color.FromArgb(255, 16, 185, 129)) 
-        : new SolidColorBrush(Color.FromArgb(180, 255, 255, 255));
-
-    public string BatteryText => BatteryPercent.HasValue ? $"{BatteryPercent}%" : "";
-    public Visibility BatteryVisibility => BatteryPercent.HasValue ? Visibility.Visible : Visibility.Collapsed;
-    public string ButtonText => IsConnected ? "Disconnect" : "Connect";
-
-    public event PropertyChangedEventHandler? PropertyChanged;
-    private void RaisePropertyChanged(string prop)
+    private async void StashedFile_Click(object sender, RoutedEventArgs e)
     {
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(prop));
+        if (sender is Button btn && btn.Tag is string path)
+        {
+            if (path == "mock_path_hero_shot.png") return; // ignore mock
+            try
+            {
+                var file = await Windows.Storage.StorageFile.GetFileFromPathAsync(path);
+                await Windows.System.Launcher.LaunchFileAsync(file);
+            }
+            catch (Exception ex)
+            {
+                Helpers.Logger.Error($"FileShelf: failed to open stashed file {path}", ex);
+            }
+        }
+    }
+
+    private void DeleteStashedFile_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button btn && btn.Tag is string path)
+        {
+            var file = StashedFiles.FirstOrDefault(f => f.Path == path);
+            if (file != null)
+            {
+                StashedFiles.Remove(file);
+                OnPropertyChanged(nameof(DropZoneVisibility));
+                OnPropertyChanged(nameof(StashedFilesVisibility));
+            }
+        }
+    }
+
+    private void Task_Checked(object sender, RoutedEventArgs e)
+    {
+        if (sender is CheckBox cb && cb.DataContext is TaskItem task)
+        {
+            task.IsCompleted = true;
+        }
+    }
+
+    private void Task_Unchecked(object sender, RoutedEventArgs e)
+    {
+        if (sender is CheckBox cb && cb.DataContext is TaskItem task)
+        {
+            task.IsCompleted = false;
+        }
     }
 }
+

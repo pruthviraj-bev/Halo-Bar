@@ -599,7 +599,7 @@ public class WindowService
             case WindowProfile.Expanded:
                 // Premium wide grid dashboard flyout
                 width  = 800;
-                height = _taskbarHeightDips + 480;
+                height = 480;
                 break;
 
             default:
@@ -653,16 +653,31 @@ public class WindowService
     // ── Anchoring ──────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Pins the window's bottom edge to the screen bottom and left edge to the screen left.
-    /// As height grows (expansion), the window rises upward — the dock strip stays fixed.
+    /// Pins the window's bottom edge to the screen bottom or taskbar top depending on profile state.
+    /// As height grows (expansion), the window rises upward and clears the taskbar.
     /// </summary>
     private PointInt32 GetAnchoredPosition(int rawWidthPhysical, int rawHeightPhysical)
     {
         var da = _cachedDisplayArea ?? DisplayArea.GetFromWindowId(_appWindow.Id, DisplayAreaFallback.Primary);
+        double scale = _cachedScale;
 
-        int x = da.WorkArea.X + (int)Math.Round(LeftMarginDips * _cachedScale);
+        double currentHeightDips = rawHeightPhysical / scale;
+        double collapsedHeight = _taskbarHeightDips;
+        double expandedHeight = 480;
+
+        double progress = 0;
+        if (expandedHeight > collapsedHeight)
+        {
+            progress = (currentHeightDips - collapsedHeight) / (expandedHeight - collapsedHeight);
+            if (progress < 0) progress = 0;
+            if (progress > 1) progress = 1;
+        }
+
+        double bottomOffsetDips = progress * _taskbarHeightDips;
+
+        int x = da.WorkArea.X + (int)Math.Round(LeftMarginDips * scale);
         int screenBottom = da.OuterBounds.Y + da.OuterBounds.Height;
-        int y = screenBottom - rawHeightPhysical;
+        int y = screenBottom - rawHeightPhysical - (int)Math.Round(bottomOffsetDips * scale);
 
         return new PointInt32(x, y);
     }

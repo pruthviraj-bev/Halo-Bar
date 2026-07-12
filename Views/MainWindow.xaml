@@ -28,7 +28,7 @@
                 Background="{ThemeResource IslandBackgroundBrush}"
                 BorderBrush="Transparent"
                 BorderThickness="0"
-                CornerRadius="20"
+                CornerRadius="24"
                 Margin="0,0,0,8"
                 Visibility="{x:Bind BoolToVisibility(ViewModel.IsExpanded), Mode=OneWay}">
             <ContentControl
@@ -48,6 +48,7 @@
                 HorizontalAlignment="Stretch"
                 VerticalAlignment="Stretch"
                 Margin="0"
+                Visibility="{x:Bind BoolToVisibilityInverse(ViewModel.IsExpanded), Mode=OneWay}"
                 AutomationProperties.Name="Dynamic Island Pill">
 
             <!-- Inside the collapsed capsule, center the active content vertically -->
