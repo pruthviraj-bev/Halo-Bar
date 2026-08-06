@@ -12,6 +12,7 @@ public partial class App : Application
 {
     public static MainWindow Window { get; private set; } = null!;
     public static WindowService WindowService { get; private set; } = null!;
+    public static CompactLayoutController CompactLayoutController { get; private set; } = null!;
     public static MediaService MediaService { get; } = new();
     public static ClipboardService ClipboardService { get; } = new();
     public static BatteryService BatteryService { get; } = new();
@@ -63,10 +64,24 @@ public partial class App : Application
         // MainWindowViewModel can subscribe to ActiveControlChanged on construction.
         IslandController = new IslandController(DispatcherQueue);
 
-        // Create window and wire up WindowService
+        // Create window and wire up WindowService.
+        // CompactLayoutController is the sole authority for compact geometry and
+        // is created first so WindowService can consume it passively.
         Window = new MainWindow();
-        WindowService = new WindowService(Window);
-        WindowService.InitializeWindow(220, 40);
+        CompactLayoutController = new CompactLayoutController(Window);
+        WindowService = new WindowService(Window, CompactLayoutController);
+
+        // Apply all DWM/borderless/toolwindow/owner styling while the window is
+        // still HIDDEN so its very first present (triggered by InitializeWindow's
+        // MoveAndResize / Window.Activate) is already styled. Previously this ran
+        // AFTER Activate(), causing a default-styled opaque first frame (black flash).
+        WindowService.ApplyDwmAttributes(DispatcherQueue);
+
+        // Measure the taskbar BEFORE the first placement so the window is created
+        // anchored in the free zone (right of Start/Search) instead of at x=0.
+        CompactLayoutController.Start();
+
+        WindowService.InitializeWindow(CompactLayoutController.CompactIdealWidth, 40);
 
         WindowService.FullscreenStateChanged += (s, isFullscreen) =>
         {
@@ -77,6 +92,5 @@ public partial class App : Application
         };
 
         Window.Activate();
-        WindowService.ApplyDwmAttributes(DispatcherQueue);
     }
 }

@@ -36,9 +36,6 @@ public class IslandController
     // Auto-dismiss timer for transient widgets (currently: Clipboard).
     private DispatcherQueueTimer? _autoDismissTimer;
 
-    // Tracks the last profile sent to WindowService to avoid redundant animations.
-    private WindowProfile? _currentProfile;
-
     // Whether the user has toggled manual expansion via click.
     private bool _clickExpanded;
 
@@ -63,6 +60,14 @@ public class IslandController
     public event EventHandler<UserControl?> ActiveControlChanged = delegate { };
 
     /// <summary>
+    /// The currently active compact widget control (stack[0]), or null when the stack is empty.
+    /// Needed because the initial selection is published in the IslandController constructor,
+    /// before MainWindowViewModel subscribes to <see cref="ActiveControlChanged"/> — so late
+    /// subscribers must read this to pick up the default widget instead of being left empty.
+    /// </summary>
+    public UserControl? CurrentControl => _stack.Count > 0 ? _stack[0].Control : null;
+
+    /// <summary>
     /// Fires whenever the manual click-expansion state changes.
     /// </summary>
     public event EventHandler<bool> IsExpandedChanged = delegate { };
@@ -80,15 +85,6 @@ public class IslandController
         Push(defaultWidget, defaultWidget);
     }
 
-    /// <summary>
-    /// Called by WindowService (150ms timer thread) when the width tier changes.
-    /// Routes the update to the MediaWidget on the UI thread.
-    /// </summary>
-    public void SetMediaWidgetTier(int tier)
-    {
-        _dispatcherQueue.TryEnqueue(() => _mediaWidget?.SetTier(tier));
-    }
-
     // ── Interaction signals (from MainWindow) ─────────────────────────────
 
     /// <summary>
@@ -99,7 +95,7 @@ public class IslandController
     {
         _clickExpanded = !_clickExpanded;
         IsExpandedChanged.Invoke(this, _clickExpanded);
-        ApplyWindowProfile();
+        Commit();
 
         if (_clickExpanded)
             ArmAutoCollapse(TimeSpan.FromSeconds(6));
@@ -135,13 +131,12 @@ public class IslandController
     /// </summary>
     public void NotifyFocusLost()
     {
-        Helpers.Logger.Info($"[DEBUG_EVENT] NotifyFocusLost: _clickExpanded={_clickExpanded} at {DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}");
         if (_clickExpanded)
         {
             _clickExpanded = false;
             IsExpandedChanged.Invoke(this, false);
             DisarmAutoCollapse();
-            ApplyWindowProfile();
+            Commit();
         }
     }
 
@@ -161,7 +156,7 @@ public class IslandController
             {
                 _clickExpanded = false;
                 IsExpandedChanged.Invoke(this, false);
-                ApplyWindowProfile();
+                Commit();
             }
         };
         _autoCollapseTimer.Start();
@@ -177,6 +172,8 @@ public class IslandController
 
     private void Push(IIslandWidget widget, UserControl control, TimeSpan? autoDismiss = null)
     {
+        Helpers.Logger.Info($"IslandController.Push: {control.GetType().Name} (priority={widget.Priority}, stackBefore={_stack.Count})");
+
         // Prevent duplicate stack entries for the same widget instance.
         if (_stack.Any(e => e.Widget == widget)) return;
 
@@ -195,9 +192,10 @@ public class IslandController
 
     private void Pop(IIslandWidget widget, UserControl control)
     {
-        Helpers.Logger.Info($"[DEBUG_EVENT] IslandController.Pop: Widget={widget.GetType().Name} at {DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}");
         int idx = _stack.FindIndex(e => e.Widget == widget);
         if (idx < 0) return; // Already removed — safe to ignore.
+
+        Helpers.Logger.Info($"IslandController.Pop: {control.GetType().Name} (wasTop={idx == 0}, stackBefore={_stack.Count})");
 
         bool wasTop = (idx == 0);
         _stack.RemoveAt(idx);
@@ -228,7 +226,8 @@ public class IslandController
         else
         {
             var top = _stack.Count > 0 ? _stack[0] : null;
-            ActiveControlChanged.Invoke(this, top?.Control);
+            var published = top?.Control;
+            ActiveControlChanged.Invoke(this, published);
 
             // Manage auto-dismiss timer: stop any running timer, then start a new one if needed.
             _autoDismissTimer?.Stop();
@@ -274,10 +273,9 @@ public class IslandController
             desired = expand ? top.PreferredProfile : WindowProfile.Collapsed;
         }
 
-        // Deduplicate: skip if the window is already animating toward this profile.
-        if (desired == _currentProfile) return;
-        _currentProfile = desired;
-
+        // Deduplication happens inside WindowService.SetProfile, which compares the
+        // resolved target size. Compact is stateless (one fixed width), so a change
+        // between two compact widgets resolves to the same target and is a no-op.
         App.WindowService.SetProfile(desired);
     }
 

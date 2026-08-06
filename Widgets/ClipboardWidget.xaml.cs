@@ -92,7 +92,8 @@ public sealed partial class ClipboardWidget : UserControl, IIslandWidget
 
         VisualStateManager.GoToState(this, "Expanded", true);
 
-        // Animate the window height to fit the expanded clipboard notification (180 DIPs)
+        // LEGACY (deferred to a later phase): widget-level preview that resizes
+        // the window to 320×180. Will move to the dashboard/overlay system.
         App.WindowService.StartSizeAnimation(320, 180);
     }
 
@@ -103,9 +104,9 @@ public sealed partial class ClipboardWidget : UserControl, IIslandWidget
 
         VisualStateManager.GoToState(this, "Collapsed", true);
 
-        // Animate window back to collapsed capsule width/height
-        bool isMediaActive = App.MediaService.CurrentState != null && !string.IsNullOrEmpty(App.MediaService.CurrentState.Title);
-        int targetWidth = isMediaActive ? 320 : 160;
-        App.WindowService.StartSizeAnimation(targetWidth, 48);
+        // Phase 1: compact pill geometry is fixed — collapse back to the single
+        // compact size (width token × taskbar height). No more width tiers.
+        var (width, height) = App.WindowService.CompactSize;
+        App.WindowService.StartSizeAnimation(width, height);
     }
 }

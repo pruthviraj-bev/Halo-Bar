@@ -30,7 +30,7 @@
                 BorderThickness="0"
                 CornerRadius="24"
                 Margin="0,0,0,8"
-                Visibility="{x:Bind BoolToVisibility(ViewModel.IsExpanded), Mode=OneWay}">
+                Visibility="{x:Bind ViewModel.ExpandedVisibility, Mode=OneWay}">
             <ContentControl
                 x:Name="DashboardHost"
                 Content="{x:Bind ViewModel.Dashboard, Mode=OneWay}"
@@ -48,14 +48,14 @@
                 HorizontalAlignment="Stretch"
                 VerticalAlignment="Stretch"
                 Margin="0"
-                Visibility="{x:Bind BoolToVisibilityInverse(ViewModel.IsExpanded), Mode=OneWay}"
+                Visibility="{x:Bind ViewModel.PillVisibility, Mode=OneWay}"
                 AutomationProperties.Name="Dynamic Island Pill">
 
             <!-- Inside the collapsed capsule, center the active content vertically -->
             <Grid Padding="10,0,10,0">
                 <ContentControl
                     x:Name="WidgetHost"
-                    Content="{x:Bind GetTaskbarContent(ViewModel.IsExpanded, ViewModel.ActiveWidget), Mode=OneWay}"
+                    Content="{x:Bind ViewModel.ActiveWidget, Mode=OneWay}"
                     HorizontalContentAlignment="Stretch"
                     VerticalContentAlignment="Center"
                     AutomationProperties.Name="Widget Host" />

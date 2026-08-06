@@ -1,4 +1,5 @@
 using System;
+using DynamicIsland.Controls;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Data;
 
@@ -31,28 +32,15 @@ public class NullToVisibilityInverseConverter : IValueConverter
 }
 
 /// <summary>
-/// Converter that returns a tiny play status indicator icon based on playback state.
+/// Converter that returns the Filled Play icon when paused and the Filled Pause
+/// icon when playing, for player buttons.
 /// </summary>
-public class PlaybackGlyphConverter : IValueConverter
+public class PlayPauseIconConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, string language)
     {
         bool isPlaying = (bool)value;
-        return isPlaying ? "\uE102" : ""; // Tiny pause bars when playing, empty when paused
-    }
-
-    public object ConvertBack(object value, Type targetType, object parameter, string language) => throw new NotImplementedException();
-}
-
-/// <summary>
-/// Converter that returns standard Play (\uF5B0) or Pause (\uF5B1) icons for player buttons.
-/// </summary>
-public class PlayPauseGlyphConverter : IValueConverter
-{
-    public object Convert(object value, Type targetType, object parameter, string language)
-    {
-        bool isPlaying = (bool)value;
-        return isPlaying ? "\uF5B1" : "\uF5B0"; // MDL2 Glyph codes
+        return isPlaying ? AppIconKind.Pause : AppIconKind.Play;
     }
 
     public object ConvertBack(object value, Type targetType, object parameter, string language) => throw new NotImplementedException();

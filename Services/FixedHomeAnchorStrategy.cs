@@ -1,0 +1,51 @@
+using DynamicIsland.Helpers;
+
+namespace DynamicIsland.Services;
+
+/// <summary>
+/// Single, fixed home position for the pill: X = 0 (the screen/taskbar left
+/// edge). Only the width responds to the taskbar — it takes however much room
+/// genuinely exists between the left edge and the start of the app-button
+/// strip, minus <see cref="CompactLayoutController.SafetyMargin"/> and an
+/// <see cref="UnmeasuredIconBuffer"/> for the Start/Search visuals that sit
+/// left of the strip, floored at 0 and capped at
+/// <see cref="CompactLayoutController.CompactIdealWidth"/>. The position never
+/// moves.
+///
+/// The width is bounded by the app strip's <em>left</em> edge
+/// (<see cref="TaskbarSnapshot.AppStripLeft"/>, i.e. MSTaskSwWClass.Left ==
+/// ReBarWindow32.Left in the current layout). Start/Search are deliberately
+/// <em>not</em> detected: icon mode renders them XAML-only with no HWND, which
+/// made reserved-cluster detection flaky. The strip's left edge is measurable
+/// in every layout and is stable, so it is the single boundary used here.
+///
+/// Width uses the same "never claim a width you can't back up" clamping as
+/// <see cref="AppStripAnchorStrategy"/> — <c>Math.Min(ideal, Math.Max(0,
+/// available))</c> — never the old Math.Clamp(raw, CompactMinWidth, ideal)
+/// floor, which would push the pill past the tray on a crowded taskbar.
+/// </summary>
+public sealed class FixedHomeAnchorStrategy : IAnchorStrategy
+{
+    // Observed this session: Start/Search visuals begin ~33 DIP left of
+    // AppStripLeft (368.8 − 336), and that gap is not reliably measurable (icon
+    // mode exposes no HWND). Buffer 40 DIP on top of SafetyMargin so the pill can
+    // never reach the Start icon even when the pill takes its full ideal width.
+    // Pragmatic trade: a little pill width for guaranteed non-overlap.
+    private const double UnmeasuredIconBuffer = 40;
+
+    /// <inheritdoc/>
+    public AnchorResult Resolve(TaskbarSnapshot snapshot)
+    {
+        // Home is X=0 (screen/taskbar left edge). Width responds to how much
+        // room is free until the app strip begins, less the margins (SafetyMargin
+        // for the strip itself + UnmeasuredIconBuffer for the Start/Search visuals
+        // that sit left of the strip but are not reliably measurable); position
+        // never moves.
+        double boundary = snapshot.AppStripLeft;
+        double available = boundary - CompactLayoutController.SafetyMargin - UnmeasuredIconBuffer;
+        double width = Math.Min(CompactLayoutController.CompactIdealWidth, Math.Max(0, available));
+
+        Logger.Info($"[ANCHOR-FIXEDHOME] x=0 width={width:F1} available={available:F1} boundary={boundary:F1} buffer={UnmeasuredIconBuffer} source=appStripLeft");
+        return new AnchorResult(0, width);
+    }
+}

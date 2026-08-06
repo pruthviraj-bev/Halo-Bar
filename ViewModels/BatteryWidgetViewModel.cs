@@ -1,4 +1,5 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using DynamicIsland.Controls;
 using DynamicIsland.Helpers;
 
 namespace DynamicIsland.ViewModels;
@@ -17,7 +18,7 @@ public partial class BatteryWidgetViewModel : ObservableObject
     public partial string StatusText { get; set; } = "";
 
     [ObservableProperty]
-    public partial string BatteryGlyph { get; set; } = "\uE83F";
+    public partial AppIconKind BatteryIconKind { get; set; } = AppIconKind.Battery10;
 
     [ObservableProperty]
     public partial bool IsCharging { get; set; }
@@ -39,16 +40,16 @@ public partial class BatteryWidgetViewModel : ObservableObject
             _                    => "On Battery",
         };
 
-        // Segoe MDL2 Assets: battery charging vs. level icons
-        BatteryGlyph = state.IsCharging
-            ? "\uE85A"                        // BatteryCharging9
+        // Fluent System Icons: charging vs. battery level icons
+        BatteryIconKind = state.IsCharging
+            ? AppIconKind.BatteryCharge
             : state.ChargePercent switch
             {
-                >= 80 => "\uE83F",            // Battery10 (full)
-                >= 60 => "\uEBA9",            // Battery6
-                >= 40 => "\uEBA8",            // Battery4
-                >= 20 => "\uEBA7",            // Battery2
-                _     => "\uEBA6",            // Battery0 / critical
+                >= 80 => AppIconKind.Battery10,
+                >= 60 => AppIconKind.Battery6,
+                >= 40 => AppIconKind.Battery4,
+                >= 20 => AppIconKind.Battery2,
+                _     => AppIconKind.Battery0,
             };
     }
 

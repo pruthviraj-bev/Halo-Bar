@@ -3,6 +3,7 @@
     x:Class="DynamicIsland.Widgets.VolumeWidget"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:DynamicIsland.Controls"
     SizeChanged="OnSizeChanged">
 
     <Grid x:Name="Root" VerticalAlignment="Center">
@@ -31,13 +32,12 @@
               Height="36"
               Padding="10,0">
 
-            <FontIcon Grid.Column="0"
-                      Glyph="{x:Bind ViewModel.VolumeGlyph, Mode=OneWay}"
-                      FontFamily="Segoe Fluent Icons"
-                      FontSize="12"
-                      Foreground="{ThemeResource AccentBrush}"
-                      Margin="0,0,10,0"
-                      VerticalAlignment="Center"/>
+            <controls:AppIcon Grid.Column="0"
+                              Kind="{x:Bind ViewModel.VolumeIconKind, Mode=OneWay}"
+                              Width="12" Height="12"
+                              Fill="{ThemeResource AccentBrush}"
+                              Margin="0,0,10,0"
+                              VerticalAlignment="Center"/>
 
             <!-- Subtle volume progress bar -->
             <ProgressBar Grid.Column="1"

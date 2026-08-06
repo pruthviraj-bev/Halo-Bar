@@ -14,7 +14,10 @@ namespace DynamicIsland.Services;
 /// Manages window sizing, positioning, and taskbar-docking behavior.
 ///
 /// Design contract:
-///  - Window is permanently docked bottom-left, flush with the taskbar.
+///  - Window is permanently docked at the start of the taskbar's free zone —
+///    its X and width come from CompactLayoutController (<see cref="HaloX"/> and
+///    <see cref="HaloWidth"/>), never from a screen-relative offset. The pill
+///    always stays right of the reserved cluster (Start/Search) and left of the tray.
 ///  - No drag, no free positioning, no inertia.
 ///  - Z-order is actively maintained by a lightweight guard timer so the
 ///    widget always stays visually above the taskbar regardless of shell focus.
@@ -26,27 +29,39 @@ public class WindowService
     private readonly AppWindow _appWindow;
     private readonly IntPtr _hwnd;
 
+    // Sole authority for compact geometry. WindowService only consumes its
+    // CurrentWidth and animates on WidthChanged — it never computes compact width.
+    private readonly CompactLayoutController _compactLayout;
+
+    // Last profile applied via SetProfile. Used to keep width adaptation from
+    // touching the window while the expanded dashboard is showing.
+    private WindowProfile _currentProfile = WindowProfile.Collapsed;
+
     private double _cachedScale = 1.0;
     private DisplayArea? _cachedDisplayArea;
 
-    // Flush left, flush bottom — no margins against the screen edges.
-    private const double LeftMarginDips = 0.0;
+    // X is owned by CompactLayoutController (HaloX); the window is never
+    // positioned from a screen-relative constant.
 
     // Actual taskbar height (DIPs), detected from DisplayArea on init.
     private int _taskbarHeightDips = 48;
 
-    // Spring simulations for smooth size animation.
+    // Last resolved profile target; SetProfile dedupes against this so state changes
+    // that keep the same enum (e.g. media toggling while Collapsed) still re-apply.
+    private (int Width, int Height)? _lastProfileTarget;
+
+    // Spring simulations for smooth size animation. Position is NOT spring-animated:
+    // X is stateless, derived from CompactLayoutController.HaloX on every frame via
+    // GetAnchoredPosition(), so no animation can ever restore a stale X.
     private readonly MotionConfig _motionConfig = new();
     private readonly SpringSimulation _widthSpring;
     private readonly SpringSimulation _heightSpring;
-    private readonly SpringSimulation _xSpring;
-    private readonly SpringSimulation _ySpring;
 
     private bool _isAnimating = false;
     private readonly System.Diagnostics.Stopwatch _stopwatch = new();
 
     private DispatcherQueueTimer? _zOrderTimer;
-    private int _lastCloakedState = -1;
+
     private WinEventDelegate? _winEventDelegate;
     private IntPtr _hWinEventHook = IntPtr.Zero;
 
@@ -54,22 +69,18 @@ public class WindowService
     private bool _lastFullscreenActive = false;
     private bool _isHiddenForFullscreen = false;
 
-    // -1 = unchecked, 0 = full (320 DIPs), 1 = moderate (260 DIPs, artist hidden), 2 = heavy (180 DIPs, both hidden)
-    private int _lastWidthTier = -1;
+    // Fullscreen signal debounce. Taskbar/Explorer churn can flap
+    // IsFullscreenModeActive() for a few frames; acting on every flap causes a
+    // visible hide/show blink. A candidate state must persist for
+    // FullscreenConfirmMs before the window actually hides or shows.
+    private bool? _pendingFullscreen;
+    private double _pendingFullscreenSinceMs;
+    private readonly System.Diagnostics.Stopwatch _fsClock = new();
+    private static readonly long FullscreenConfirmMs = 200;
 
-    /// <summary>
-    /// The current layout tier resolved from taskbar available width.
-    /// 0 = full (both text visible), 1 = moderate (artist hidden), 2 = heavy (both hidden).
-    /// Set every 150ms by the z-order guard timer. MediaWidget reads this instead of
-    /// re-deriving the tier from the oscillating spring width, which would cause flickering.
-    /// </summary>
-    public static int CurrentWidthTier { get; private set; } = 0;
-
-#if DEBUG
-    public static double AvailableWidthOverride { get; set; } = -1;
-#endif
-
-    public PointInt32 HomePosition { get; set; }
+    // Last geometry handed to the OS — used to log only real moves, keeping the
+    // [MOVE] instrumentation quiet while unchanged frames are re-applied.
+    private RectInt32 _lastApplied;
 
     // ── P/Invoke ───────────────────────────────────────────────────────────
 
@@ -110,9 +121,6 @@ public class WindowService
     [DllImport("dwmapi.dll")]
     private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int pvAttribute, int cbAttribute);
 
-    [DllImport("dwmapi.dll")]
-    private static extern int DwmGetWindowAttribute(IntPtr hwnd, int attribute, out int pvAttribute, int cbAttribute);
-
     [DllImport("user32.dll")]
     private static extern uint GetDpiForWindow(IntPtr hwnd);
 
@@ -131,9 +139,6 @@ public class WindowService
     [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
     private static extern IntPtr FindWindow(string lpClassName, string? lpWindowName);
 
-    [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
-    private static extern IntPtr FindWindowEx(IntPtr hwndParent, IntPtr hwndChildAfter, string? lpszClass, string? lpszWindow);
-
     [DllImport("user32.dll", SetLastError = true)]
     private static extern IntPtr SetWinEventHook(
         uint eventMin, uint eventMax, IntPtr hmodWinEventProc,
@@ -151,6 +156,9 @@ public class WindowService
     [DllImport("user32.dll")]
     private static extern IntPtr GetForegroundWindow();
 
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+
     [DllImport("user32.dll")]
     private static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint dwFlags);
 
@@ -159,9 +167,6 @@ public class WindowService
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
-
-    [DllImport("user32.dll")]
-    private static extern short GetAsyncKeyState(int vKey);
 
     private delegate void WinEventDelegate(
         IntPtr hWinEventHook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint dwEventThread, uint dwmsEventTime);
@@ -181,7 +186,6 @@ public class WindowService
     private const int DWMWCP_ROUND  = 2;
     private const int DWMWA_BORDER_COLOR = 34;
     private const int DWMWA_COLOR_NONE   = -2;
-    private const int DWMWA_CLOAKED = 14;
     private const uint EVENT_SYSTEM_FOREGROUND = 0x0003;
     private const uint WINEVENT_OUTOFCONTEXT = 0x0000;
 
@@ -195,9 +199,11 @@ public class WindowService
 
     // ── Constructor ────────────────────────────────────────────────────────
 
-    public WindowService(Window window)
+    public WindowService(Window window, CompactLayoutController compactLayout)
     {
         _window = window ?? throw new ArgumentNullException(nameof(window));
+        _compactLayout = compactLayout ?? throw new ArgumentNullException(nameof(compactLayout));
+        _compactLayout.WidthChanged += OnCompactWidthChanged;
         _hwnd   = WinRT.Interop.WindowNative.GetWindowHandle(_window);
 
         var windowId = Win32Interop.GetWindowIdFromWindow(_hwnd);
@@ -207,26 +213,22 @@ public class WindowService
 
         _cachedScale       = GetScaleFactor();
         _cachedDisplayArea = DisplayArea.GetFromWindowId(_appWindow.Id, DisplayAreaFallback.Primary);
+        _compactLayout.Scale = _cachedScale;
 
-        _widthSpring  = new SpringSimulation(160, _motionConfig);
+        int initialCompactWidth = (int)Math.Round(_compactLayout.CurrentWidth);
+        _widthSpring  = new SpringSimulation(initialCompactWidth, _motionConfig);
         _heightSpring = new SpringSimulation(48,  _motionConfig);
 
-        int rawW = (int)Math.Round(160 * _cachedScale);
-        int rawH = (int)Math.Round(48  * _cachedScale);
-        var start = GetAnchoredPosition(rawW, rawH);
-        HomePosition = start;
-
-        _xSpring = new SpringSimulation(start.X, _motionConfig);
-        _ySpring = new SpringSimulation(start.Y, _motionConfig);
+        _fsClock.Start();
     }
 
     private void AppWindow_Changed(AppWindow sender, AppWindowChangedEventArgs args)
     {
-        Logger.Info($"[DEBUG_EVENT] AppWindow_Changed: PositionChanged={args.DidPositionChange}, SizeChanged={args.DidSizeChange}, VisibilityChanged={args.DidVisibilityChange} at {DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}");
         if ((args.DidPositionChange || args.DidSizeChange) && !_isAnimating)
         {
             _cachedScale = GetScaleFactor();
             _cachedDisplayArea = DisplayArea.GetFromWindowId(_appWindow.Id, DisplayAreaFallback.Primary);
+            _compactLayout.Scale = _cachedScale;
             _taskbarHeightDips = ComputeTaskbarHeightDips();
         }
     }
@@ -241,6 +243,7 @@ public class WindowService
     {
         _cachedScale       = GetScaleFactor();
         _cachedDisplayArea = DisplayArea.GetFromWindowId(_appWindow.Id, DisplayAreaFallback.Primary);
+        _compactLayout.Scale = _cachedScale;
 
         _taskbarHeightDips = ComputeTaskbarHeightDips();
 
@@ -252,15 +255,10 @@ public class WindowService
         int rawWidth  = (int)Math.Round(width              * _cachedScale);
         int rawHeight = (int)Math.Round(_taskbarHeightDips * _cachedScale);
         var start     = GetAnchoredPosition(rawWidth, rawHeight);
-        HomePosition  = start;
-
-        _xSpring.Current = start.X; _xSpring.Target = start.X;
-        _ySpring.Current = start.Y; _ySpring.Target = start.Y;
 
         ConfigureBorderless();
-        _window.ExtendsContentIntoTitleBar = true;
         SetAlwaysOnTop(true);
-        _appWindow.MoveAndResize(new RectInt32(start.X, start.Y, rawWidth, rawHeight));
+        ApplyGeometry(start.X, start.Y, rawWidth, rawHeight, "InitializeWindow");
 
         Logger.Info($"InitializeWindow: taskbarHeight={_taskbarHeightDips} dips, anchor=({start.X},{start.Y})");
     }
@@ -269,7 +267,6 @@ public class WindowService
     {
         if (_appWindow.Presenter is OverlappedPresenter p)
         {
-            p.SetBorderAndTitleBar(false, false);
             p.IsResizable   = false;
             p.IsMinimizable = false;
             p.IsMaximizable = false;
@@ -278,7 +275,8 @@ public class WindowService
 
     /// <summary>
     /// Applies all DWM and Win32 window behavior attributes.
-    /// Must be called AFTER Window.Activate().
+    /// Must be called BEFORE the window is first shown (while hidden), so the
+    /// first presented frame is already borderless, popup, toolwindow and owner-anchored.
     /// </summary>
     /// <param name="dispatcherQueue">UI dispatcher used to run the z-order guard timer.</param>
     public void ApplyDwmAttributes(DispatcherQueue dispatcherQueue)
@@ -363,125 +361,55 @@ public class WindowService
 
     private void ForceAboveTaskbar()
     {
-        bool success = SetWindowPos(_hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-        int error = System.Runtime.InteropServices.Marshal.GetLastWin32Error();
-        
-        // Query DWM cloaked attribute
-        int hr = DwmGetWindowAttribute(_hwnd, DWMWA_CLOAKED, out int cloaked, sizeof(int));
-        if (hr == 0)
-        {
-            if (cloaked != _lastCloakedState)
-            {
-                Logger.Info($"[DEBUG_EVENT] DWMWA_CLOAKED changed: {_lastCloakedState} → {cloaked} (1=App, 2=Shell, 4=Inherited) at {DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}");
-                _lastCloakedState = cloaked;
-            }
-        }
-        else
-        {
-            Logger.Error($"[DEBUG_EVENT] DwmGetWindowAttribute failed with HRESULT 0x{hr:X8} (GetLastError={System.Runtime.InteropServices.Marshal.GetLastWin32Error()})");
-        }
+        SetWindowPos(_hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
 
-#if DEBUG
-        // Check testing hotkeys in debug builds
-        if ((GetAsyncKeyState(0x78) & 0x8000) != 0) // F9
-        {
-            if (AvailableWidthOverride != -1)
-            {
-                AvailableWidthOverride = -1;
-                Logger.Info("[TEST_OVERRIDE] Available taskbar width reset to auto.");
-                App.IslandController.ApplyWindowProfile();
-            }
-        }
-        else if ((GetAsyncKeyState(0x79) & 0x8000) != 0) // F10
-        {
-            if (AvailableWidthOverride != 240)
-            {
-                AvailableWidthOverride = 240;
-                Logger.Info("[TEST_OVERRIDE] Available taskbar width overridden to 240 DIPs (Moderate crowding).");
-                App.IslandController.ApplyWindowProfile();
-            }
-        }
-        else if ((GetAsyncKeyState(0x7A) & 0x8000) != 0) // F11
-        {
-            if (AvailableWidthOverride != 180)
-            {
-                AvailableWidthOverride = 180;
-                Logger.Info("[TEST_OVERRIDE] Available taskbar width overridden to 180 DIPs (Heavy crowding).");
-                App.IslandController.ApplyWindowProfile();
-            }
-        }
-#endif
-
-        // Evaluate fullscreen mode state changes — hide/show AppWindow directly so the acrylic surface is fully removed
+        // Evaluate fullscreen mode state changes — hide/show AppWindow directly so the acrylic surface is fully removed.
+        // Debounced: the state must persist for FullscreenConfirmMs before acting, so transient taskbar-churn flaps
+        // (IsFullscreenModeActive() flickering for a few frames) never produce a hide/show blink.
         bool isFullscreen = IsFullscreenModeActive();
         if (isFullscreen != _lastFullscreenActive)
         {
-            _lastFullscreenActive = isFullscreen;
-            Logger.Info($"[DEBUG_EVENT] Fullscreen state changed: isFullscreen={isFullscreen} at {DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}");
-            if (isFullscreen)
+            if (_pendingFullscreen != isFullscreen)
             {
-                Logger.Info("[DEBUG_EVENT] Hiding AppWindow for fullscreen suppression.");
-                _isHiddenForFullscreen = true;
-                _appWindow.Hide();
+                _pendingFullscreen = isFullscreen;
+                _pendingFullscreenSinceMs = _fsClock.Elapsed.TotalMilliseconds;
             }
-            else
+            else if (_fsClock.Elapsed.TotalMilliseconds - _pendingFullscreenSinceMs >= FullscreenConfirmMs)
             {
-                Logger.Info("[DEBUG_EVENT] Showing AppWindow after fullscreen exit.");
-                _isHiddenForFullscreen = false;
-                _appWindow.Show();
-                // Re-assert TOPMOST after Show(), since Show() may reset Z-order
-                SetWindowPos(_hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+                _lastFullscreenActive = isFullscreen;
+                _pendingFullscreen = null;
+                if (isFullscreen)
+                {
+                    _isHiddenForFullscreen = true;
+                    Logger.Info("[WINDOW] fullscreen confirmed — Hide().");
+                    _appWindow.Hide();
+                }
+                else
+                {
+                    _isHiddenForFullscreen = false;
+                    Logger.Info("[WINDOW] fullscreen exited — Show().");
+                    _appWindow.Show();
+                    // Re-assert TOPMOST after Show(), since Show() may reset Z-order
+                    SetWindowPos(_hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+                }
+                FullscreenStateChanged?.Invoke(this, isFullscreen);
             }
-            FullscreenStateChanged?.Invoke(this, isFullscreen);
+        }
+        else if (_pendingFullscreen != null)
+        {
+            // Signal returned to the committed state before the confirm window —
+            // this was a transient flap. Drop the candidate without acting.
+            _pendingFullscreen = null;
         }
 
-        // Skip width tier check and SetWindowPos when hidden — window is not visible
+        // Skip SetWindowPos when hidden — window is not visible
         if (_isHiddenForFullscreen) return;
-
-        // ── Continuous available-width tier tracking ──────────────────────
-        // Run every 150ms tick so opening/closing taskbar apps is immediately reflected.
-        if (App.MediaService.CurrentState != null &&
-            !string.IsNullOrEmpty(App.MediaService.CurrentState.Title))
-        {
-            double availW = GetAvailableWidthDips();
-            // Use hysteresis: separate up/down thresholds to prevent oscillation at boundaries.
-            // Down-shift thresholds (tightening): 330 / 260
-            // Up-shift thresholds  (loosening):  350 / 280  (20 DIP dead-band each side)
-            int tier;
-            if (_lastWidthTier <= 0)
-                tier = availW < 330 ? 1 : 0;            // was full or unitialized → tighten at 330
-            else if (_lastWidthTier == 1)
-                tier = availW < 260 ? 2 : availW >= 350 ? 0 : 1;  // hysteresis both ways
-            else
-                tier = availW >= 280 ? 1 : 2;           // was heavy → loosen at 280
-
-            if (tier != _lastWidthTier)
-            {
-                Logger.Info($"[WIDTH_TIER] availWidth={availW:F1} DIPs → tier={tier} ({(tier==0?"full":tier==1?"moderate":"heavy")}), prev={_lastWidthTier} — calling ApplyWindowProfile");
-                _lastWidthTier = tier;
-                CurrentWidthTier = tier;
-                // Push text animation immediately, independently of window spring settling
-                App.IslandController.SetMediaWidgetTier(tier);
-                App.IslandController.ApplyWindowProfile();
-            }
-        }
-        else
-        {
-            // No media active — reset tier so next media session starts fresh
-            _lastWidthTier = -1;
-            CurrentWidthTier = 0;
-        }
     }
 
     private void WinEventProc(IntPtr hWinEventHook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint dwEventThread, uint dwmsEventTime)
     {
         if (eventType == EVENT_SYSTEM_FOREGROUND)
         {
-            var sb = new StringBuilder(256);
-            GetClassName(hwnd, sb, sb.Capacity);
-            string className = sb.ToString();
-            Logger.Info($"[DEBUG_EVENT] Foreground window changed to: {className} (HWND: 0x{hwnd.ToInt64():X}) at {DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}");
-            
             ForceAboveTaskbar();
         }
     }
@@ -567,47 +495,69 @@ public class WindowService
     }
 
     /// <summary>
-    /// Animates to a predefined WindowProfile using real taskbar-relative dimensions.
-    /// IslandController is the only permitted caller.
+    /// Resolves a WindowProfile to its logical DIP target size at this moment.
+    /// Compact geometry is stateless and owned by CompactLayoutController:
+    /// width comes from its CurrentWidth, height matches the taskbar.
+    /// It never depends on which widget is active, so compact→compact changes
+    /// never produce a different target (SetProfile dedupes them into no-ops).
     /// </summary>
-    public void SetProfile(WindowProfile profile)
+    public (int Width, int Height) ResolveProfileSize(WindowProfile profile)
     {
-        int width, height;
         switch (profile)
         {
             case WindowProfile.Collapsed:
-                // Collapsed dimensions matching the taskbar height.
-                // Each tier uses a discrete target width well inside the tier's range,
-                // so the spring never oscillates across a tier boundary during settling.
-                bool isMediaActive = App.MediaService.CurrentState != null && 
-                                     !string.IsNullOrEmpty(App.MediaService.CurrentState.Title);
-                if (isMediaActive)
-                {
-                    // Tier 0 (full): 320 DIPs — both text elements visible
-                    // Tier 1 (moderate): 250 DIPs — artist hidden, title shown
-                    // Tier 2 (heavy): 170 DIPs — both hidden
-                    int tier = CurrentWidthTier;
-                    width = tier == 0 ? 320 : tier == 1 ? 250 : 170;
-                }
-                else
-                {
-                    width = 160;
-                }
-                height = _taskbarHeightDips;
-                break;
+                // Compact pill — adaptive width (controller) × taskbar height.
+                return ((int)Math.Round(_compactLayout.CurrentWidth), _taskbarHeightDips);
 
             case WindowProfile.Expanded:
                 // Premium wide grid dashboard flyout
-                width  = 800;
-                height = 480;
-                break;
+                return (800, 664);
 
             default:
-                (width, height) = profile.ToDimensions();
-                break;
+                return profile.ToDimensions();
         }
+    }
 
+    /// <summary>
+    /// Current compact pill dimensions in DIPs (adaptive width from the
+    /// controller × live taskbar height). Exposed for the legacy ClipboardWidget
+    /// preview collapse; the only caller.
+    /// </summary>
+    public (int Width, int Height) CompactSize => ResolveProfileSize(WindowProfile.Collapsed);
+
+    /// <summary>
+    /// Animates to a predefined WindowProfile using real taskbar-relative dimensions.
+    /// IslandController is the only permitted caller.
+    /// Deduplicates on the resolved target size, so repeated calls with the same
+    /// profile (e.g. a compact→compact content change) are no-ops — the window
+    /// geometry never changes for compact widget switches.
+    /// </summary>
+    public void SetProfile(WindowProfile profile)
+    {
+        _currentProfile = profile;
+        var (width, height) = ResolveProfileSize(profile);
+
+        if (_lastProfileTarget is (int lastW, int lastH) && lastW == width && lastH == height)
+            return;
+
+        _lastProfileTarget = (width, height);
         StartSizeAnimation(width, height);
+    }
+
+    /// <summary>
+    /// Consumes the controller's width announcement. Applies the new compact
+    /// width only while the window is in the compact profile — an expanded
+    /// dashboard keeps its size, and the new width is picked up on collapse.
+    /// Animate once and keep the dedupe target in sync so later SetProfile
+    /// calls don't re-animate to a stale width.
+    /// </summary>
+    private void OnCompactWidthChanged(object? sender, double newWidth)
+    {
+        if (_currentProfile != WindowProfile.Collapsed) return;
+
+        int width = (int)Math.Round(newWidth);
+        StartSizeAnimation(width, _taskbarHeightDips);
+        _lastProfileTarget = (width, _taskbarHeightDips);
     }
 
     // ── Rendering loop ─────────────────────────────────────────────────────
@@ -636,18 +586,14 @@ public class WindowService
             int finalH   = (int)Math.Round(_heightSpring.Target * _cachedScale);
             var finalPos = GetAnchoredPosition(finalW, finalH);
 
-            _xSpring.Current = finalPos.X; _xSpring.Velocity = 0;
-            _ySpring.Current = finalPos.Y; _ySpring.Velocity = 0;
-            HomePosition = finalPos;
-
-            _appWindow.MoveAndResize(new RectInt32(finalPos.X, finalPos.Y, finalW, finalH));
+            ApplyGeometry(finalPos.X, finalPos.Y, finalW, finalH, "Settle");
             _isAnimating = false;
             Microsoft.UI.Xaml.Media.CompositionTarget.Rendering -= OnRendering;
             Logger.Info("Animation settled.");
             return;
         }
 
-        _appWindow.MoveAndResize(new RectInt32(pos.X, pos.Y, rawW, rawH));
+        ApplyGeometry(pos.X, pos.Y, rawW, rawH, "Frame");
     }
 
     // ── Anchoring ──────────────────────────────────────────────────────────
@@ -655,6 +601,8 @@ public class WindowService
     /// <summary>
     /// Pins the window's bottom edge to the screen bottom or taskbar top depending on profile state.
     /// As height grows (expansion), the window rises upward and clears the taskbar.
+    /// X is owned by CompactLayoutController (<see cref="HaloX"/>), so the pill
+    /// always starts in the free zone, right of the reserved cluster.
     /// </summary>
     private PointInt32 GetAnchoredPosition(int rawWidthPhysical, int rawHeightPhysical)
     {
@@ -663,7 +611,7 @@ public class WindowService
 
         double currentHeightDips = rawHeightPhysical / scale;
         double collapsedHeight = _taskbarHeightDips;
-        double expandedHeight = 480;
+        double expandedHeight = 664;
 
         double progress = 0;
         if (expandedHeight > collapsedHeight)
@@ -675,7 +623,7 @@ public class WindowService
 
         double bottomOffsetDips = progress * _taskbarHeightDips;
 
-        int x = da.WorkArea.X + (int)Math.Round(LeftMarginDips * scale);
+        int x = da.WorkArea.X + (int)Math.Round(_compactLayout.HaloX * scale);
         int screenBottom = da.OuterBounds.Y + da.OuterBounds.Height;
         int y = screenBottom - rawHeightPhysical - (int)Math.Round(bottomOffsetDips * scale);
 
@@ -684,10 +632,60 @@ public class WindowService
 
     // ── Helpers ────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// The single funnel for every window geometry write. Position and size are
+    /// always handed to the OS together in one MoveAndResize, so X and width can
+    /// never diverge. X always comes from the controller's HaloX via
+    /// <see cref="GetAnchoredPosition"/> — the [MOVE] log makes any path that
+    /// bypasses it immediately visible (haloX would not equal finalX).
+    /// </summary>
+    private void ApplyGeometry(int x, int y, int widthPx, int heightPx, string origin)
+    {
+        if (_lastApplied.X != x || _lastApplied.Y != y
+            || _lastApplied.Width != widthPx || _lastApplied.Height != heightPx)
+        {
+            _lastApplied = new RectInt32(x, y, widthPx, heightPx);
+            Logger.Info($"[MOVE] {origin}: haloX={_compactLayout.HaloX:F1} finalX={x} finalY={y} w={widthPx} h={heightPx}");
+        }
+        _appWindow.MoveAndResize(new RectInt32(x, y, widthPx, heightPx));
+    }
+
     private double GetScaleFactor()
     {
         uint dpi = GetDpiForWindow(_hwnd);
         return dpi / 96.0;
+    }
+
+    // Shell UI host processes that own full-screen borderless overlays
+    // (Start, Search, Widgets, taskbar flyouts). These must never be treated
+    // as fullscreen, even though their windows cover the monitor.
+    private static readonly string[] ShellHostProcesses =
+    {
+        "explorer",
+        "StartMenuExperienceHost",
+        "SearchHost",
+        "Widgets",
+        "ShellExperienceHost",
+    };
+
+    private static bool IsShellHostWindow(IntPtr hwnd)
+    {
+        GetWindowThreadProcessId(hwnd, out uint pid);
+        if (pid == 0) return false;
+        try
+        {
+            using var process = System.Diagnostics.Process.GetProcessById((int)pid);
+            foreach (string name in ShellHostProcesses)
+            {
+                if (string.Equals(process.ProcessName, name, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+        }
+        catch (ArgumentException)
+        {
+            // Process already exited — not a shell host.
+        }
+        return false;
     }
 
     private bool IsFullscreenModeActive()
@@ -706,11 +704,16 @@ public class WindowService
         IntPtr fgHwnd = GetForegroundWindow();
         if (fgHwnd != IntPtr.Zero)
         {
-            // Do not treat taskbar or desktop as fullscreen
+            // Never treat the taskbar, desktop, or Explorer's shell UI as
+            // fullscreen. Explorer's XAML islands (XamlExplorerHostIslandWindow)
+            // cover the monitor and have no caption, so without this check the
+            // pill would hide whenever Start/Search/Widgets/taskbar overlays take
+            // foreground — the visible hide/show blink during taskbar churn.
             StringBuilder sb = new StringBuilder(256);
             GetClassName(fgHwnd, sb, sb.Capacity);
             string className = sb.ToString();
-            if (className == "Shell_TrayWnd" || className == "Progman" || className == "WorkerW")
+            if (className == "Shell_TrayWnd" || className == "Progman" || className == "WorkerW"
+                || className == "XamlExplorerHostIslandWindow" || IsShellHostWindow(fgHwnd))
             {
                 return false;
             }
@@ -744,69 +747,5 @@ public class WindowService
         }
 
         return false;
-    }
-
-
-
-    /// <summary>
-    /// Returns the left edge of the Windows taskbar icon list (MSTaskListWClass) in DIPs.
-    /// This represents the available width between the left screen edge (or start menu area)
-    /// and the taskbar buttons. As more apps are opened, the task list shifts left, reducing this value.
-    /// </summary>
-    public double GetAvailableWidthDips()
-    {
-#if DEBUG
-        if (AvailableWidthOverride > 0)
-        {
-            return AvailableWidthOverride;
-        }
-#endif
-
-        IntPtr trayHwnd = FindWindow("Shell_TrayWnd", null);
-        if (trayHwnd != IntPtr.Zero)
-        {
-            IntPtr targetHwnd = FindChildWindow(trayHwnd, "MSTaskListWClass");
-            if (targetHwnd == IntPtr.Zero)
-            {
-                targetHwnd = FindChildWindow(trayHwnd, "MSTaskSwWClass");
-            }
-
-            if (targetHwnd != IntPtr.Zero && GetWindowRect(targetHwnd, out RECT rect))
-            {
-                double leftDips = rect.Left / _cachedScale;
-                Logger.Info($"[WIDTH_DBG] Found task list: left={rect.Left}px ({leftDips:F1}dip)");
-                if (leftDips > 50)
-                {
-                    return leftDips;
-                }
-            }
-            else
-            {
-                Logger.Info("[WIDTH_DBG] Task list window not found under Shell_TrayWnd");
-            }
-        }
-        else
-        {
-            Logger.Info("[WIDTH_DBG] Shell_TrayWnd not accessible — using WorkArea fallback");
-        }
-
-        // Fallback: return full work area width
-        var da = _cachedDisplayArea ?? DisplayArea.GetFromWindowId(_appWindow.Id, DisplayAreaFallback.Primary);
-        return da.WorkArea.Width / _cachedScale;
-    }
-
-    private IntPtr FindChildWindow(IntPtr parent, string className)
-    {
-        string? nullStr = null;
-        IntPtr child = FindWindowEx(parent, IntPtr.Zero, className, nullStr);
-        if (child != IntPtr.Zero) return child;
-
-        IntPtr current = IntPtr.Zero;
-        while ((current = FindWindowEx(parent, current, nullStr, nullStr)) != IntPtr.Zero)
-        {
-            IntPtr found = FindChildWindow(current, className);
-            if (found != IntPtr.Zero) return found;
-        }
-        return IntPtr.Zero;
     }
 }

@@ -6,14 +6,14 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:helpers="using:DynamicIsland.Helpers"
+    xmlns:controls="using:DynamicIsland.Controls"
     SizeChanged="UserControl_SizeChanged"
     mc:Ignorable="d">
 
     <UserControl.Resources>
         <helpers:NullToVisibilityConverter x:Key="NullToVisibilityConverter" />
         <helpers:NullToVisibilityInverseConverter x:Key="NullToVisibilityInverseConverter" />
-        <helpers:PlaybackGlyphConverter x:Key="PlaybackGlyphConverter" />
-        <helpers:PlayPauseGlyphConverter x:Key="PlayPauseGlyphConverter" />
+        <helpers:PlayPauseIconConverter x:Key="PlayPauseIconConverter" />
 
         <!-- Premium Win11 Button Style with hover & pressed animations -->
         <Style x:Key="PlayerButtonStyle" TargetType="Button">
@@ -21,7 +21,6 @@
             <Setter Property="BorderBrush" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="Foreground" Value="{ThemeResource TextPrimaryBrush}" />
-            <Setter Property="FontFamily" Value="Segoe MDL2 Assets" />
             <Setter Property="FontSize" Value="12" />
             <Setter Property="Width" Value="24" />
             <Setter Property="Height" Value="24" />
@@ -69,9 +68,9 @@
                 <Image Source="{x:Bind ViewModel.Thumbnail, Mode=OneWay}" 
                        Visibility="{x:Bind ViewModel.Thumbnail, Converter={StaticResource NullToVisibilityConverter}, Mode=OneWay}" 
                        Stretch="UniformToFill" />
-                <FontIcon Glyph="&#xE8D6;" FontFamily="Segoe Fluent Icons" FontSize="11" 
-                          Foreground="{ThemeResource TextSecondaryBrush}"
-                          Visibility="{x:Bind ViewModel.Thumbnail, Converter={StaticResource NullToVisibilityInverseConverter}, Mode=OneWay}" />
+                <controls:AppIcon Kind="MusicNote" Width="12" Height="12"
+                                  Fill="{ThemeResource TextSecondaryBrush}"
+                                  Visibility="{x:Bind ViewModel.Thumbnail, Converter={StaticResource NullToVisibilityInverseConverter}, Mode=OneWay}" />
             </Grid>
 
             <!-- Col 1: Song Information (Auto-stretched width) -->
@@ -130,9 +129,15 @@
                         Spacing="8" 
                         HorizontalAlignment="Right" 
                         VerticalAlignment="Center">
-                <Button Style="{StaticResource PlayerButtonStyle}" Content="&#xE892;" Command="{x:Bind ViewModel.PreviousCommand}" ToolTipService.ToolTip="Previous" />
-                <Button Style="{StaticResource PlayerButtonStyle}" Content="{x:Bind ViewModel.IsPlaying, Converter={StaticResource PlayPauseGlyphConverter}, Mode=OneWay}" Command="{x:Bind ViewModel.PlayPauseCommand}" ToolTipService.ToolTip="Play/Pause" />
-                <Button Style="{StaticResource PlayerButtonStyle}" Content="&#xE893;" Command="{x:Bind ViewModel.NextCommand}" ToolTipService.ToolTip="Next" />
+                <Button Style="{StaticResource PlayerButtonStyle}" Command="{x:Bind ViewModel.PreviousCommand}" ToolTipService.ToolTip="Previous">
+                    <controls:AppIcon Kind="Previous" Width="16" Height="16"/>
+                </Button>
+                <Button Style="{StaticResource PlayerButtonStyle}" Command="{x:Bind ViewModel.PlayPauseCommand}" ToolTipService.ToolTip="Play/Pause">
+                    <controls:AppIcon Kind="{x:Bind ViewModel.IsPlaying, Converter={StaticResource PlayPauseIconConverter}, Mode=OneWay}" Filled="True" Width="20" Height="20"/>
+                </Button>
+                <Button Style="{StaticResource PlayerButtonStyle}" Command="{x:Bind ViewModel.NextCommand}" ToolTipService.ToolTip="Next">
+                    <controls:AppIcon Kind="Next" Width="16" Height="16"/>
+                </Button>
             </StackPanel>
         </Grid>
 
@@ -144,9 +149,9 @@
                     <Image Source="{x:Bind ViewModel.Thumbnail, Mode=OneWay}" 
                            Visibility="{x:Bind ViewModel.Thumbnail, Converter={StaticResource NullToVisibilityConverter}, Mode=OneWay}" 
                            Stretch="UniformToFill" />
-                    <FontIcon Glyph="&#xE189;" FontFamily="Segoe MDL2 Assets" FontSize="18" 
-                              Foreground="{ThemeResource TextSecondaryBrush}"
-                              Visibility="{x:Bind ViewModel.Thumbnail, Converter={StaticResource NullToVisibilityInverseConverter}, Mode=OneWay}" />
+                    <controls:AppIcon Kind="MusicNote" Width="20" Height="20"
+                                      Fill="{ThemeResource TextSecondaryBrush}"
+                                      Visibility="{x:Bind ViewModel.Thumbnail, Converter={StaticResource NullToVisibilityInverseConverter}, Mode=OneWay}" />
                 </Grid>
 
                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
@@ -161,9 +166,15 @@
 
             <!-- Lower Row: Playback Keys -->
             <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="16">
-                <Button Style="{StaticResource PlayerButtonStyle}" Width="36" Height="36" CornerRadius="18" Content="&#xE892;" Command="{x:Bind ViewModel.PreviousCommand}" />
-                <Button Style="{StaticResource PlayerButtonStyle}" Width="36" Height="36" CornerRadius="18" Content="{x:Bind ViewModel.IsPlaying, Converter={StaticResource PlayPauseGlyphConverter}, Mode=OneWay}" Command="{x:Bind ViewModel.PlayPauseCommand}" />
-                <Button Style="{StaticResource PlayerButtonStyle}" Width="36" Height="36" CornerRadius="18" Content="&#xE893;" Command="{x:Bind ViewModel.NextCommand}" />
+                <Button Style="{StaticResource PlayerButtonStyle}" Width="36" Height="36" CornerRadius="18" Command="{x:Bind ViewModel.PreviousCommand}">
+                    <controls:AppIcon Kind="Previous" Width="20" Height="20"/>
+                </Button>
+                <Button Style="{StaticResource PlayerButtonStyle}" Width="36" Height="36" CornerRadius="18" Command="{x:Bind ViewModel.PlayPauseCommand}">
+                    <controls:AppIcon Kind="{x:Bind ViewModel.IsPlaying, Converter={StaticResource PlayPauseIconConverter}, Mode=OneWay}" Filled="True" Width="24" Height="24"/>
+                </Button>
+                <Button Style="{StaticResource PlayerButtonStyle}" Width="36" Height="36" CornerRadius="18" Command="{x:Bind ViewModel.NextCommand}">
+                    <controls:AppIcon Kind="Next" Width="20" Height="20"/>
+                </Button>
             </StackPanel>
         </Grid>
     </Grid>

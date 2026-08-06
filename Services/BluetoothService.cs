@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Windows.Devices.Bluetooth;
 using Windows.Devices.Enumeration;
 using Microsoft.UI.Dispatching;
+using DynamicIsland.Controls;
 
 namespace DynamicIsland.Services;
 
@@ -89,27 +90,27 @@ public class BluetoothService
                     battery = batInt;
                 }
 
-                // Determine device class glyph
-                string glyph = "\uE702"; // Default Bluetooth icon
+                // Determine device class icon
+                AppIconKind iconKind = AppIconKind.Bluetooth; // Default Bluetooth icon
                 string nameLower = info.Name.ToLowerInvariant();
                 
                 if (nameLower.Contains("headphone") || nameLower.Contains("headset") || nameLower.Contains("wh-") || nameLower.Contains("earbud") || nameLower.Contains("buds") || nameLower.Contains("audio") || nameLower.Contains("speaker") || nameLower.Contains("sound"))
                 {
-                    glyph = "\uE7F6"; // Headphone icon
+                    iconKind = AppIconKind.Headphone; // Headphone icon
                 }
                 else if (nameLower.Contains("keyboard") || nameLower.Contains("keys") || nameLower.Contains("kb"))
                 {
-                    glyph = "\uE765"; // Keyboard icon
+                    iconKind = AppIconKind.Keyboard; // Keyboard icon
                 }
                 else if (nameLower.Contains("mouse") || nameLower.Contains("trackpad") || nameLower.Contains("pointer"))
                 {
-                    glyph = "\uE962"; // Mouse icon
+                    iconKind = AppIconKind.Mouse; // Mouse icon
                 }
 
                 list.Add(new BluetoothDeviceModel(
                     Id: info.Id,
                     Name: info.Name,
-                    Glyph: glyph,
+                    IconKind: iconKind,
                     IsConnected: isConnected,
                     BatteryPercent: battery
                 ));
@@ -133,4 +134,4 @@ public class BluetoothService
     }
 }
 
-public record BluetoothDeviceModel(string Id, string Name, string Glyph, bool IsConnected, int? BatteryPercent);
+public record BluetoothDeviceModel(string Id, string Name, AppIconKind IconKind, bool IsConnected, int? BatteryPercent);

@@ -4,6 +4,7 @@ using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using DynamicIsland.Controls;
 using DynamicIsland.Services;
 
 namespace DynamicIsland.ViewModels;
@@ -25,7 +26,7 @@ public partial class ClipboardWidgetViewModel : ObservableObject
     public partial string Detail { get; set; } = "";
 
     [ObservableProperty]
-    public partial string TypeGlyph { get; set; } = "\uE16C"; // Clipboard glyph
+    public partial AppIconKind TypeIconKind { get; set; } = AppIconKind.Clipboard;
 
     [ObservableProperty]
     public partial BitmapImage? ImagePreview { get; set; }
@@ -47,17 +48,17 @@ public partial class ClipboardWidgetViewModel : ObservableObject
         switch (item.Type)
         {
             case ClipboardItemType.Text:
-                TypeGlyph = "\uE15F"; // Page/text glyph
+                TypeIconKind = AppIconKind.Document;
                 ImagePreview = null;
                 break;
 
             case ClipboardItemType.Files:
-                TypeGlyph = "\uE838"; // Folder glyph
+                TypeIconKind = AppIconKind.Folder;
                 ImagePreview = null;
                 break;
 
             case ClipboardItemType.Image:
-                TypeGlyph = "\uEB9F"; // Photo glyph
+                TypeIconKind = AppIconKind.Image;
                 if (item.ImageStreamRef != null)
                 {
                     try

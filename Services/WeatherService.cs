@@ -4,6 +4,7 @@ using System.Net.Http;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.UI.Dispatching;
+using DynamicIsland.Controls;
 
 namespace DynamicIsland.Services;
 
@@ -15,7 +16,7 @@ public class WeatherService
     public bool IsWeatherAvailable { get; private set; } = false;
     public string CurrentTemp { get; private set; } = "—";
     public string Condition { get; private set; } = "Unknown";
-    public string Glyph { get; private set; } = "\uE706"; // Default sun-behind-cloud
+    public AppIconKind IconKind { get; private set; } = AppIconKind.WeatherPartlyCloudy;
     public int Humidity { get; private set; } = 0;
     public int WindSpeed { get; private set; } = 0;
     public int AQI { get; private set; } = 0;
@@ -78,7 +79,7 @@ public class WeatherService
                 WindSpeed = (int)Math.Round(currentElement.GetProperty("wind_speed_10m").GetDouble());
 
                 int weatherCode = currentElement.GetProperty("weather_code").GetInt32();
-                (Condition, Glyph) = MapWeatherCode(weatherCode);
+                (Condition, IconKind) = MapWeatherCode(weatherCode);
 
                 // Mock AQI based on wind speed/humidity for realistic live simulation
                 AQI = Math.Clamp(50 - WindSpeed + (Humidity / 10), 10, 150);
@@ -100,11 +101,11 @@ public class WeatherService
                     string dayName = DateTime.Now.AddDays(i).DayOfWeek.ToString()[..3];
                     if (i == 0) dayName = "Today";
 
-                    var (_, dayGlyph) = MapWeatherCode(code);
+                    var (_, dayIconKind) = MapWeatherCode(code);
 
                     list[i] = new ForecastDay(
                         Day: dayName,
-                        Glyph: dayGlyph,
+                        IconKind: dayIconKind,
                         TempRange: $"{Math.Round(max)}°/ {Math.Round(min)}°"
                     );
                 }
@@ -122,19 +123,19 @@ public class WeatherService
         }
     }
 
-    private static (string Condition, string Glyph) MapWeatherCode(int code)
+    private static (string Condition, AppIconKind IconKind) MapWeatherCode(int code)
     {
         return code switch
         {
-            0 => ("Clear", "\uE706"), // Sunny
-            1 or 2 or 3 => ("Partly Cloudy", "\uE706"),
-            45 or 48 => ("Foggy", "\uE707"),
-            51 or 53 or 55 => ("Drizzle", "\uE774"),
-            61 or 63 or 65 => ("Rainy", "\uE774"),
-            71 or 73 or 75 => ("Snowy", "\uE774"),
-            80 or 81 or 82 => ("Showers", "\uE774"),
-            95 or 96 or 99 => ("Thunderstorm", "\uEA39"),
-            _ => ("Cloudy", "\uE708")
+            0 => ("Clear", AppIconKind.WeatherSunny),
+            1 or 2 or 3 => ("Partly Cloudy", AppIconKind.WeatherPartlyCloudy),
+            45 or 48 => ("Foggy", AppIconKind.WeatherFog),
+            51 or 53 or 55 => ("Drizzle", AppIconKind.WeatherDrizzle),
+            61 or 63 or 65 => ("Rainy", AppIconKind.WeatherRain),
+            71 or 73 or 75 => ("Snowy", AppIconKind.WeatherSnow),
+            80 or 81 or 82 => ("Showers", AppIconKind.WeatherShowers),
+            95 or 96 or 99 => ("Thunderstorm", AppIconKind.WeatherThunderstorm),
+            _ => ("Cloudy", AppIconKind.WeatherCloudy)
         };
     }
 
@@ -149,4 +150,4 @@ public class WeatherService
     }
 }
 
-public record ForecastDay(string Day, string Glyph, string TempRange);
+public record ForecastDay(string Day, AppIconKind IconKind, string TempRange);

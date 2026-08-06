@@ -2,7 +2,6 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using DynamicIsland.ViewModels;
-using DynamicIsland.Widgets;
 using WinRT;
 using Microsoft.UI.Composition;
 using Microsoft.UI.Composition.SystemBackdrops;
@@ -27,17 +26,17 @@ public sealed partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
-        SetAcrylicBackdrop();
 
-        // Collapse when the user clicks anywhere outside the widget.
-        Activated += MainWindow_Activated;
+        SetAcrylicBackdrop();
     }
 
     private void SetAcrylicBackdrop()
     {
-        if (DesktopAcrylicController.IsSupported())
+        bool supported = DesktopAcrylicController.IsSupported();
+        if (supported)
         {
             _acrylicController = new DesktopAcrylicController();
+
             _configuration = new SystemBackdropConfiguration();
             
             // Force active backdrop state permanently so the window never goes solid gray on deactivation
@@ -47,35 +46,6 @@ public sealed partial class MainWindow : Window
             _acrylicController.AddSystemBackdropTarget(supportsSystemBackdrop);
             _acrylicController.SetSystemBackdropConfiguration(_configuration);
         }
-    }
-
-    public Visibility BoolToVisibility(bool value)
-    {
-        return value ? Visibility.Visible : Visibility.Collapsed;
-    }
-
-    public Visibility BoolToVisibilityInverse(bool value)
-    {
-        return value ? Visibility.Collapsed : Visibility.Visible;
-    }
-
-    private UserControl? _expandedTaskbarAnchor;
-
-    public UserControl? GetTaskbarContent(bool isExpanded, UserControl? activeWidget)
-    {
-        if (isExpanded)
-        {
-            return _expandedTaskbarAnchor ??= new WeatherCollapsedWidget();
-        }
-        return activeWidget;
-    }
-
-    // ── Window activation ──────────────────────────────────────────────────
-
-    private void MainWindow_Activated(object sender, WindowActivatedEventArgs e)
-    {
-        bool configActive = _configuration != null ? _configuration.IsInputActive : false;
-        Helpers.Logger.Info($"[DEBUG_EVENT] MainWindow_Activated: State={e.WindowActivationState}, IsInputActive={configActive} at {DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}");
     }
 
     // ── Click to expand/collapse ───────────────────────────────────────────
@@ -95,7 +65,6 @@ public sealed partial class MainWindow : Window
     // This method is kept for future use (e.g. additional UI state on suppression).
     public void SetFullscreenSuppressed(bool suppress)
     {
-        Helpers.Logger.Info($"[DEBUG_EVENT] MainWindow.SetFullscreenSuppressed: suppress={suppress}");
     }
 
     // ── Hover tracking (for auto-collapse) ────────────────────────────────

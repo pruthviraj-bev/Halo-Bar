@@ -1,4 +1,5 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using DynamicIsland.Controls;
 using DynamicIsland.Helpers;
 
 namespace DynamicIsland.ViewModels;
@@ -19,7 +20,7 @@ public partial class VolumeWidgetViewModel : ObservableObject
     public partial string StatusText { get; set; } = "";
 
     [ObservableProperty]
-    public partial string VolumeGlyph { get; set; } = "\uE994";
+    public partial AppIconKind VolumeIconKind { get; set; } = AppIconKind.Speaker1;
 
     public VolumeWidgetViewModel(VolumeState state)
     {
@@ -27,13 +28,13 @@ public partial class VolumeWidgetViewModel : ObservableObject
         IsMuted = state.IsMuted;
 
         StatusText = IsMuted ? "Muted" : "Volume";
-        VolumeGlyph = IsMuted
-            ? "\uE992"
+        VolumeIconKind = IsMuted
+            ? AppIconKind.SpeakerMute
             : VolumePercent switch
             {
-                <= 25 => "\uE993",
-                <= 70 => "\uE994",
-                _ => "\uE995",
+                <= 25 => AppIconKind.Speaker0,
+                <= 70 => AppIconKind.Speaker1,
+                _ => AppIconKind.Speaker2,
             };
     }
 

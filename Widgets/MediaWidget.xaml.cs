@@ -1,8 +1,6 @@
 using System;
-using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Media.Animation;
 using DynamicIsland.Helpers;
 using DynamicIsland.Interfaces;
 using DynamicIsland.ViewModels;
@@ -14,9 +12,6 @@ public sealed partial class MediaWidget : UserControl, IIslandWidget
     private DispatcherTimer? _visualizerTimer;
     private double _progressVal = 35;
     private int _tickCount = 0;
-
-    // -1 = unknown, 0 = full, 1 = moderate (artist hidden), 2 = heavy (both hidden)
-    private int _lastCollapsedTier = -1;
 
     // ── IIslandWidget ──────────────────────────────────────────────────────
 
@@ -86,79 +81,7 @@ public sealed partial class MediaWidget : UserControl, IIslandWidget
         _visualizerTimer.Start();
     }
 
-    // ── Animated text visibility ───────────────────────────────────────────
-
-    /// <summary>
-    /// Fades a TextBlock in (opacity 0→1, then Visibility.Visible) or
-    /// out (opacity 1→0, then Visibility.Collapsed) over 200ms.
-    /// </summary>
-    private void AnimateTextBlock(TextBlock block, bool show)
-    {
-        if (block == null) return;
-
-        var anim = new DoubleAnimation
-        {
-            To           = show ? 1.0 : 0.0,
-            Duration     = new Duration(TimeSpan.FromMilliseconds(200)),
-            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut }
-        };
-
-        if (show)
-        {
-            // Make visible immediately before fading in
-            block.Visibility = Visibility.Visible;
-        }
-        else
-        {
-            // Collapse after the fade-out completes
-            anim.Completed += (_, _) =>
-            {
-                block.Visibility = Visibility.Collapsed;
-            };
-        }
-
-        Storyboard.SetTarget(anim, block);
-        Storyboard.SetTargetProperty(anim, "Opacity");
-
-        var sb = new Storyboard();
-        sb.Children.Add(anim);
-        sb.Begin();
-    }
-
-    private void ApplyTier(int tier)
-    {
-        if (SongTitleTextBlock == null || SongArtistTextBlock == null) return;
-
-        switch (tier)
-        {
-            case 0: // Full — both visible
-                AnimateTextBlock(SongTitleTextBlock, show: true);
-                AnimateTextBlock(SongArtistTextBlock, show: true);
-                break;
-            case 1: // Moderate — title visible, artist hidden
-                AnimateTextBlock(SongTitleTextBlock, show: true);
-                AnimateTextBlock(SongArtistTextBlock, show: false);
-                break;
-            case 2: // Heavy — both hidden
-                AnimateTextBlock(SongTitleTextBlock, show: false);
-                AnimateTextBlock(SongArtistTextBlock, show: false);
-                break;
-        }
-    }
-
-    /// <summary>
-    /// Called by WindowService whenever the width tier changes (0=full, 1=moderate, 2=heavy).
-    /// This is the authoritative tier setter — MediaWidget never re-derives the tier from
-    /// its own width so it cannot oscillate across tier boundaries during spring settling.
-    /// </summary>
-    public void SetTier(int tier)
-    {
-        if (tier == _lastCollapsedTier) return;
-        string tierName = tier == 0 ? "full" : tier == 1 ? "moderate" : "heavy";
-        Logger.Info($"[WIDTH_TIER] MediaWidget.SetTier: tier={tier} ({tierName}), prev={_lastCollapsedTier}");
-        _lastCollapsedTier = tier;
-        ApplyTier(tier);
-    }
+    // ── Size-based state ──────────────────────────────────────────────────
 
     private void UserControl_SizeChanged(object sender, SizeChangedEventArgs e)
     {
@@ -171,10 +94,9 @@ public sealed partial class MediaWidget : UserControl, IIslandWidget
             // In ExpandedState always show both text blocks immediately (no animation needed)
             if (SongTitleTextBlock != null) { SongTitleTextBlock.Visibility = Visibility.Visible; SongTitleTextBlock.Opacity = 1; }
             if (SongArtistTextBlock != null) { SongArtistTextBlock.Visibility = Visibility.Visible; SongArtistTextBlock.Opacity = 1; }
-            _lastCollapsedTier = 0;
         }
-        // Note: tier-based visibility is NOT derived from width here — it is set exclusively
-        // via SetTier() which is called from WindowService when the 150ms timer detects a change.
-        // This prevents flickering caused by the spring animation crossing the tier threshold.
+        // Note: the compact pill's width is owned by CompactLayoutController
+        // (adaptive within design bounds). Widgets never derive width or hide
+        // content based on it — title and artist are always visible in compact.
     }
 }

@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8" ?>
+<?xml version="1.0" encoding="utf-8"?>
 <UserControl
     x:Class="DynamicIsland.Widgets.ExpandedDashboard"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -7,31 +7,31 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:helpers="using:DynamicIsland.Helpers"
     xmlns:local="using:DynamicIsland.Widgets"
+    xmlns:models="using:DynamicIsland.Models"
+    xmlns:services="using:DynamicIsland.Services"
+    xmlns:controls="using:DynamicIsland.Controls"
     mc:Ignorable="d"
     Width="780"
-    Height="460">
+    Height="640">
 
+    <!-- Resources -->
     <UserControl.Resources>
         <helpers:NullToVisibilityConverter x:Key="NullToVisibilityConverter" />
         <helpers:NullToVisibilityInverseConverter x:Key="NullToVisibilityInverseConverter" />
-        <helpers:PlaybackGlyphConverter x:Key="PlaybackGlyphConverter" />
-        <helpers:PlayPauseGlyphConverter x:Key="PlayPauseGlyphConverter" />
-
-
-        <!-- 8px Baseline Grid Section Border Style (No Card backgrounds, e.g. seamless glass) -->
+        <helpers:FocusProgressToArcConverter x:Key="FocusProgressToArcConverter" />
         <Style x:Key="SectionBorderStyle" TargetType="Border">
             <Setter Property="Background" Value="Transparent" />
-            <Setter Property="BorderBrush" Value="#15FFFFFF" /> <!-- Hairline divider at 8% opacity -->
+            <Setter Property="BorderBrush" Value="Gray" />
+            <Setter Property="BorderThickness" Value="1" />
             <Setter Property="Padding" Value="16" />
         </Style>
 
-        <!-- Button styles inside cards (using unified Segoe Fluent Icons) -->
+        <!-- Button styles inside cards -->
         <Style x:Key="CardButtonStyle" TargetType="Button">
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderBrush" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="Foreground" Value="{ThemeResource TextPrimaryBrush}" />
-            <Setter Property="FontFamily" Value="Segoe Fluent Icons" />
             <Setter Property="FontSize" Value="14" />
             <Setter Property="Width" Value="32" />
             <Setter Property="Height" Value="32" />
@@ -46,7 +46,6 @@
             <Setter Property="Background" Value="{ThemeResource AccentBrush}" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="Foreground" Value="White" />
-            <Setter Property="FontFamily" Value="Segoe Fluent Icons" />
             <Setter Property="FontSize" Value="14" />
             <Setter Property="Width" Value="38" />
             <Setter Property="Height" Value="38" />
@@ -56,346 +55,326 @@
             <Setter Property="Padding" Value="0" />
         </Style>
 
-        <!-- Bluetooth device connect/disconnect toggle -->
-        <Style x:Key="BtToggleButtonStyle" TargetType="Button">
-            <Setter Property="Background" Value="#30FFFFFF" />
+        <!-- Clipboard list converters -->
+        <helpers:ClipboardImagePathConverter x:Key="ClipboardImagePathConverter" />
+        <helpers:ClipboardTypeIconConverter x:Key="ClipboardTypeIconConverter" />
+        <helpers:IsPinnedToIconConverter x:Key="IsPinnedToIconConverter" />
+        <helpers:IsPinnedToBrushConverter x:Key="IsPinnedToBrushConverter" />
+
+        <!-- All/Pinned filter toggle buttons -->
+        <Style x:Key="FilterToggleButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="Foreground" Value="{ThemeResource TextPrimaryBrush}" />
-            <Setter Property="FontSize" Value="9.5" />
-            <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="Padding" Value="10,4" />
-            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Padding" Value="6,2" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontWeight" Value="Normal" />
+            <Setter Property="Foreground" Value="{ThemeResource TextSecondaryBrush}" />
+            <Setter Property="CornerRadius" Value="4" />
         </Style>
     </UserControl.Resources>
 
-    <Grid RowDefinitions="160,210,90" RowSpacing="0">
-        <!-- Row 0: Now Playing (Left) & Clipboard (Right) -->
-        <Grid Grid.Row="0" ColumnDefinitions="1.3*,1*" ColumnSpacing="0">
-            <!-- Now Playing Card -->
-            <Border Grid.Column="0" Style="{StaticResource SectionBorderStyle}" BorderThickness="0,0,1,1">
-                <Grid RowDefinitions="Auto,*,Auto">
-                    <!-- Header -->
-                    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,6" Spacing="6">
-                        <FontIcon Glyph="&#xE8D6;" FontFamily="Segoe Fluent Icons" FontSize="12.5" Foreground="{ThemeResource AccentBrush}"/>
-                        <TextBlock Text="NOW PLAYING" FontSize="10" FontWeight="Bold" Foreground="{ThemeResource TextSecondaryBrush}" CharacterSpacing="50"/>
-                    </StackPanel>
+    <Grid x:Name="RootLayoutGrid">
+        <!-- Home icon top‑left -->
+        <controls:AppIcon Kind="Home" Width="20" Height="20"
+                          Fill="{ThemeResource TextSecondaryBrush}"
+                          HorizontalAlignment="Left" VerticalAlignment="Top" Margin="8" />
 
-                    <!-- Content (Art + Metadata) -->
-                    <Grid Grid.Row="1" ColumnDefinitions="Auto,*" VerticalAlignment="Center">
-                        <!-- Art -->
-                        <Grid Grid.Column="0" Width="64" Height="64" CornerRadius="8" Background="#15FFFFFF" Margin="0,0,14,0" VerticalAlignment="Top">
-                            <Image Source="{x:Bind MediaViewModel.Thumbnail, Mode=OneWay}" 
-                                   Visibility="{x:Bind MediaViewModel.Thumbnail, Converter={StaticResource NullToVisibilityConverter}, Mode=OneWay}" 
-                                   Stretch="UniformToFill" />
-                            <FontIcon Glyph="&#xE8D6;" FontFamily="Segoe Fluent Icons" FontSize="20" 
-                                      Foreground="{ThemeResource TextSecondaryBrush}"
-                                      Visibility="{x:Bind MediaViewModel.Thumbnail, Converter={StaticResource NullToVisibilityInverseConverter}, Mode=OneWay}" />
+        <!-- Dummy elements to satisfy code-behind references and build -->
+        <Canvas Visibility="Collapsed">
+            <Polyline x:Name="CpuGraphLine" />
+            <Polyline x:Name="GpuGraphLine" />
+        </Canvas>
+
+        <!-- Main layout grid -->
+        <Grid RowSpacing="0" Margin="8,40,8,8">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" MinHeight="320"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+        <!-- Unified top area – left column: Stats + Focus Session, right column: Clipboard -->
+        <Grid Grid.Row="0" RowDefinitions="*" ColumnDefinitions="2*,3*" RowSpacing="8" ColumnSpacing="8">
+            <!-- LEFT column – resources grid (top) + Focus Session (fills remaining height) -->
+            <Grid Grid.Column="0" RowDefinitions="Auto,*" RowSpacing="12">
+                <!-- 2×2 resource placeholder grid -->
+                <Grid Grid.Row="0" RowDefinitions="Auto,Auto" ColumnDefinitions="Auto,Auto" RowSpacing="4" ColumnSpacing="4">
+                    <Border BorderBrush="Gray" BorderThickness="1" Padding="8"><TextBlock Text="RAM" HorizontalAlignment="Center" /></Border>
+                    <Border Grid.Column="1" BorderBrush="Gray" BorderThickness="1" Padding="8"><TextBlock Text="CPU" HorizontalAlignment="Center" /></Border>
+                    <Border Grid.Row="1" BorderBrush="Gray" BorderThickness="1" Padding="8"><TextBlock Text="GPU" HorizontalAlignment="Center" /></Border>
+                    <Border Grid.Row="1" Grid.Column="1" BorderBrush="Gray" BorderThickness="1" Padding="8"><TextBlock Text="DISK" HorizontalAlignment="Center" /></Border>
+                </Grid>
+
+                <!-- Focus Session card – stretches to fill remaining left-column height, content stays centered -->
+                <Border Grid.Row="1" Style="{StaticResource SectionBorderStyle}">
+                    <Grid x:Name="FocusCardHost">
+                    <Grid x:Name="FocusMainView" RowDefinitions="Auto,*,Auto">
+                        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,6" Spacing="6">
+                            <controls:AppIcon Kind="Target" Width="12" Height="12" Fill="{ThemeResource AccentBrush}"/>
+                            <TextBlock Text="FOCUS SESSION" FontSize="10" FontWeight="Bold" Foreground="{ThemeResource TextSecondaryBrush}" CharacterSpacing="50"/>
+                        </StackPanel>
+                        <StackPanel Grid.Row="1" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="6">
+                            <TextBlock Text="{x:Bind CurrentSessionName, Mode=OneWay}" FontSize="10" FontWeight="Bold"
+                                       Foreground="{ThemeResource TextSecondaryBrush}" HorizontalAlignment="Center"/>
+                            <Grid x:Name="FocusRingGrid" Width="100" Height="100">
+                                <Ellipse Stroke="Gray" StrokeThickness="4" />
+                                <Path Data="{x:Bind FocusProgressFraction, Converter={StaticResource FocusProgressToArcConverter}, Mode=OneWay}" Stroke="{ThemeResource AccentBrush}" StrokeThickness="4" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                                <!-- Pill handle wrapper: rotates about the ring center; pill sits at 12 o'clock (Angle 0). -->
+                                <Grid Width="100" Height="100" RenderTransformOrigin="0.5,0.5" IsHitTestVisible="False">
+                                    <Grid.RenderTransform>
+                                        <RotateTransform x:Name="FocusPillRotate" Angle="0" />
+                                    </Grid.RenderTransform>
+                                    <Ellipse Width="14" Height="14" Fill="{ThemeResource AccentBrush}" Stroke="White" StrokeThickness="1" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,-3,0,0" />
+                                </Grid>
+                                <TextBlock Text="{x:Bind FocusTimerText, Mode=OneWay}" FontSize="26" FontWeight="Bold" Foreground="{ThemeResource TextPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                <!-- Transparent drag surface: full-ring hit target, topmost. -->
+                                <Ellipse Fill="Transparent" x:Name="FocusRingDragSurface"
+                                         PointerPressed="FocusRing_PointerPressed"
+                                         PointerMoved="FocusRing_PointerMoved"
+                                         PointerReleased="FocusRing_PointerReleased"
+                                         PointerCanceled="FocusRing_PointerCanceled"
+                                         PointerCaptureLost="FocusRing_PointerCaptureLost" />
+                            </Grid>
+                            <ItemsControl x:Name="FocusDotsControl"
+                                          ItemsSource="{x:Bind FocusSessions}"
+                                          HorizontalAlignment="Center"
+                                          Loaded="FocusDotsControl_Loaded">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Horizontal" Spacing="4" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="models:FocusSession">
+                                        <Button Background="Transparent" BorderThickness="0" Padding="2"
+                                                Click="FocusSessionDot_Click"
+                                                ToolTipService.ToolTip="{x:Bind Name}">
+                                            <Ellipse x:Name="DotEllipse" Width="6" Height="6" Fill="LightGray" />
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <Button Style="{StaticResource CardButtonStyle}" Width="16" Height="16"
+                                    Click="FocusSessionAdd_Click" ToolTipService.ToolTip="New session">
+                                <controls:AppIcon Kind="Add" Width="12" Height="12"/>
+                            </Button>
+                        </StackPanel>
+                        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="12">
+                            <Button Style="{StaticResource PlayCircleButtonStyle}"
+                                    Click="FocusPlayPause_Click" ToolTipService.ToolTip="Start/Pause">
+                                <controls:AppIcon Kind="{x:Bind FocusPlayPauseIconKind, Mode=OneWay}" Filled="True"
+                                                  Width="20" Height="20" Fill="White"/>
+                            </Button>
+                            <Button Style="{StaticResource CardButtonStyle}"
+                                    Click="FocusReset_Click" ToolTipService.ToolTip="Reset">
+                                <controls:AppIcon Kind="Reset" Width="16" Height="16"/>
+                            </Button>
+                            <Button Style="{StaticResource CardButtonStyle}"
+                                    Click="FocusSettings_Click" ToolTipService.ToolTip="Settings">
+                                <controls:AppIcon Kind="Settings" Width="16" Height="16"/>
+                            </Button>
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- Focus Session settings view: in-place card swap (not an overlay). -->
+                    <Grid x:Name="FocusSettingsView" Visibility="Collapsed" RowDefinitions="Auto,*,Auto" RowSpacing="8">
+                        <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+                            <TextBlock Grid.Column="0" Text="{x:Bind FocusSettingsHeaderText, Mode=OneWay}" FontSize="10" FontWeight="Bold"
+                                       Foreground="{ThemeResource TextSecondaryBrush}" CharacterSpacing="50" VerticalAlignment="Center"/>
+                            <Button Grid.Column="1" Style="{StaticResource CardButtonStyle}"
+                                    Click="FocusSettingsClose_Click" ToolTipService.ToolTip="Close" HorizontalAlignment="Right">
+                                <controls:AppIcon Kind="Dismiss" Width="16" Height="16"/>
+                            </Button>
                         </Grid>
-
-                        <!-- Track Info -->
-                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,-4,0,0">
-                            <TextBlock Text="{x:Bind MediaViewModel.Title, Mode=OneWay}" FontSize="15" FontWeight="Bold" Foreground="{ThemeResource TextPrimaryBrush}" TextTrimming="CharacterEllipsis"/>
-                            <TextBlock Text="{x:Bind MediaViewModel.Artist, Mode=OneWay}" FontSize="11" Foreground="{ThemeResource TextSecondaryBrush}" Margin="0,2,0,8" TextTrimming="CharacterEllipsis"/>
-                            
-                            <!-- Track Slider & Progress line -->
-                            <Grid ColumnDefinitions="Auto,*,Auto" VerticalAlignment="Center">
-                                <TextBlock Grid.Column="0" Text="{x:Bind CurrentPlaybackTimeText, Mode=OneWay}" FontSize="9" Foreground="{ThemeResource TextSecondaryBrush}"/>
-                                <ProgressBar Grid.Column="1" 
-                                             Value="{x:Bind PlaybackProgressValue, Mode=OneWay}" 
-                                             Minimum="0" Maximum="100" 
-                                             Height="2.5" 
-                                             Foreground="{ThemeResource AccentBrush}" 
-                                             Background="#15FFFFFF" 
-                                             CornerRadius="1.25" 
-                                             Margin="8,0,8,0" 
-                                             HorizontalAlignment="Stretch" 
-                                             VerticalAlignment="Center"/>
-                                <TextBlock Grid.Column="2" Text="{x:Bind TotalPlaybackTimeText, Mode=OneWay}" FontSize="9" Foreground="{ThemeResource TextSecondaryBrush}"/>
+                        <StackPanel Grid.Row="1" VerticalAlignment="Center" HorizontalAlignment="Stretch" Spacing="10">
+                            <TextBox x:Name="FocusSettingsNameBox" PlaceholderText="Session name" FontSize="12" MaxLength="40"/>
+                            <StackPanel Spacing="2" HorizontalAlignment="Center">
+                                <TextBlock x:Name="FocusSettingsReadout" Text="25:00" FontSize="26" FontWeight="Bold"
+                                           Foreground="{ThemeResource TextPrimaryBrush}" HorizontalAlignment="Center"/>
+                                <TextBlock Text="Duration (minutes)" FontSize="10" Foreground="{ThemeResource TextSecondaryBrush}" HorizontalAlignment="Center"/>
+                            </StackPanel>
+                            <Grid ColumnDefinitions="*,*,*" ColumnSpacing="8">
+                                <StackPanel Grid.Column="0" Spacing="2">
+                                    <NumberBox x:Name="FocusSettingsHoursBox" Minimum="0" Maximum="23" SpinButtonPlacementMode="Compact"
+                                               ValueChanged="FocusSettingsNumberBox_ValueChanged"/>
+                                    <TextBlock Text="H" FontSize="10" Foreground="{ThemeResource TextSecondaryBrush}" HorizontalAlignment="Center"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Spacing="2">
+                                    <NumberBox x:Name="FocusSettingsMinutesBox" Minimum="0" Maximum="59" SpinButtonPlacementMode="Compact"
+                                               ValueChanged="FocusSettingsNumberBox_ValueChanged"/>
+                                    <TextBlock Text="M" FontSize="10" Foreground="{ThemeResource TextSecondaryBrush}" HorizontalAlignment="Center"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="2" Spacing="2">
+                                    <NumberBox x:Name="FocusSettingsSecondsBox" Minimum="0" Maximum="59" SpinButtonPlacementMode="Compact"
+                                               ValueChanged="FocusSettingsNumberBox_ValueChanged"/>
+                                    <TextBlock Text="S" FontSize="10" Foreground="{ThemeResource TextSecondaryBrush}" HorizontalAlignment="Center"/>
+                                </StackPanel>
                             </Grid>
                         </StackPanel>
-                    </Grid>
-
-                    <!-- Controls -->
-                    <Grid Grid.Row="2" ColumnDefinitions="Auto,Auto,Auto,*,Auto" Margin="0,2,0,0" VerticalAlignment="Center">
-                        <Button Grid.Column="0" Style="{StaticResource CardButtonStyle}" Content="&#xE892;" Command="{x:Bind MediaViewModel.PreviousCommand}" ToolTipService.ToolTip="Previous" />
-                        <Button Grid.Column="1" Style="{StaticResource PlayCircleButtonStyle}" Content="{x:Bind MediaViewModel.IsPlaying, Converter={StaticResource PlayPauseGlyphConverter}, Mode=OneWay}" Command="{x:Bind MediaViewModel.PlayPauseCommand}" Margin="8,0,8,0" ToolTipService.ToolTip="Play/Pause" />
-                        <Button Grid.Column="2" Style="{StaticResource CardButtonStyle}" Content="&#xE893;" Command="{x:Bind MediaViewModel.NextCommand}" ToolTipService.ToolTip="Next" />
-                        
-                        <!-- Volume Slider -->
-                        <Grid Grid.Column="4" ColumnDefinitions="Auto,*" Width="120" VerticalAlignment="Center">
-                            <Button Grid.Column="0" Style="{StaticResource CardButtonStyle}" Width="28" Height="28" Content="&#xE767;" Click="MuteButton_Click" ToolTipService.ToolTip="Mute/Unmute"/>
-                            <Slider Grid.Column="1" 
-                                    Minimum="0" 
-                                    Maximum="100" 
-                                    Value="{x:Bind VolumePercentValue, Mode=TwoWay}" 
-                                    Margin="4,0,0,0" 
-                                    Height="20"
-                                    Foreground="{ThemeResource AccentBrush}"
-                                    VerticalAlignment="Center"/>
-                        </Grid>
-                    </Grid>
-                </Grid>
-            </Border>
-
-            <!-- Clipboard Card -->
-            <Border Grid.Column="1" Style="{StaticResource SectionBorderStyle}" BorderThickness="0,0,0,1">
-                <Grid RowDefinitions="Auto,*,Auto">
-                    <!-- Header -->
-                    <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,6">
-                        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6">
-                            <FontIcon Glyph="&#xF0E3;" FontFamily="Segoe Fluent Icons" FontSize="12.5" Foreground="{ThemeResource AccentBrush}"/>
-                            <TextBlock Text="CLIPBOARD" FontSize="10" FontWeight="Bold" Foreground="{ThemeResource TextSecondaryBrush}" CharacterSpacing="50"/>
+                        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="12">
+                            <Button Style="{StaticResource PlayCircleButtonStyle}"
+                                    Click="FocusSettingsSave_Click" ToolTipService.ToolTip="Save">
+                                <controls:AppIcon Kind="Save" Filled="True" Width="20" Height="20" Fill="White"/>
+                            </Button>
                         </StackPanel>
-                        <Button Grid.Column="1" Content="Clear" Background="Transparent" BorderThickness="0" Padding="0" Foreground="{ThemeResource AccentBrush}" FontSize="10" FontWeight="SemiBold" Click="ClearAllClipboard_Click"/>
                     </Grid>
-
-                    <!-- History Items List -->
-                    <StackPanel Grid.Row="1" Spacing="5" VerticalAlignment="Center">
-                        <!-- Item 1 (Live Current Item) -->
-                        <Grid ColumnDefinitions="*,Auto" Height="26" Background="#0AFFFFFF" Padding="8,2" CornerRadius="6">
-                            <TextBlock Grid.Column="0" Text="{x:Bind LiveClipboardTitle, Mode=OneWay}" FontSize="10.5" Foreground="{ThemeResource TextPrimaryBrush}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-                            <FontIcon Grid.Column="1" Glyph="&#xE73E;" FontFamily="Segoe Fluent Icons" FontSize="9.5" Foreground="{ThemeResource AccentBrush}" VerticalAlignment="Center" Margin="6,0,0,0"/>
-                        </Grid>
-
-                        <!-- Item 2 (Mock History) -->
-                        <Grid ColumnDefinitions="*,Auto" Height="26" Background="#05FFFFFF" Padding="8,2" CornerRadius="6">
-                            <TextBlock Grid.Column="0" Text="git clone https://github.com/dynowin" FontSize="10.5" Foreground="{ThemeResource TextPrimaryBrush}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-                            <FontIcon Grid.Column="1" Glyph="&#xE73E;" FontFamily="Segoe Fluent Icons" FontSize="9.5" Foreground="{ThemeResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="6,0,0,0"/>
-                        </Grid>
-                    </StackPanel>
-
-                    <!-- Paste Actions Button -->
-                    <Grid Grid.Row="2" Margin="0,2,0,0">
-                        <Button Content="Paste Active" Background="#FF2D2D30" BorderBrush="#15FFFFFF" BorderThickness="1" CornerRadius="6" FontSize="11" Height="28" HorizontalAlignment="Stretch" Click="PasteClipboard_Click"/>
                     </Grid>
+                </Border>
+            </Grid>
+
+            <!-- RIGHT column – real clipboard history -->
+            <Grid Grid.Column="1" RowDefinitions="Auto,Auto,*" RowSpacing="6" VerticalAlignment="Stretch">
+                <!-- Header row: title + All/Pinned filter toggle -->
+                <Grid Grid.Row="0" ColumnDefinitions="Auto,Auto" HorizontalAlignment="Left" VerticalAlignment="Center">
+                    <TextBlock Grid.Column="0" Text="Clipboard" FontSize="14" FontWeight="Bold"/>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="12,0,0,0" Spacing="4">
+                        <Button x:Name="AllFilterButton" Style="{StaticResource FilterToggleButtonStyle}" Content="All" Click="AllFilter_Click" />
+                        <Button x:Name="PinnedFilterButton" Style="{StaticResource FilterToggleButtonStyle}" Content="Pinned" Click="PinnedFilter_Click" />
+                    </StackPanel>
                 </Grid>
-            </Border>
-        </Grid>
 
-        <!-- Row 1: Focus Session (Left), Quick Tasks (Middle), File Shelf (Right) -->
-        <Grid Grid.Row="1" ColumnDefinitions="1*,1*,1*" ColumnSpacing="0">
-            <!-- Focus Session Card -->
-            <Border Grid.Column="0" Style="{StaticResource SectionBorderStyle}" BorderThickness="0,0,1,1">
-                <Grid RowDefinitions="Auto,*,Auto">
-                    <!-- Header -->
-                    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,6" Spacing="6">
-                        <FontIcon Glyph="&#xE815;" FontFamily="Segoe Fluent Icons" FontSize="12.5" Foreground="{ThemeResource AccentBrush}"/>
-                        <TextBlock Text="FOCUS SESSION" FontSize="10" FontWeight="Bold" Foreground="{ThemeResource TextSecondaryBrush}" CharacterSpacing="50"/>
-                    </StackPanel>
+                <!-- Empty state -->
+                <TextBlock Grid.Row="1" x:Name="ClipboardEmptyText" Text="Nothing copied yet" FontSize="11" Foreground="{ThemeResource TextSecondaryBrush}" Visibility="{x:Bind ClipboardEmptyVisibility, Mode=OneWay}" />
 
-                    <!-- Timer Count -->
-                    <Grid Grid.Row="1" VerticalAlignment="Center" HorizontalAlignment="Center">
-                        <TextBlock Text="{x:Bind FocusTimerText, Mode=OneWay}" FontSize="32" FontWeight="Bold" Foreground="{ThemeResource TextPrimaryBrush}"/>
-                    </Grid>
+                <ScrollViewer Grid.Row="2" VerticalAlignment="Stretch" VerticalScrollBarVisibility="Auto" Padding="0,0,12,0">
+                    <ItemsControl ItemsSource="{x:Bind ClipboardItems}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="services:ClipboardItem">
+                                <Grid>
+                                    <!-- Background delete strip, revealed by sliding the front card left -->
+                                    <Button Background="#E81123" Foreground="White" BorderThickness="0"
+                                            CornerRadius="6" Width="56" Height="Auto" Padding="0"
+                                            Opacity="0"
+                                            HorizontalAlignment="Right" VerticalAlignment="Stretch"
+                                            Margin="0,0,0,4"
+                                            Click="ClipboardRevealedDelete_Click" Tapped="ClipboardAction_Tapped"
+                                            ToolTipService.ToolTip="Delete">
+                                        <controls:AppIcon Kind="Delete" Width="20" Height="20" Fill="White"/>
+                                    </Button>
 
-                    <!-- Controls -->
-                    <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="12">
-                        <Button Style="{StaticResource PlayCircleButtonStyle}" Content="{x:Bind FocusPlayPauseGlyph, Mode=OneWay}" Click="FocusPlayPause_Click" ToolTipService.ToolTip="Start/Pause" />
-                        <Button Style="{StaticResource CardButtonStyle}" Content="&#xE777;" Click="FocusReset_Click" ToolTipService.ToolTip="Reset" />
-                    </StackPanel>
-
-                    <!-- Round Info (floating on top of grid row 2) -->
-                    <TextBlock Grid.Row="2" Text="{x:Bind FocusRoundText, Mode=OneWay}" FontSize="10.5" Foreground="{ThemeResource TextSecondaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,-40"/>
-                </Grid>
-            </Border>
-
-            <!-- Quick Tasks Card -->
-            <Border Grid.Column="1" Style="{StaticResource SectionBorderStyle}" BorderThickness="0,0,1,1">
-                <Grid RowDefinitions="Auto,*,Auto">
-                    <!-- Header -->
-                    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,6" Spacing="6">
-                        <FontIcon Glyph="&#xE73E;" FontFamily="Segoe Fluent Icons" FontSize="12.5" Foreground="{ThemeResource AccentBrush}"/>
-                        <TextBlock Text="QUICK TASKS" FontSize="10" FontWeight="Bold" Foreground="{ThemeResource TextSecondaryBrush}" CharacterSpacing="50"/>
-                    </StackPanel>
-
-                    <!-- List of Tasks -->
-                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="0,2,0,4">
-                        <ItemsControl ItemsSource="{x:Bind Tasks, Mode=OneWay}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate x:DataType="local:TaskItem">
-                                    <Grid Margin="0,2">
-                                        <!-- Custom Styled CheckBox with Purple Accent -->
-                                        <CheckBox IsChecked="{x:Bind IsCompleted, Mode=OneWay}" 
-                                                  Checked="Task_Checked" 
-                                                  Unchecked="Task_Unchecked" 
-                                                  Content="{x:Bind Text, Mode=OneWay}" 
-                                                  FontSize="11.5" 
-                                                  Foreground="{ThemeResource TextPrimaryBrush}"/>
-                                    </Grid>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </ScrollViewer>
-
-                    <!-- Add task input -->
-                    <TextBox Grid.Row="2" 
-                             PlaceholderText="+ Add task..." 
-                             FontSize="11" 
-                             Height="28" 
-                             Background="#0AFFFFFF" 
-                             BorderBrush="#15FFFFFF" 
-                             BorderThickness="1" 
-                             CornerRadius="6"
-                             Padding="8,2"
-                             KeyDown="AddTaskTextBox_KeyDown"/>
-                </Grid>
-            </Border>
-
-            <!-- File Shelf Card -->
-            <Border Grid.Column="2" Style="{StaticResource SectionBorderStyle}" BorderThickness="0,0,0,1">
-                <Grid RowDefinitions="Auto,*,Auto">
-                    <!-- Header -->
-                    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,6" Spacing="6">
-                        <FontIcon Glyph="&#xE8F4;" FontFamily="Segoe Fluent Icons" FontSize="12.5" Foreground="{ThemeResource AccentBrush}"/>
-                        <TextBlock Text="FILE SHELF" FontSize="10" FontWeight="Bold" Foreground="{ThemeResource TextSecondaryBrush}" CharacterSpacing="50"/>
-                    </StackPanel>
-
-                    <!-- Drop Zone / Stash list -->
-                    <Border Grid.Row="1" 
-                            x:Name="FileDropZone" 
-                            AllowDrop="True" 
-                            DragOver="FileDropZone_DragOver" 
-                            Drop="FileDropZone_Drop"
-                            BorderBrush="#33FFFFFF" 
-                            BorderThickness="1.5" 
-                            CornerRadius="8" 
-                            Background="#08FFFFFF" 
-                            Padding="8"
-                            Margin="0,2,0,4">
-                        <Grid>
-                            <!-- Drop Zone Text (shows only when list is empty) -->
-                            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="4" 
-                                        Visibility="{x:Bind DropZoneVisibility, Mode=OneWay}">
-                                <FontIcon Glyph="&#xE898;" FontFamily="Segoe Fluent Icons" FontSize="16" Foreground="{ThemeResource TextSecondaryBrush}"/>
-                                <TextBlock Text="Drop to stash" FontSize="10.5" Foreground="{ThemeResource TextSecondaryBrush}"/>
-                            </StackPanel>
-
-                            <!-- Stashed items (scrollable list) -->
-                            <ScrollViewer VerticalScrollBarVisibility="Auto" Visibility="{x:Bind StashedFilesVisibility, Mode=OneWay}">
-                                <ItemsControl ItemsSource="{x:Bind StashedFiles, Mode=OneWay}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate x:DataType="local:StashedFile">
-                                            <Grid ColumnDefinitions="Auto,*,Auto" Height="26" Background="#15FFFFFF" Padding="6,2" CornerRadius="6" Margin="0,1">
-                                                <FontIcon Grid.Column="0" Glyph="&#xE7C3;" FontFamily="Segoe Fluent Icons" FontSize="11" Foreground="{ThemeResource AccentBrush}" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                                                <Button Grid.Column="1" 
-                                                        Content="{x:Bind Name}" 
-                                                        Tag="{x:Bind Path}" 
-                                                        Click="StashedFile_Click" 
-                                                        Background="Transparent" 
-                                                        BorderThickness="0" 
-                                                        Padding="0" 
-                                                        FontSize="10.5" 
-                                                        Foreground="{ThemeResource TextPrimaryBrush}" 
-                                                        FontWeight="SemiBold"
-                                                        HorizontalAlignment="Left" 
-                                                        VerticalAlignment="Center"/>
-                                                <Button Grid.Column="2" 
-                                                        Tag="{x:Bind Path}" 
-                                                        Click="DeleteStashedFile_Click" 
-                                                        Style="{StaticResource CardButtonStyle}" 
-                                                        Width="20" Height="20" FontSize="8" 
-                                                        Content="&#xE711;" 
-                                                        Foreground="{ThemeResource TextSecondaryBrush}"
-                                                        VerticalAlignment="Center"/>
+                                    <!-- Front card -->
+                                    <Border BorderBrush="Gray" BorderThickness="1" Padding="8" Margin="0,0,0,4"
+                                            Background="Transparent"
+                                            Tapped="ClipboardItemCard_Tapped">
+                                        <Border.RenderTransform>
+                                            <TranslateTransform x:Name="FrontCardTranslate" X="0" Y="0" />
+                                        </Border.RenderTransform>
+                                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                                            <!-- Thumbnail / type glyph (64x64) -->
+                                            <Grid Grid.Column="0" Width="64" Height="64" CornerRadius="6" Background="#12FFFFFF" VerticalAlignment="Center">
+                                                <Image Source="{x:Bind ImageFilePath, Converter={StaticResource ClipboardImagePathConverter}, Mode=OneWay}"
+                                                       Visibility="{x:Bind ImageFilePath, Converter={StaticResource NullToVisibilityConverter}, Mode=OneWay}"
+                                                       Stretch="UniformToFill" />
+                                                <controls:AppIcon Kind="{x:Bind Type, Converter={StaticResource ClipboardTypeIconConverter}, Mode=OneWay}"
+                                                                  Width="16" Height="16"
+                                                                  Fill="{ThemeResource AccentBrush}"
+                                                                  Visibility="{x:Bind ImageFilePath, Converter={StaticResource NullToVisibilityInverseConverter}, Mode=OneWay}" />
                                             </Grid>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                            </ScrollViewer>
-                        </Grid>
-                    </Border>
-                </Grid>
-            </Border>
+
+                                            <!-- Title / content text -->
+                                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                                                <TextBlock Text="{x:Bind Title, Mode=OneWay}" FontSize="11" FontWeight="SemiBold" Foreground="{ThemeResource TextPrimaryBrush}" TextTrimming="CharacterEllipsis" MaxLines="1"/>
+                                                <TextBlock Text="{x:Bind Detail, Mode=OneWay}" FontSize="9.5" Foreground="{ThemeResource TextSecondaryBrush}" TextTrimming="CharacterEllipsis" MaxLines="1"/>
+                                            </StackPanel>
+
+                                            <!-- Pin + More stacked vertically in the trailing slot -->
+                                            <StackPanel Grid.Column="2" VerticalAlignment="Center" Spacing="4">
+                                                <Button Style="{StaticResource CardButtonStyle}"
+                                                        Click="ClipboardMore_Click" Tapped="ClipboardAction_Tapped"
+                                                        ToolTipService.ToolTip="More">
+                                                    <controls:AppIcon Kind="More" Width="16" Height="16"/>
+                                                </Button>
+                                                <Button Style="{StaticResource CardButtonStyle}"
+                                                        Click="ClipboardPin_Click" Tapped="ClipboardAction_Tapped"
+                                                        ToolTipService.ToolTip="Pin/Unpin">
+                                                    <controls:AppIcon Kind="{x:Bind IsPinned, Converter={StaticResource IsPinnedToIconConverter}, Mode=OneWay}"
+                                                                      Filled="{x:Bind IsPinned, Mode=OneWay}"
+                                                                      Fill="{x:Bind IsPinned, Converter={StaticResource IsPinnedToBrushConverter}, Mode=OneWay}"
+                                                                      Width="16" Height="16"/>
+                                                </Button>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </Grid>
         </Grid>
 
-        <!-- Row 2: Bottom Stats Row (Weather, CPU, RAM, GPU, Disk) - 5 columns seamless -->
-        <Grid Grid.Row="2" ColumnDefinitions="1.2*,1*,1*,1*,1*" ColumnSpacing="0">
-            <!-- Weather Card -->
-            <Border Grid.Column="0" Style="{StaticResource SectionBorderStyle}" BorderThickness="0,0,1,0" Padding="12,10">
-                <Grid>
-                    <!-- Unavailable state -->
-                    <Grid Visibility="{x:Bind WeatherUnavailableVisibility, Mode=OneWay}" VerticalAlignment="Center" HorizontalAlignment="Center">
-                        <TextBlock Text="Weather Unavailable" FontSize="10" Foreground="{ThemeResource TextSecondaryBrush}" Opacity="0.7"/>
+        <!-- Now Playing (original content wrapped in outline) -->
+        <Border Grid.Row="1" BorderBrush="Gray" BorderThickness="1" Padding="0">
+            <Grid RowDefinitions="Auto,*,Auto">
+                <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,6">
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6">
+                        <controls:AppIcon Kind="MusicNote" Width="12" Height="12" Fill="{ThemeResource AccentBrush}"/>
+                        <TextBlock Text="NOW PLAYING" FontSize="10" FontWeight="Bold" Foreground="{ThemeResource TextSecondaryBrush}" CharacterSpacing="50"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+                        <Button Style="{StaticResource CardButtonStyle}" Command="{x:Bind MediaViewModel.PreviousSourceCommand}" IsEnabled="{x:Bind MediaViewModel.HasMultipleSources, Mode=OneWay}" ToolTipService.ToolTip="Previous source">
+                            <controls:AppIcon Kind="Previous" Width="16" Height="16"/>
+                        </Button>
+                        <Button Style="{StaticResource CardButtonStyle}" Command="{x:Bind MediaViewModel.NextSourceCommand}" IsEnabled="{x:Bind MediaViewModel.HasMultipleSources, Mode=OneWay}" ToolTipService.ToolTip="Next source">
+                            <controls:AppIcon Kind="Next" Width="16" Height="16"/>
+                        </Button>
+                    </StackPanel>
+                </Grid>
+                <Grid Grid.Row="1" ColumnDefinitions="Auto,*" VerticalAlignment="Center">
+                    <Grid Grid.Column="0" Width="64" Height="64" CornerRadius="8" Background="#15FFFFFF" Margin="0,0,14,0" VerticalAlignment="Top">
+                        <Image Source="{x:Bind MediaViewModel.Thumbnail, Mode=OneWay}" Visibility="{x:Bind MediaViewModel.Thumbnail, Converter={StaticResource NullToVisibilityConverter}, Mode=OneWay}" Stretch="UniformToFill" />
+                        <controls:AppIcon Kind="MusicNote" Width="20" Height="20"
+                                          Fill="{ThemeResource TextSecondaryBrush}"
+                                          Visibility="{x:Bind MediaViewModel.Thumbnail, Converter={StaticResource NullToVisibilityInverseConverter}, Mode=OneWay}" />
                     </Grid>
-
-                    <!-- Real Weather Data -->
-                    <Grid RowDefinitions="*,Auto" Visibility="{x:Bind WeatherAvailableVisibility, Mode=OneWay}">
-                        <!-- Top Details -->
-                        <Grid Grid.Row="0" ColumnDefinitions="Auto,*" VerticalAlignment="Center">
-                            <FontIcon Grid.Column="0" Glyph="{x:Bind WeatherGlyph, Mode=OneWay}" FontFamily="Segoe Fluent Icons" FontSize="18" Foreground="#FFFFD700" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                <TextBlock Text="{x:Bind WeatherTemp, Mode=OneWay}" FontSize="12.5" FontWeight="Bold" Foreground="{ThemeResource TextPrimaryBrush}" Margin="0,-2,0,0"/>
-                                <TextBlock Text="Seattle" FontSize="9" Foreground="{ThemeResource TextSecondaryBrush}"/>
-                            </StackPanel>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,-4,0,0">
+                        <TextBlock Text="{x:Bind MediaViewModel.Title, Mode=OneWay}" FontSize="15" FontWeight="Bold" Foreground="{ThemeResource TextPrimaryBrush}" TextTrimming="CharacterEllipsis"/>
+                        <TextBlock Text="{x:Bind MediaViewModel.Artist, Mode=OneWay}" FontSize="11" Foreground="{ThemeResource TextSecondaryBrush}" Margin="0,2,0,8" TextTrimming="CharacterEllipsis"/>
+                        <Grid ColumnDefinitions="Auto,*,Auto" VerticalAlignment="Center">
+                            <TextBlock Grid.Column="0" Text="{x:Bind CurrentPlaybackTimeText, Mode=OneWay}" FontSize="9" Foreground="{ThemeResource TextSecondaryBrush}"/>
+                            <Slider x:Name="PlaybackSlider" Grid.Column="1" Minimum="0" Maximum="100" Value="{x:Bind PlaybackProgressValue, Mode=OneWay}" Background="#15FFFFFF" Foreground="{ThemeResource AccentBrush}" Margin="8,0,8,0" HorizontalAlignment="Stretch" VerticalAlignment="Center" IsThumbToolTipEnabled="False" ValueChanged="PlaybackSlider_ValueChanged">
+                                <Slider.Resources>
+                                    <x:Double x:Key="SliderTrackThemeHeight">2.5</x:Double>
+                                    <x:Double x:Key="SliderHorizontalThumbWidth">16</x:Double>
+                                    <x:Double x:Key="SliderHorizontalThumbHeight">16</x:Double>
+                                    <x:Double x:Key="SliderInnerThumbWidth">8</x:Double>
+                                    <x:Double x:Key="SliderInnerThumbHeight">8</x:Double>
+                                </Slider.Resources>
+                            </Slider>
+                            <TextBlock Grid.Column="2" Text="{x:Bind TotalPlaybackTimeText, Mode=OneWay}" FontSize="9" Foreground="{ThemeResource TextSecondaryBrush}"/>
                         </Grid>
-
-                        <!-- Compact 3-day forecast text -->
-                        <TextBlock Grid.Row="1" FontSize="8.5" Foreground="{ThemeResource TextSecondaryBrush}" Margin="0,2,0,-4">
-                            <Run Text="M: "/>
-                            <Run Text="{x:Bind ForecastDay1Temp, Mode=OneWay}" Foreground="{ThemeResource TextPrimaryBrush}"/>
-                            <Run Text="  T: "/>
-                            <Run Text="{x:Bind ForecastDay2Temp, Mode=OneWay}" Foreground="{ThemeResource TextPrimaryBrush}"/>
-                            <Run Text="  W: "/>
-                            <Run Text="{x:Bind ForecastDay3Temp, Mode=OneWay}" Foreground="{ThemeResource TextPrimaryBrush}"/>
-                        </TextBlock>
+                    </StackPanel>
+                </Grid>
+                <Grid Grid.Row="2" ColumnDefinitions="Auto,Auto,Auto,Auto,*,Auto" Margin="0,2,0,0" VerticalAlignment="Center">
+                    <Button Grid.Column="0" x:Name="RepeatButton" Style="{StaticResource CardButtonStyle}" Command="{x:Bind MediaViewModel.ToggleRepeatCommand}" ToolTipService.ToolTip="Repeat">
+                        <controls:AppIcon Kind="Repeat" Width="16" Height="16"/>
+                    </Button>
+                    <Button Grid.Column="1" Style="{StaticResource CardButtonStyle}" Command="{x:Bind MediaViewModel.PreviousCommand}" ToolTipService.ToolTip="Previous">
+                        <controls:AppIcon Kind="Previous" Width="16" Height="16"/>
+                    </Button>
+                    <Button Grid.Column="2" Style="{StaticResource PlayCircleButtonStyle}" Command="{x:Bind MediaViewModel.PlayPauseCommand}" Margin="8,0,8,0" ToolTipService.ToolTip="Play/Pause">
+                        <controls:AppIcon Kind="{x:Bind MediaViewModel.IsPlaying, Converter={StaticResource PlayPauseIconConverter}, Mode=OneWay}" Filled="True"
+                                          Width="20" Height="20" Fill="White"/>
+                    </Button>
+                    <Button Grid.Column="3" Style="{StaticResource CardButtonStyle}" Command="{x:Bind MediaViewModel.NextCommand}" ToolTipService.ToolTip="Next">
+                        <controls:AppIcon Kind="Next" Width="16" Height="16"/>
+                    </Button>
+                    <Grid Grid.Column="5" ColumnDefinitions="Auto,*" Width="120" VerticalAlignment="Center">
+                        <Button Grid.Column="0" Style="{StaticResource CardButtonStyle}" Width="28" Height="28" Click="MuteButton_Click" ToolTipService.ToolTip="Mute/Unmute">
+                            <controls:AppIcon Kind="Speaker1" Width="14" Height="14"/>
+                        </Button>
+                        <Slider Grid.Column="1" Minimum="0" Maximum="100" Value="{x:Bind VolumePercentValue, Mode=TwoWay}" Margin="4,0,0,0" Height="20" Foreground="{ThemeResource AccentBrush}" VerticalAlignment="Center" />
                     </Grid>
                 </Grid>
-            </Border>
+            </Grid>
+        </Border>
 
-            <!-- CPU Card -->
-            <Border Grid.Column="1" Style="{StaticResource SectionBorderStyle}" BorderThickness="0,0,1,0" Padding="12,10">
-                <Grid RowDefinitions="Auto,*">
-                    <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="4">
-                        <TextBlock Text="CPU" FontSize="9" FontWeight="Bold" Foreground="{ThemeResource TextSecondaryBrush}"/>
-                        <TextBlock Text="{x:Bind CpuPercentText, Mode=OneWay}" FontSize="9.5" FontWeight="Bold" Foreground="{ThemeResource TextPrimaryBrush}"/>
-                    </StackPanel>
-                    <Canvas Grid.Row="1" x:Name="CpuGraphCanvas" Height="22" Margin="0,4,0,0" VerticalAlignment="Center">
-                        <Polyline x:Name="CpuGraphLine" Stroke="{ThemeResource AccentBrush}" StrokeThickness="1.2"/>
-                    </Canvas>
-                </Grid>
-            </Border>
-
-            <!-- RAM Card -->
-            <Border Grid.Column="2" Style="{StaticResource SectionBorderStyle}" BorderThickness="0,0,1,0" Padding="12,10">
-                <Grid RowDefinitions="Auto,*,Auto">
-                    <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="4">
-                        <TextBlock Text="RAM" FontSize="9" FontWeight="Bold" Foreground="{ThemeResource TextSecondaryBrush}"/>
-                        <TextBlock Text="{x:Bind RamPercentText, Mode=OneWay}" FontSize="9.5" FontWeight="Bold" Foreground="{ThemeResource TextPrimaryBrush}"/>
-                    </StackPanel>
-                    <TextBlock Grid.Row="1" FontSize="8" Foreground="{ThemeResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="0,-2,0,0">
-                        <Run Text="{x:Bind RamUsedText, Mode=OneWay}"/>
-                    </TextBlock>
-                    <ProgressBar Grid.Row="2" Value="{x:Bind RamPercent, Mode=OneWay}" Minimum="0" Maximum="100" Height="2.5" Foreground="{ThemeResource AccentBrush}" Background="#20FFFFFF" CornerRadius="1.25"/>
-                </Grid>
-            </Border>
-
-            <!-- GPU Card -->
-            <Border Grid.Column="3" Style="{StaticResource SectionBorderStyle}" BorderThickness="0,0,1,0" Padding="12,10">
-                <Grid RowDefinitions="Auto,*">
-                    <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="4">
-                        <TextBlock Text="GPU" FontSize="9" FontWeight="Bold" Foreground="{ThemeResource TextSecondaryBrush}"/>
-                        <TextBlock Text="{x:Bind GpuPercentText, Mode=OneWay}" FontSize="9.5" FontWeight="Bold" Foreground="{ThemeResource TextPrimaryBrush}"/>
-                    </StackPanel>
-                    <Canvas Grid.Row="1" x:Name="GpuGraphCanvas" Height="22" Margin="0,4,0,0" VerticalAlignment="Center">
-                        <Polyline x:Name="GpuGraphLine" Stroke="{ThemeResource AccentBrush}" StrokeThickness="1.2"/>
-                    </Canvas>
-                </Grid>
-            </Border>
-
-            <!-- Disk Card -->
-            <Border Grid.Column="4" Style="{StaticResource SectionBorderStyle}" BorderThickness="0" Padding="12,10">
-                <Grid RowDefinitions="Auto,*,Auto">
-                    <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="4">
-                        <TextBlock Text="DISK" FontSize="9" FontWeight="Bold" Foreground="{ThemeResource TextSecondaryBrush}"/>
-                        <TextBlock Text="{x:Bind StoragePercentText, Mode=OneWay}" FontSize="9.5" FontWeight="Bold" Foreground="{ThemeResource TextPrimaryBrush}"/>
-                    </StackPanel>
-                    <TextBlock Grid.Row="1" FontSize="8" Foreground="{ThemeResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="0,-2,0,0">
-                        <Run Text="{x:Bind StorageFreeText, Mode=OneWay}"/>
-                        <Run Text=" free"/>
-                    </TextBlock>
-                    <ProgressBar Grid.Row="2" Value="{x:Bind StoragePercent, Mode=OneWay}" Minimum="0" Maximum="100" Height="2.5" Foreground="{ThemeResource AccentBrush}" Background="#20FFFFFF" CornerRadius="1.25"/>
-                </Grid>
-            </Border>
+        <!-- Footer strip -->
+        <Grid Grid.Row="2" ColumnDefinitions="*,Auto" Height="30" Margin="0,8,0,0">
+            <TextBlock Text="31°C" VerticalAlignment="Center" Margin="8,0,0,0"/>
+            <controls:AppIcon Kind="Settings" Width="16" Height="16"
+                              Fill="{ThemeResource TextSecondaryBrush}"
+                              VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,8,0"/>
         </Grid>
     </Grid>
+</Grid>
 </UserControl>

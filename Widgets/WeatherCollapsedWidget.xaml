@@ -5,6 +5,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:controls="using:DynamicIsland.Controls"
     mc:Ignorable="d">
 
     <Grid VerticalAlignment="Center" HorizontalAlignment="Center" Height="28">
@@ -13,14 +14,13 @@
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
 
-        <!-- Weather Icon (Segoe MDL2 Assets Sun-behind-cloud) -->
-        <FontIcon Grid.Column="0" 
-                  Glyph="&#xE706;" 
-                  FontFamily="Segoe MDL2 Assets" 
-                  FontSize="15" 
-                  Foreground="#FFFFD700" 
-                  Margin="0,0,8,0" 
-                  VerticalAlignment="Center"/>
+        <!-- Weather icon (Fluent System Icons, partly cloudy day) -->
+        <controls:AppIcon Grid.Column="0"
+                          Kind="WeatherPartlyCloudy"
+                          Width="16" Height="16"
+                          Fill="#FFFFD700"
+                          Margin="0,0,8,0"
+                          VerticalAlignment="Center"/>
 
         <TextBlock Grid.Column="1" 
                    VerticalAlignment="Center" 
