@@ -19,10 +19,10 @@ namespace DynamicIsland.Services;
 /// made reserved-cluster detection flaky. The strip's left edge is measurable
 /// in every layout and is stable, so it is the single boundary used here.
 ///
-/// Width uses the same "never claim a width you can't back up" clamping as
-/// <see cref="AppStripAnchorStrategy"/> — <c>Math.Min(ideal, Math.Max(0,
-/// available))</c> — never the old Math.Clamp(raw, CompactMinWidth, ideal)
-/// floor, which would push the pill past the tray on a crowded taskbar.
+/// Width uses a "never claim a width you can't back up" clamp —
+/// <c>Math.Min(ideal, Math.Max(0, available))</c> — with no lower floor, so a
+/// crowded taskbar degrades honestly instead of the pill re-overlapping the
+/// tray.
 /// </summary>
 public sealed class FixedHomeAnchorStrategy : IAnchorStrategy
 {
@@ -32,6 +32,11 @@ public sealed class FixedHomeAnchorStrategy : IAnchorStrategy
     // never reach the Start icon even when the pill takes its full ideal width.
     // Pragmatic trade: a little pill width for guaranteed non-overlap.
     private const double UnmeasuredIconBuffer = 40;
+
+    // Last values actually announced, so steady-state polls don't spam the log —
+    // the same change-only pattern as WindowService.ApplyGeometry.
+    private double _lastLoggedBoundary = double.NegativeInfinity;
+    private double _lastLoggedWidth = double.NegativeInfinity;
 
     /// <inheritdoc/>
     public AnchorResult Resolve(TaskbarSnapshot snapshot)
@@ -45,7 +50,14 @@ public sealed class FixedHomeAnchorStrategy : IAnchorStrategy
         double available = boundary - CompactLayoutController.SafetyMargin - UnmeasuredIconBuffer;
         double width = Math.Min(CompactLayoutController.CompactIdealWidth, Math.Max(0, available));
 
-        Logger.Info($"[ANCHOR-FIXEDHOME] x=0 width={width:F1} available={available:F1} boundary={boundary:F1} buffer={UnmeasuredIconBuffer} source=appStripLeft");
+        if (Math.Abs(boundary - _lastLoggedBoundary) >= 1.0
+            || Math.Abs(width - _lastLoggedWidth) >= 1.0)
+        {
+            _lastLoggedBoundary = boundary;
+            _lastLoggedWidth = width;
+            Logger.Info($"[ANCHOR-FIXEDHOME] x=0 width={width:F1} available={available:F1} boundary={boundary:F1} buffer={UnmeasuredIconBuffer} source=appStripLeft");
+        }
+
         return new AnchorResult(0, width);
     }
 }
