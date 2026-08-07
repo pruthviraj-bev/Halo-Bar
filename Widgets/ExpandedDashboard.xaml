@@ -79,12 +79,6 @@
                           Fill="{ThemeResource TextSecondaryBrush}"
                           HorizontalAlignment="Left" VerticalAlignment="Top" Margin="8" />
 
-        <!-- Dummy elements to satisfy code-behind references and build -->
-        <Canvas Visibility="Collapsed">
-            <Polyline x:Name="CpuGraphLine" />
-            <Polyline x:Name="GpuGraphLine" />
-        </Canvas>
-
         <!-- Main layout grid -->
         <Grid RowSpacing="0" Margin="8,40,8,8">
             <Grid.RowDefinitions>
@@ -96,12 +90,32 @@
         <Grid Grid.Row="0" RowDefinitions="*" ColumnDefinitions="2*,3*" RowSpacing="8" ColumnSpacing="8">
             <!-- LEFT column – resources grid (top) + Focus Session (fills remaining height) -->
             <Grid Grid.Column="0" RowDefinitions="Auto,*" RowSpacing="12">
-                <!-- 2×2 resource placeholder grid -->
+                <!-- Live 2×2 stats grid (CPU/RAM/DISK) -->
                 <Grid Grid.Row="0" RowDefinitions="Auto,Auto" ColumnDefinitions="Auto,Auto" RowSpacing="4" ColumnSpacing="4">
-                    <Border BorderBrush="Gray" BorderThickness="1" Padding="8"><TextBlock Text="RAM" HorizontalAlignment="Center" /></Border>
-                    <Border Grid.Column="1" BorderBrush="Gray" BorderThickness="1" Padding="8"><TextBlock Text="CPU" HorizontalAlignment="Center" /></Border>
-                    <Border Grid.Row="1" BorderBrush="Gray" BorderThickness="1" Padding="8"><TextBlock Text="GPU" HorizontalAlignment="Center" /></Border>
-                    <Border Grid.Row="1" Grid.Column="1" BorderBrush="Gray" BorderThickness="1" Padding="8"><TextBlock Text="DISK" HorizontalAlignment="Center" /></Border>
+                    <!-- CPU -->
+                    <Border BorderBrush="Gray" BorderThickness="1" Padding="8,6">
+                        <StackPanel Spacing="2" HorizontalAlignment="Center">
+                            <TextBlock Text="CPU" FontSize="9" Foreground="{ThemeResource TextSecondaryBrush}" HorizontalAlignment="Center"/>
+                            <TextBlock Text="{x:Bind CpuPercentText, Mode=OneWay}" FontSize="13" FontWeight="SemiBold"
+                                       Foreground="{ThemeResource TextPrimaryBrush}" HorizontalAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
+                    <!-- RAM -->
+                    <Border Grid.Column="1" BorderBrush="Gray" BorderThickness="1" Padding="8,6">
+                        <StackPanel Spacing="2" HorizontalAlignment="Center">
+                            <TextBlock Text="RAM" FontSize="9" Foreground="{ThemeResource TextSecondaryBrush}" HorizontalAlignment="Center"/>
+                            <TextBlock Text="{x:Bind RamPercentText, Mode=OneWay}" FontSize="13" FontWeight="SemiBold"
+                                       Foreground="{ThemeResource TextPrimaryBrush}" HorizontalAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
+                    <!-- DISK (spans bottom row) -->
+                    <Border Grid.Row="1" Grid.ColumnSpan="2" BorderBrush="Gray" BorderThickness="1" Padding="8,6">
+                        <StackPanel Spacing="2" HorizontalAlignment="Center">
+                            <TextBlock Text="DISK" FontSize="9" Foreground="{ThemeResource TextSecondaryBrush}" HorizontalAlignment="Center"/>
+                            <TextBlock Text="{x:Bind StoragePercentText, Mode=OneWay}" FontSize="13" FontWeight="SemiBold"
+                                       Foreground="{ThemeResource TextPrimaryBrush}" HorizontalAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
                 </Grid>
 
                 <!-- Focus Session card – shared WidgetCard shell; stretches to fill remaining left-column height. -->

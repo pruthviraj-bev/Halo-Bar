@@ -88,14 +88,14 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
         set { _ramTotalText = value; OnPropertyChanged(); }
     }
 
-    private int _ramPercent = 60;
+    private int _ramPercent = 0;
     public int RamPercent
     {
         get => _ramPercent;
         set { _ramPercent = value; OnPropertyChanged(); }
     }
 
-    private string _ramPercentText = "60%";
+    private string _ramPercentText = "—";
     public string RamPercentText
     {
         get => _ramPercentText;
@@ -109,14 +109,7 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
         set { _cpuPercentText = value; OnPropertyChanged(); }
     }
 
-    private string _gpuPercentText = "—";
-    public string GpuPercentText
-    {
-        get => _gpuPercentText;
-        set { _gpuPercentText = value; OnPropertyChanged(); }
-    }
-
-    private string _batteryPercentText = "82%";
+    private string _batteryPercentText = "—";
     public string BatteryPercentText
     {
         get => _batteryPercentText;
@@ -158,7 +151,7 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
         set { _storageTotalText = value; OnPropertyChanged(); }
     }
 
-    private int _storagePercent = 58;
+    private int _storagePercent = 0;
     public int StoragePercent
     {
         get => _storagePercent;
@@ -166,11 +159,15 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
         { 
             _storagePercent = value; 
             OnPropertyChanged(); 
-            OnPropertyChanged(nameof(StoragePercentText));
         }
     }
 
-    public string StoragePercentText => $"{_storagePercent}%";
+    private string _storagePercentText = "—";
+    public string StoragePercentText
+    {
+        get => _storagePercentText;
+        set { _storagePercentText = value; OnPropertyChanged(); }
+    }
 
     // ── Volume Slider Integration ──────────────────────────────────────────
 
@@ -340,8 +337,6 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
 
         // Initial query
         UpdateStats();
-        InitializeCpuGraph();
-        InitializeGpuGraph();
 
         // Initialize sample tasks
         Tasks.Add(new TaskItem { Text = "Review PR #42", IsCompleted = false });
@@ -436,18 +431,6 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
 
     private int _lastVol = -1;
 
-    // TEMP (System Monitoring PR-1 verification): throttled CPU log on change only.
-    // Remove this helper and the LogCpu call in UpdateStats in PR-2.
-    private int _lastLoggedCpu = -1;
-
-    private void LogCpu(double cpuPercent)
-    {
-        int pct = (int)Math.Round(cpuPercent);
-        if (pct == _lastLoggedCpu) return;
-        _lastLoggedCpu = pct;
-        Helpers.Logger.Info($"[CPU] {pct}%");
-    }
-
     private void UpdateStats()
     {
         // 1. Focus Session Timer
@@ -484,10 +467,8 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
             RamPercentText = $"{RamPercent}%";
         }
 
-        // 4. CPU (real load; graph data feed dropped pending PR-2 graph decision)
-        double cpuLoad = MeasureCpuLoad();
-        CpuPercentText = $"{cpuLoad:F0}%";
-        LogCpu(cpuLoad); // TEMP (PR-1 verification); remove in PR-2
+        // 4. CPU (real load)
+        CpuPercentText = $"{MeasureCpuLoad():F0}%";
 
         // 6. Battery
         var bat = App.BatteryService.CurrentState;
@@ -514,6 +495,7 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
             StorageTotalText = $"{totalGB:F0} GB";
             StorageFreeText = $"{freeGB:F0} GB";
             StoragePercent = (int)Math.Round((usedGB / totalGB) * 100);
+            StoragePercentText = $"{StoragePercent}%";
         }
         catch { }
 
@@ -636,41 +618,6 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
         _lastCpuLoad = totalDelta <= 0 ? _lastCpuLoad
                         : Math.Clamp(100.0 * (1.0 - (double)idleDelta / totalDelta), 0, 100);
         return _lastCpuLoad;
-    }
-
-    // ── CPU Sparkline graph ────────────────────────────────────────────────
-
-    private readonly Queue<double> _cpuHistory = new();
-    private readonly Queue<double> _gpuHistory = new();
-
-    private void InitializeCpuGraph()
-    {
-        for (int i = 0; i < 30; i++)
-            _cpuHistory.Enqueue(15);
-        
-        RedrawCpuGraph();
-    }
-
-    private void AddCpuDataPoint(double val)
-    {
-        _cpuHistory.Enqueue(val);
-        if (_cpuHistory.Count > 30)
-            _cpuHistory.Dequeue();
-
-        RedrawCpuGraph();
-    }
-
-    private void RedrawCpuGraph()
-    {
-        CpuGraphLine.Points.Clear();
-        int idx = 0;
-        foreach (var val in _cpuHistory)
-        {
-            double x = idx * 5.1; // ~153px width
-            double y = 22 - (val / 100.0 * 22);
-            CpuGraphLine.Points.Add(new Windows.Foundation.Point(x, y));
-            idx++;
-        }
     }
 
     // ── Clipboard history UI ───────────────────────────────────────────────
@@ -840,41 +787,6 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
     {
         var current = App.VolumeService.ReadCurrentState();
         App.VolumeService.SetMute(!current.IsMuted);
-    }
-
-    // ── GPU Sparkline graph ────────────────────────────────────────────────
-
-    private void InitializeGpuGraph()
-    {
-        for (int i = 0; i < 30; i++)
-            _gpuHistory.Enqueue(15);
-        
-        RedrawGpuGraph();
-    }
-
-    private void AddGpuDataPoint(double val)
-    {
-        _gpuHistory.Enqueue(val);
-        if (_gpuHistory.Count > 30)
-            _gpuHistory.Dequeue();
-
-        RedrawGpuGraph();
-    }
-
-    private void RedrawGpuGraph()
-    {
-        if (GpuGraphLine != null)
-        {
-            GpuGraphLine.Points.Clear();
-            int idx = 0;
-            foreach (var val in _gpuHistory)
-            {
-                double x = idx * 5.1; // ~153px width
-                double y = 22 - (val / 100.0 * 22);
-                GpuGraphLine.Points.Add(new Windows.Foundation.Point(x, y));
-                idx++;
-            }
-        }
     }
 
     // ── Focus Session click handlers ───────────────────────────────────────
