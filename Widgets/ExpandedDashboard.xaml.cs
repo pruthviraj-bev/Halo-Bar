@@ -226,14 +226,14 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
 
     private List<FocusSession> _focusSessions = new() { new() { Name = "Focus", DurationSeconds = 1500 } };
     private int _selectedFocusSessionIndex = 0;
-    private int _focusSecondsRemaining = 1492; // 24:52 as shown in the mockup
+    private int _focusSecondsRemaining = 0; // neutral; the constructor derives the real value from the active session before InitializeComponent
 
     /// <summary>
     /// Sessions shown by the Focus Session dot switcher (backed by _focusSessions).
     /// </summary>
     public List<FocusSession> FocusSessions => _focusSessions;
     private bool _focusIsRunning = false;
-    private int _focusRound = 2;
+    private int _focusRound = 1;
     private int _focusTotalRounds = 4;
 
     /// <summary>
@@ -304,6 +304,21 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
         // during InitializeComponent, so _focusSessions must already hold the
         // disk-loaded list or the dots would show only the field-initializer default.
         _focusSessions = FocusSessionStore.LoadAll();
+
+        // PR-1: first-render state must derive from the persisted session list, never from
+        // mock literals. This runs before InitializeComponent so the OneTime x:Bind of
+        // FocusSessions sees derived values on first render.
+        _selectedFocusSessionIndex = 0;
+        _focusSecondsRemaining = FocusTotalSeconds;
+        _focusRound = 1;
+        _focusIsRunning = false;
+
+        // Defensive clamp: the store guarantees >= 1 session, but never allow an
+        // out-of-range index (belt-and-suspenders against internal inconsistency).
+        if (_selectedFocusSessionIndex >= _focusSessions.Count)
+        {
+            _selectedFocusSessionIndex = 0;
+        }
 
         InitializeComponent();
         _dispatcherQueue = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
