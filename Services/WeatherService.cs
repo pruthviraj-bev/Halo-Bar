@@ -28,6 +28,8 @@ public class WeatherService
 
     public event EventHandler? WeatherUpdated;
 
+    public string LocationName => App.LocationService.LocationName;
+
     public WeatherService()
     {
         _dispatcherQueue = DispatcherQueue.GetForCurrentThread();
@@ -35,6 +37,9 @@ public class WeatherService
 
     public void Initialize()
     {
+        // Re-fetch when the location materially changes (e.g. resolved first time).
+        App.LocationService.LocationChanged += (_, _) => _ = FetchWeatherAsync();
+
         // Initial fetch
         _ = FetchWeatherAsync();
 
@@ -50,8 +55,17 @@ public class WeatherService
     {
         try
         {
-            double latitude = 28.61; // Default: New Delhi
-            double longitude = 77.20;
+            // WeatherService is a dumb Open-Meteo consumer — LocationService
+            // decides where we are.
+            if (!App.LocationService.IsAvailable)
+            {
+                IsWeatherAvailable = false;
+                _dispatcherQueue.TryEnqueue(() => WeatherUpdated?.Invoke(this, EventArgs.Empty));
+                return;
+            }
+
+            double latitude = App.LocationService.Latitude;
+            double longitude = App.LocationService.Longitude;
 
             // Attempt to fetch weather from free Open-Meteo API
             using var client = new HttpClient();

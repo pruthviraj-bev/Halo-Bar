@@ -17,6 +17,7 @@ public partial class App : Application
     public static ClipboardService ClipboardService { get; } = new();
     public static BatteryService BatteryService { get; } = new();
     public static VolumeService VolumeService { get; } = new();
+    public static LocationService LocationService { get; } = new();
     public static WeatherService WeatherService { get; } = new();
     public static BluetoothService BluetoothService { get; } = new();
     public static IslandController IslandController { get; private set; } = null!;
@@ -57,6 +58,7 @@ public partial class App : Application
         ClipboardService.Initialize();
         BatteryService.Initialize();
         VolumeService.Initialize();
+        LocationService.Initialize();
         WeatherService.Initialize();
         BluetoothService.Initialize();
 
