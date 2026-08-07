@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+    x:Class="DynamicIsland.Controls.WidgetCard"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    IsTabStop="True"
+    UseSystemFocusVisuals="False"
+    PointerEntered="OnPointerEntered"
+    PointerExited="OnPointerExited"
+    PointerPressed="OnPointerPressed"
+    PointerReleased="OnPointerReleased"
+    PointerCaptureLost="OnPointerCaptureLost"
+    GotFocus="OnGotFocus"
+    LostFocus="OnLostFocus">
+
+    <Grid x:Name="Root">
+        <VisualStateManager.VisualStateGroups>
+            <VisualStateGroup x:Name="CommonStates">
+                <VisualState x:Name="Default">
+                    <Storyboard x:Name="DefaultStoryboard">
+                        <DoubleAnimation Storyboard.TargetName="RaisedSurface" Storyboard.TargetProperty="Opacity" To="0" />
+                        <DoubleAnimation Storyboard.TargetName="RaisedBorder" Storyboard.TargetProperty="Opacity" To="0" />
+                        <DoubleAnimation Storyboard.TargetName="FocusVisual" Storyboard.TargetProperty="Opacity" To="0" />
+                    </Storyboard>
+                </VisualState>
+                <VisualState x:Name="Hover">
+                    <Storyboard x:Name="HoverStoryboard">
+                        <DoubleAnimation Storyboard.TargetName="RaisedSurface" Storyboard.TargetProperty="Opacity" To="1" />
+                        <DoubleAnimation Storyboard.TargetName="RaisedBorder" Storyboard.TargetProperty="Opacity" To="1" />
+                        <DoubleAnimation Storyboard.TargetName="FocusVisual" Storyboard.TargetProperty="Opacity" To="0" />
+                    </Storyboard>
+                </VisualState>
+                <VisualState x:Name="Pressed">
+                    <Storyboard x:Name="PressedStoryboard">
+                        <DoubleAnimation Storyboard.TargetName="RaisedSurface" Storyboard.TargetProperty="Opacity" To="0" />
+                        <DoubleAnimation Storyboard.TargetName="RaisedBorder" Storyboard.TargetProperty="Opacity" To="0" />
+                        <DoubleAnimation Storyboard.TargetName="FocusVisual" Storyboard.TargetProperty="Opacity" To="0" />
+                    </Storyboard>
+                </VisualState>
+                <VisualState x:Name="Focused">
+                    <Storyboard x:Name="FocusedStoryboard">
+                        <DoubleAnimation Storyboard.TargetName="RaisedSurface" Storyboard.TargetProperty="Opacity" To="0" />
+                        <DoubleAnimation Storyboard.TargetName="RaisedBorder" Storyboard.TargetProperty="Opacity" To="1" />
+                        <DoubleAnimation Storyboard.TargetName="FocusVisual" Storyboard.TargetProperty="Opacity" To="1" />
+                    </Storyboard>
+                </VisualState>
+            </VisualStateGroup>
+        </VisualStateManager.VisualStateGroups>
+
+        <!-- Raised surface fill, painted behind the card so content stays on top. -->
+        <Border x:Name="RaisedSurface"
+                Background="{StaticResource Semantic.Surface.Raised}"
+                CornerRadius="{StaticResource Radius.Large}"
+                Opacity="0"
+                IsHitTestVisible="False" />
+
+        <Border x:Name="CardSurface"
+                Style="{StaticResource Elevation.Flat}"
+                Background="{StaticResource Semantic.Surface.Default}"
+                BorderBrush="{StaticResource Semantic.Border.Default}"
+                CornerRadius="{StaticResource Radius.Large}">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition x:Name="HeaderRow" Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <ContentPresenter x:Name="HeaderPresenter"
+                                  Grid.Row="0"
+                                  Content="{x:Bind HeaderContent, Mode=OneWay}"
+                                  HorizontalContentAlignment="Stretch"
+                                  VerticalContentAlignment="Center" />
+
+                <Grid Grid.Row="1">
+                    <ContentPresenter x:Name="BodyPresenter"
+                                      Content="{x:Bind BodyContent, Mode=OneWay}"
+                                      HorizontalContentAlignment="Stretch"
+                                      VerticalContentAlignment="Stretch" />
+                    <ContentPresenter x:Name="OverlayPresenter"
+                                      Content="{x:Bind OverlayContent, Mode=OneWay}"
+                                      HorizontalContentAlignment="Stretch"
+                                      VerticalContentAlignment="Stretch" />
+                </Grid>
+
+                <ContentPresenter x:Name="FooterPresenter"
+                                  Grid.Row="2"
+                                  Content="{x:Bind FooterContent, Mode=OneWay}"
+                                  HorizontalContentAlignment="Stretch"
+                                  VerticalContentAlignment="Center" />
+            </Grid>
+        </Border>
+
+        <!-- Raised elevation edge, painted on top of the card. -->
+        <Border x:Name="RaisedBorder"
+                Style="{StaticResource Elevation.Raised}"
+                BorderBrush="{StaticResource Semantic.Border.Default}"
+                CornerRadius="{StaticResource Radius.Large}"
+                Opacity="0"
+                IsHitTestVisible="False" />
+
+        <!-- Keyboard focus ring. -->
+        <Border x:Name="FocusVisual"
+                Style="{StaticResource Elevation.Overlay}"
+                BorderBrush="{StaticResource Semantic.Accent.Primary}"
+                CornerRadius="{StaticResource Radius.Large}"
+                Opacity="0"
+                IsHitTestVisible="False" />
+    </Grid>
+</UserControl>

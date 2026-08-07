@@ -104,121 +104,126 @@
                     <Border Grid.Row="1" Grid.Column="1" BorderBrush="Gray" BorderThickness="1" Padding="8"><TextBlock Text="DISK" HorizontalAlignment="Center" /></Border>
                 </Grid>
 
-                <!-- Focus Session card – stretches to fill remaining left-column height, content stays centered -->
-                <Border Grid.Row="1" Style="{StaticResource SectionBorderStyle}">
-                    <Grid x:Name="FocusCardHost">
-                    <Grid x:Name="FocusMainView" RowDefinitions="Auto,*,Auto">
-                        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,6" Spacing="6">
-                            <controls:AppIcon Kind="Target" Width="12" Height="12" Fill="{ThemeResource AccentBrush}"/>
-                            <TextBlock Text="FOCUS SESSION" FontSize="10" FontWeight="Bold" Foreground="{ThemeResource TextSecondaryBrush}" CharacterSpacing="50"/>
-                        </StackPanel>
-                        <StackPanel Grid.Row="1" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="6">
-                            <TextBlock Text="{x:Bind CurrentSessionName, Mode=OneWay}" FontSize="10" FontWeight="Bold"
-                                       Foreground="{ThemeResource TextSecondaryBrush}" HorizontalAlignment="Center"/>
-                            <Grid x:Name="FocusRingGrid" Width="100" Height="100">
-                                <Ellipse Stroke="Gray" StrokeThickness="4" />
-                                <Path Data="{x:Bind FocusProgressFraction, Converter={StaticResource FocusProgressToArcConverter}, Mode=OneWay}" Stroke="{ThemeResource AccentBrush}" StrokeThickness="4" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
-                                <!-- Pill handle wrapper: rotates about the ring center; pill sits at 12 o'clock (Angle 0). -->
-                                <Grid Width="100" Height="100" RenderTransformOrigin="0.5,0.5" IsHitTestVisible="False">
-                                    <Grid.RenderTransform>
-                                        <RotateTransform x:Name="FocusPillRotate" Angle="0" />
-                                    </Grid.RenderTransform>
-                                    <Ellipse Width="14" Height="14" Fill="{ThemeResource AccentBrush}" Stroke="White" StrokeThickness="1" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,-3,0,0" />
-                                </Grid>
-                                <TextBlock Text="{x:Bind FocusTimerText, Mode=OneWay}" FontSize="26" FontWeight="Bold" Foreground="{ThemeResource TextPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                <!-- Transparent drag surface: full-ring hit target, topmost. -->
-                                <Ellipse Fill="Transparent" x:Name="FocusRingDragSurface"
-                                         PointerPressed="FocusRing_PointerPressed"
-                                         PointerMoved="FocusRing_PointerMoved"
-                                         PointerReleased="FocusRing_PointerReleased"
-                                         PointerCanceled="FocusRing_PointerCanceled"
-                                         PointerCaptureLost="FocusRing_PointerCaptureLost" />
-                            </Grid>
-                            <ItemsControl x:Name="FocusDotsControl"
-                                          ItemsSource="{x:Bind FocusSessions}"
-                                          HorizontalAlignment="Center"
-                                          Loaded="FocusDotsControl_Loaded">
-                                <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate>
-                                        <StackPanel Orientation="Horizontal" Spacing="4" />
-                                    </ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate x:DataType="models:FocusSession">
-                                        <Button Background="Transparent" BorderThickness="0" Padding="2"
-                                                Click="FocusSessionDot_Click"
-                                                ToolTipService.ToolTip="{x:Bind Name}">
-                                            <Ellipse x:Name="DotEllipse" Width="6" Height="6" Fill="LightGray" />
-                                        </Button>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                            <Button Style="{StaticResource CardButtonStyle}" Width="16" Height="16"
-                                    Click="FocusSessionAdd_Click" ToolTipService.ToolTip="New session">
-                                <controls:AppIcon Kind="Add" Width="12" Height="12"/>
-                            </Button>
-                        </StackPanel>
-                        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="12">
-                            <Button Style="{StaticResource PlayCircleButtonStyle}"
-                                    Click="FocusPlayPause_Click" ToolTipService.ToolTip="Start/Pause">
-                                <controls:AppIcon Kind="{x:Bind FocusPlayPauseIconKind, Mode=OneWay}" Filled="True"
-                                                  Width="20" Height="20" Fill="White"/>
-                            </Button>
-                            <Button Style="{StaticResource CardButtonStyle}"
-                                    Click="FocusReset_Click" ToolTipService.ToolTip="Reset">
-                                <controls:AppIcon Kind="Reset" Width="16" Height="16"/>
-                            </Button>
-                            <Button Style="{StaticResource CardButtonStyle}"
-                                    Click="FocusSettings_Click" ToolTipService.ToolTip="Settings">
-                                <controls:AppIcon Kind="Settings" Width="16" Height="16"/>
-                            </Button>
-                        </StackPanel>
-                    </Grid>
-
-                    <!-- Focus Session settings view: in-place card swap (not an overlay). -->
-                    <Grid x:Name="FocusSettingsView" Visibility="Collapsed" RowDefinitions="Auto,*,Auto" RowSpacing="8">
-                        <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
-                            <TextBlock Grid.Column="0" Text="{x:Bind FocusSettingsHeaderText, Mode=OneWay}" FontSize="10" FontWeight="Bold"
-                                       Foreground="{ThemeResource TextSecondaryBrush}" CharacterSpacing="50" VerticalAlignment="Center"/>
-                            <Button Grid.Column="1" Style="{StaticResource CardButtonStyle}"
-                                    Click="FocusSettingsClose_Click" ToolTipService.ToolTip="Close" HorizontalAlignment="Right">
-                                <controls:AppIcon Kind="Dismiss" Width="16" Height="16"/>
-                            </Button>
-                        </Grid>
-                        <StackPanel Grid.Row="1" VerticalAlignment="Center" HorizontalAlignment="Stretch" Spacing="10">
-                            <TextBox x:Name="FocusSettingsNameBox" PlaceholderText="Session name" FontSize="12" MaxLength="40"/>
-                            <StackPanel Spacing="2" HorizontalAlignment="Center">
-                                <TextBlock x:Name="FocusSettingsReadout" Text="25:00" FontSize="26" FontWeight="Bold"
-                                           Foreground="{ThemeResource TextPrimaryBrush}" HorizontalAlignment="Center"/>
-                                <TextBlock Text="Duration (minutes)" FontSize="10" Foreground="{ThemeResource TextSecondaryBrush}" HorizontalAlignment="Center"/>
+                <!-- Focus Session card – shared WidgetCard shell; stretches to fill remaining left-column height. -->
+                <controls:WidgetCard Grid.Row="1" IsTabStop="False">
+                    <controls:WidgetCard.HeaderContent>
+                        <!-- Main/settings header pair: in-place Visibility swap (deliberate design; not the overlay slot). -->
+                        <Grid>
+                            <StackPanel x:Name="FocusMainHeader" Orientation="Horizontal" Spacing="6">
+                                <controls:AppIcon Kind="Target" Width="12" Height="12" Fill="{ThemeResource AccentBrush}"/>
+                                <TextBlock Text="FOCUS SESSION" FontSize="10" FontWeight="Bold" Foreground="{ThemeResource TextSecondaryBrush}" CharacterSpacing="50"/>
                             </StackPanel>
-                            <Grid ColumnDefinitions="*,*,*" ColumnSpacing="8">
-                                <StackPanel Grid.Column="0" Spacing="2">
-                                    <NumberBox x:Name="FocusSettingsHoursBox" Minimum="0" Maximum="23" SpinButtonPlacementMode="Compact"
-                                               ValueChanged="FocusSettingsNumberBox_ValueChanged"/>
-                                    <TextBlock Text="H" FontSize="10" Foreground="{ThemeResource TextSecondaryBrush}" HorizontalAlignment="Center"/>
-                                </StackPanel>
-                                <StackPanel Grid.Column="1" Spacing="2">
-                                    <NumberBox x:Name="FocusSettingsMinutesBox" Minimum="0" Maximum="59" SpinButtonPlacementMode="Compact"
-                                               ValueChanged="FocusSettingsNumberBox_ValueChanged"/>
-                                    <TextBlock Text="M" FontSize="10" Foreground="{ThemeResource TextSecondaryBrush}" HorizontalAlignment="Center"/>
-                                </StackPanel>
-                                <StackPanel Grid.Column="2" Spacing="2">
-                                    <NumberBox x:Name="FocusSettingsSecondsBox" Minimum="0" Maximum="59" SpinButtonPlacementMode="Compact"
-                                               ValueChanged="FocusSettingsNumberBox_ValueChanged"/>
-                                    <TextBlock Text="S" FontSize="10" Foreground="{ThemeResource TextSecondaryBrush}" HorizontalAlignment="Center"/>
-                                </StackPanel>
+                            <Grid x:Name="FocusSettingsHeader" Visibility="Collapsed" ColumnDefinitions="*,Auto" Margin="0,0,0,8">
+                                <TextBlock Grid.Column="0" Text="{x:Bind FocusSettingsHeaderText, Mode=OneWay}" FontSize="10" FontWeight="Bold"
+                                           Foreground="{ThemeResource TextSecondaryBrush}" CharacterSpacing="50" VerticalAlignment="Center"/>
+                                <Button Grid.Column="1" Style="{StaticResource CardButtonStyle}"
+                                        Click="FocusSettingsClose_Click" ToolTipService.ToolTip="Close" HorizontalAlignment="Right">
+                                    <controls:AppIcon Kind="Dismiss" Width="16" Height="16"/>
+                                </Button>
                             </Grid>
-                        </StackPanel>
-                        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="12">
-                            <Button Style="{StaticResource PlayCircleButtonStyle}"
-                                    Click="FocusSettingsSave_Click" ToolTipService.ToolTip="Save">
-                                <controls:AppIcon Kind="Save" Filled="True" Width="20" Height="20" Fill="White"/>
-                            </Button>
-                        </StackPanel>
-                    </Grid>
-                    </Grid>
-                </Border>
+                        </Grid>
+                    </controls:WidgetCard.HeaderContent>
+                    <controls:WidgetCard.BodyContent>
+                        <Grid>
+                            <StackPanel x:Name="FocusMainBody" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="6">
+                                <TextBlock Text="{x:Bind CurrentSessionName, Mode=OneWay}" FontSize="10" FontWeight="Bold"
+                                           Foreground="{ThemeResource TextSecondaryBrush}" HorizontalAlignment="Center"/>
+                                <Grid x:Name="FocusRingGrid" Width="100" Height="100">
+                                    <Ellipse Stroke="Gray" StrokeThickness="4" />
+                                    <Path Data="{x:Bind FocusProgressFraction, Converter={StaticResource FocusProgressToArcConverter}, Mode=OneWay}" Stroke="{ThemeResource AccentBrush}" StrokeThickness="4" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                                    <!-- Pill handle wrapper: rotates about the ring center; pill sits at 12 o'clock (Angle 0). -->
+                                    <Grid Width="100" Height="100" RenderTransformOrigin="0.5,0.5" IsHitTestVisible="False">
+                                        <Grid.RenderTransform>
+                                            <RotateTransform x:Name="FocusPillRotate" Angle="0" />
+                                        </Grid.RenderTransform>
+                                        <Ellipse Width="14" Height="14" Fill="{ThemeResource AccentBrush}" Stroke="White" StrokeThickness="1" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,-3,0,0" />
+                                    </Grid>
+                                    <TextBlock Text="{x:Bind FocusTimerText, Mode=OneWay}" Style="{StaticResource Type.LargeNumber}" Foreground="{ThemeResource TextPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    <!-- Transparent drag surface: full-ring hit target, topmost. -->
+                                    <Ellipse Fill="Transparent" x:Name="FocusRingDragSurface"
+                                             PointerPressed="FocusRing_PointerPressed"
+                                             PointerMoved="FocusRing_PointerMoved"
+                                             PointerReleased="FocusRing_PointerReleased"
+                                             PointerCanceled="FocusRing_PointerCanceled"
+                                             PointerCaptureLost="FocusRing_PointerCaptureLost" />
+                                </Grid>
+                                <ItemsControl x:Name="FocusDotsControl"
+                                              ItemsSource="{x:Bind FocusSessions}"
+                                              HorizontalAlignment="Center"
+                                              Loaded="FocusDotsControl_Loaded">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <StackPanel Orientation="Horizontal" Spacing="{StaticResource Spacing.XS}" />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="models:FocusSession">
+                                            <Button Background="Transparent" BorderThickness="0" Padding="2"
+                                                    Click="FocusSessionDot_Click"
+                                                    ToolTipService.ToolTip="{x:Bind Name}">
+                                                <Ellipse x:Name="DotEllipse" Width="6" Height="6" Fill="LightGray" />
+                                            </Button>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <Button Style="{StaticResource CardButtonStyle}" Width="16" Height="16"
+                                        Click="FocusSessionAdd_Click" ToolTipService.ToolTip="New session">
+                                    <controls:AppIcon Kind="Add" Width="12" Height="12"/>
+                                </Button>
+                            </StackPanel>
+                            <StackPanel x:Name="FocusSettingsBody" Visibility="Collapsed" VerticalAlignment="Center" HorizontalAlignment="Stretch" Spacing="10">
+                                <TextBox x:Name="FocusSettingsNameBox" PlaceholderText="Session name" FontSize="12" MaxLength="40"/>
+                                <StackPanel Spacing="2" HorizontalAlignment="Center">
+                                    <TextBlock x:Name="FocusSettingsReadout" Text="25:00" Style="{StaticResource Type.LargeNumber}"
+                                               Foreground="{ThemeResource TextPrimaryBrush}" HorizontalAlignment="Center"/>
+                                    <TextBlock Text="Duration (minutes)" FontSize="10" Foreground="{ThemeResource TextSecondaryBrush}" HorizontalAlignment="Center"/>
+                                </StackPanel>
+                                <Grid ColumnDefinitions="*,*,*" ColumnSpacing="8">
+                                    <StackPanel Grid.Column="0" Spacing="2">
+                                        <NumberBox x:Name="FocusSettingsHoursBox" Minimum="0" Maximum="23" SpinButtonPlacementMode="Compact"
+                                                   ValueChanged="FocusSettingsNumberBox_ValueChanged"/>
+                                        <TextBlock Text="H" FontSize="10" Foreground="{ThemeResource TextSecondaryBrush}" HorizontalAlignment="Center"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Spacing="2">
+                                        <NumberBox x:Name="FocusSettingsMinutesBox" Minimum="0" Maximum="59" SpinButtonPlacementMode="Compact"
+                                                   ValueChanged="FocusSettingsNumberBox_ValueChanged"/>
+                                        <TextBlock Text="M" FontSize="10" Foreground="{ThemeResource TextSecondaryBrush}" HorizontalAlignment="Center"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2" Spacing="2">
+                                        <NumberBox x:Name="FocusSettingsSecondsBox" Minimum="0" Maximum="59" SpinButtonPlacementMode="Compact"
+                                                   ValueChanged="FocusSettingsNumberBox_ValueChanged"/>
+                                        <TextBlock Text="S" FontSize="10" Foreground="{ThemeResource TextSecondaryBrush}" HorizontalAlignment="Center"/>
+                                    </StackPanel>
+                                </Grid>
+                            </StackPanel>
+                        </Grid>
+                    </controls:WidgetCard.BodyContent>
+                    <controls:WidgetCard.FooterContent>
+                        <Grid>
+                            <StackPanel x:Name="FocusMainFooter" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="{StaticResource Spacing.M}">
+                                <Button Style="{StaticResource PlayCircleButtonStyle}"
+                                        Click="FocusPlayPause_Click" ToolTipService.ToolTip="Start/Pause">
+                                    <controls:AppIcon Kind="{x:Bind FocusPlayPauseIconKind, Mode=OneWay}" Filled="True"
+                                                      Width="20" Height="20" Fill="White"/>
+                                </Button>
+                                <Button Style="{StaticResource CardButtonStyle}"
+                                        Click="FocusReset_Click" ToolTipService.ToolTip="Reset">
+                                    <controls:AppIcon Kind="Reset" Width="16" Height="16"/>
+                                </Button>
+                                <Button Style="{StaticResource CardButtonStyle}"
+                                        Click="FocusSettings_Click" ToolTipService.ToolTip="Settings">
+                                    <controls:AppIcon Kind="Settings" Width="16" Height="16"/>
+                                </Button>
+                            </StackPanel>
+                            <StackPanel x:Name="FocusSettingsFooter" Visibility="Collapsed" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="{StaticResource Spacing.M}" Margin="0,8,0,0">
+                                <Button Style="{StaticResource PlayCircleButtonStyle}"
+                                        Click="FocusSettingsSave_Click" ToolTipService.ToolTip="Save">
+                                    <controls:AppIcon Kind="Save" Filled="True" Width="20" Height="20" Fill="White"/>
+                                </Button>
+                            </StackPanel>
+                        </Grid>
+                    </controls:WidgetCard.FooterContent>
+                </controls:WidgetCard>
             </Grid>
 
             <!-- RIGHT column – real clipboard history -->

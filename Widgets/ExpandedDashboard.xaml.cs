@@ -1073,14 +1073,22 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
         FocusSettingsMinutesBox.Value = (_focusSettingsDraftSeconds % 3600) / 60;
         FocusSettingsSecondsBox.Value = _focusSettingsDraftSeconds % 60;
         UpdateSettingsReadout();
-        FocusMainView.Visibility = Visibility.Collapsed;
-        FocusSettingsView.Visibility = Visibility.Visible;
+        FocusMainHeader.Visibility = Visibility.Collapsed;
+        FocusMainBody.Visibility = Visibility.Collapsed;
+        FocusMainFooter.Visibility = Visibility.Collapsed;
+        FocusSettingsHeader.Visibility = Visibility.Visible;
+        FocusSettingsBody.Visibility = Visibility.Visible;
+        FocusSettingsFooter.Visibility = Visibility.Visible;
     }
 
     private void CloseFocusSettings()
     {
-        FocusSettingsView.Visibility = Visibility.Collapsed;
-        FocusMainView.Visibility = Visibility.Visible;
+        FocusSettingsHeader.Visibility = Visibility.Collapsed;
+        FocusSettingsBody.Visibility = Visibility.Collapsed;
+        FocusSettingsFooter.Visibility = Visibility.Collapsed;
+        FocusMainHeader.Visibility = Visibility.Visible;
+        FocusMainBody.Visibility = Visibility.Visible;
+        FocusMainFooter.Visibility = Visibility.Visible;
     }
 
     private void FocusSettingsClose_Click(object sender, RoutedEventArgs e) => CloseFocusSettings();
