@@ -226,21 +226,24 @@
                 </controls:WidgetCard>
             </Grid>
 
-            <!-- RIGHT column – real clipboard history -->
-            <Grid Grid.Column="1" RowDefinitions="Auto,Auto,*" RowSpacing="6" VerticalAlignment="Stretch">
-                <!-- Header row: title + All/Pinned filter toggle -->
-                <Grid Grid.Row="0" ColumnDefinitions="Auto,Auto" HorizontalAlignment="Left" VerticalAlignment="Center">
-                    <TextBlock Grid.Column="0" Text="Clipboard" FontSize="14" FontWeight="Bold"/>
-                    <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="12,0,0,0" Spacing="4">
-                        <Button x:Name="AllFilterButton" Style="{StaticResource FilterToggleButtonStyle}" Content="All" Click="AllFilter_Click" />
-                        <Button x:Name="PinnedFilterButton" Style="{StaticResource FilterToggleButtonStyle}" Content="Pinned" Click="PinnedFilter_Click" />
-                    </StackPanel>
-                </Grid>
+            <!-- RIGHT column – clipboard history in the shared WidgetCard shell -->
+            <controls:WidgetCard Grid.Column="1" IsTabStop="False">
+                <controls:WidgetCard.HeaderContent>
+                    <!-- Header row: title + All/Pinned filter toggle -->
+                    <Grid ColumnDefinitions="Auto,Auto" HorizontalAlignment="Left" VerticalAlignment="Center">
+                        <TextBlock Grid.Column="0" Text="Clipboard" FontSize="14" FontWeight="Bold"/>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="12,0,0,0" Spacing="{StaticResource Spacing.XS}">
+                            <Button x:Name="AllFilterButton" Style="{StaticResource FilterToggleButtonStyle}" Content="All" Click="AllFilter_Click" />
+                            <Button x:Name="PinnedFilterButton" Style="{StaticResource FilterToggleButtonStyle}" Content="Pinned" Click="PinnedFilter_Click" />
+                        </StackPanel>
+                    </Grid>
+                </controls:WidgetCard.HeaderContent>
+                <controls:WidgetCard.BodyContent>
+                    <Grid RowDefinitions="Auto,*" RowSpacing="6">
+                        <!-- Empty state -->
+                        <TextBlock Grid.Row="0" x:Name="ClipboardEmptyText" Text="Nothing copied yet" FontSize="11" Foreground="{ThemeResource TextSecondaryBrush}" Visibility="{x:Bind ClipboardEmptyVisibility, Mode=OneWay}" />
 
-                <!-- Empty state -->
-                <TextBlock Grid.Row="1" x:Name="ClipboardEmptyText" Text="Nothing copied yet" FontSize="11" Foreground="{ThemeResource TextSecondaryBrush}" Visibility="{x:Bind ClipboardEmptyVisibility, Mode=OneWay}" />
-
-                <ScrollViewer Grid.Row="2" VerticalAlignment="Stretch" VerticalScrollBarVisibility="Auto" Padding="0,0,12,0">
+                        <ScrollViewer Grid.Row="1" VerticalAlignment="Stretch" VerticalScrollBarVisibility="Auto" Padding="0,0,12,0">
                     <ItemsControl ItemsSource="{x:Bind ClipboardItems}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate x:DataType="services:ClipboardItem">
@@ -259,6 +262,7 @@
                                     <!-- Front card -->
                                     <Border BorderBrush="Gray" BorderThickness="1" Padding="8" Margin="0,0,0,4"
                                             Background="Transparent"
+                                            Tag="ClipboardFrontCard"
                                             Tapped="ClipboardItemCard_Tapped">
                                         <Border.RenderTransform>
                                             <TranslateTransform x:Name="FrontCardTranslate" X="0" Y="0" />
@@ -303,8 +307,10 @@
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
-                </ScrollViewer>
-            </Grid>
+                        </ScrollViewer>
+                    </Grid>
+                </controls:WidgetCard.BodyContent>
+            </controls:WidgetCard>
         </Grid>
 
         <!-- Now Playing (original content wrapped in outline) -->

@@ -757,7 +757,8 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
         DependencyObject current = element;
         while (current is not null)
         {
-            if (current is Border border && border.RenderTransform is TranslateTransform transform
+            if (current is Border border && border.Tag as string == "ClipboardFrontCard"
+                && border.RenderTransform is TranslateTransform transform
                 && VisualTreeHelper.GetParent(border) is Grid root)
             {
                 // The delete strip is the only Button sibling of the front card Border in the template root.

@@ -11,7 +11,8 @@ verification, not just a clean build.
 | Widget | Status | Validated | Scope / Notes |
 |--------|--------|-----------|---------------|
 | Focus (ExpandedDashboard) | ✅ | 2026-08-07 | PR 1 shell-only migration. Header/body/footer moved into the slots; in-place main↔settings swap preserved as a three-slot-pair Visibility toggle (not the overlay slot); ring drag math, pill-angle assignment, H:M:S NumberBoxes, and the OneTime `ItemsSource` rebind all untouched and re-verified live with real clicks. |
-| (next widget — Clipboard, Media, Battery, ...) | ⬜ | — | |
+| Clipboard (ExpandedDashboard) | ✅ | 2026-08-07 | PR 2 shell-only migration. Header/filter row → `HeaderContent`; empty state + list → `BodyContent` (item template moved verbatim). `GetRevealTargets` hardened with an explicit `Tag="ClipboardFrontCard"` before the template moved into the shell. Single-step delete, pin/unpin, All/Pinned filter, re-copy — all re-verified live with real clicks. |
+| (next widget — Media, Battery, ...) | ⬜ | — | |
 
 ## Discoveries Log
 
@@ -31,3 +32,15 @@ Real-world lessons from validating against live widgets, recorded here before `W
   element is half-absorbed into the centering offset (an 8px margin renders as ~4px of gap below).
 - Example in `ExpandedDashboard.xaml`: settings header `Margin="0,0,0,8"`, settings footer
   `Margin="0,8,0,0"` (matches the pre-migration `RowSpacing="8"` on `FocusSettingsView`).
+
+### 2026-08-07 — Structure-matched code-behind needs an explicit marker before moving into the shell
+
+- `GetRevealTargets` in `ExpandedDashboard.xaml.cs` walked up the tree matching "any `Border`
+  with a `TranslateTransform` whose parent `Grid` has a `Button` child" — a structural match with
+  no explicit marker. That was safe while the template sat in a standalone column, but once nested
+  inside WidgetCard's slots the same walk could match the shell's own chrome if WidgetCard ever
+  gained a `TranslateTransform` (e.g. hover/press feedback).
+- Fix: `Tag="ClipboardFrontCard"` on the front-card `Border`, and the walk now matches on that Tag
+  (the `TranslateTransform` check stays as an invariant guard). Applies to any code-behind that
+  reaches into template internals by shape rather than by name — mark the anchor explicitly before
+  nesting the template inside the shared shell.
