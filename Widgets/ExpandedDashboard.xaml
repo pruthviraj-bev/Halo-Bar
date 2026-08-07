@@ -128,6 +128,8 @@
                             <StackPanel x:Name="FocusMainBody" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="6">
                                 <TextBlock Text="{x:Bind CurrentSessionName, Mode=OneWay}" FontSize="10" FontWeight="Bold"
                                            Foreground="{ThemeResource TextSecondaryBrush}" HorizontalAlignment="Center"/>
+                                <TextBlock Text="{x:Bind FocusRoundText, Mode=OneWay}" FontSize="10" FontWeight="SemiBold"
+                                           Foreground="{ThemeResource TextSecondaryBrush}" HorizontalAlignment="Center"/>
                                 <Grid x:Name="FocusRingGrid" Width="100" Height="100">
                                     <Ellipse Stroke="Gray" StrokeThickness="4" />
                                     <Path Data="{x:Bind FocusProgressFraction, Converter={StaticResource FocusProgressToArcConverter}, Mode=OneWay}" Stroke="{ThemeResource AccentBrush}" StrokeThickness="4" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
