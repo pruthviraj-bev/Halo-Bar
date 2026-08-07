@@ -25,7 +25,6 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
 {
     private DispatcherTimer? _updateTimer;
     private DispatcherTimer? _visualizerTimer;
-    private readonly Random _rand = new();
     private readonly Microsoft.UI.Dispatching.DispatcherQueue _dispatcherQueue;
 
     // ── INotifyPropertyChanged ─────────────────────────────────────────────
@@ -103,14 +102,14 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
         set { _ramPercentText = value; OnPropertyChanged(); }
     }
 
-    private string _cpuPercentText = "18%";
+    private string _cpuPercentText = "—";
     public string CpuPercentText
     {
         get => _cpuPercentText;
         set { _cpuPercentText = value; OnPropertyChanged(); }
     }
 
-    private string _gpuPercentText = "42%";
+    private string _gpuPercentText = "—";
     public string GpuPercentText
     {
         get => _gpuPercentText;
@@ -292,6 +291,12 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GetPerformanceInfo(out PERFORMANCE_INFORMATION pPerformanceInformation, int cb);
 
+    [StructLayout(LayoutKind.Sequential)]
+    private struct FILETIME { public uint Low, High; public long ToLong() => ((long)High << 32) | Low; }
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool GetSystemTimes(out FILETIME idle, out FILETIME kernel, out FILETIME user);
+
     // ── Constructor ────────────────────────────────────────────────────────
 
     public ExpandedDashboard()
@@ -429,8 +434,19 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
 
     // ── Stats updates ──────────────────────────────────────────────────────
 
-    private int _cpuVal = 18;
     private int _lastVol = -1;
+
+    // TEMP (System Monitoring PR-1 verification): throttled CPU log on change only.
+    // Remove this helper and the LogCpu call in UpdateStats in PR-2.
+    private int _lastLoggedCpu = -1;
+
+    private void LogCpu(double cpuPercent)
+    {
+        int pct = (int)Math.Round(cpuPercent);
+        if (pct == _lastLoggedCpu) return;
+        _lastLoggedCpu = pct;
+        Helpers.Logger.Info($"[CPU] {pct}%");
+    }
 
     private void UpdateStats()
     {
@@ -468,15 +484,10 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
             RamPercentText = $"{RamPercent}%";
         }
 
-        // 4. CPU
-        _cpuVal = Math.Clamp(_cpuVal + _rand.Next(-4, 5), 5, 75);
-        CpuPercentText = $"{_cpuVal}%";
-        AddCpuDataPoint(_cpuVal);
-
-        // 5. GPU (Simulated)
-        _gpuVal = Math.Clamp(_gpuVal + _rand.Next(-5, 6), 5, 85);
-        GpuPercentText = $"{_gpuVal}%";
-        AddGpuDataPoint(_gpuVal);
+        // 4. CPU (real load; graph data feed dropped pending PR-2 graph decision)
+        double cpuLoad = MeasureCpuLoad();
+        CpuPercentText = $"{cpuLoad:F0}%";
+        LogCpu(cpuLoad); // TEMP (PR-1 verification); remove in PR-2
 
         // 6. Battery
         var bat = App.BatteryService.CurrentState;
@@ -604,11 +615,33 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
         }
     }
 
+    // ── Real CPU load (GetSystemTimes) ─────────────────────────────────────
+
+    private long _prevCpuIdle, _prevCpuKernel, _prevCpuUser;
+    private double _lastCpuLoad;
+
+    private double MeasureCpuLoad()
+    {
+        if (!GetSystemTimes(out var idle, out var kernel, out var user))
+            return _lastCpuLoad;
+        long idleNow = idle.ToLong(), kernelNow = kernel.ToLong(), userNow = user.ToLong();
+        if (_prevCpuIdle == 0)
+        {
+            _prevCpuIdle = idleNow; _prevCpuKernel = kernelNow; _prevCpuUser = userNow;
+            return 0;
+        }
+        long totalDelta = (kernelNow - _prevCpuKernel) + (userNow - _prevCpuUser);
+        long idleDelta = idleNow - _prevCpuIdle;
+        _prevCpuIdle = idleNow; _prevCpuKernel = kernelNow; _prevCpuUser = userNow;
+        _lastCpuLoad = totalDelta <= 0 ? _lastCpuLoad
+                        : Math.Clamp(100.0 * (1.0 - (double)idleDelta / totalDelta), 0, 100);
+        return _lastCpuLoad;
+    }
+
     // ── CPU Sparkline graph ────────────────────────────────────────────────
 
     private readonly Queue<double> _cpuHistory = new();
     private readonly Queue<double> _gpuHistory = new();
-    private double _gpuVal = 42;
 
     private void InitializeCpuGraph()
     {
