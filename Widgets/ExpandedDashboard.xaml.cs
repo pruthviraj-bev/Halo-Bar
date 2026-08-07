@@ -444,22 +444,15 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
             if (_focusSecondsRemaining > 0)
             {
                 _focusSecondsRemaining--;
-            }
-            else
-            {
-                _focusRound++;
-                if (_focusRound > _focusTotalRounds)
+                if (_focusSecondsRemaining == 0)
                 {
-                    _focusRound = 1;
+                    _focusIsRunning = false;          // stop counting; remain at 00:00
                 }
-                _focusSecondsRemaining = FocusTotalSeconds; // Reset to the selected session's duration
-
             }
             OnPropertyChanged(nameof(FocusTimerText));
             OnPropertyChanged(nameof(FocusRoundText));
             OnPropertyChanged(nameof(FocusProgressFraction));
-
-            // Read-only progress indicator while running: pill tracks the arc endpoint.
+            OnPropertyChanged(nameof(FocusPlayPauseIconKind)); // icon returns to Play
             FocusPillRotate.Angle = FocusProgressFraction * 360;
         }
 
@@ -860,7 +853,24 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
 
     private void FocusPlayPause_Click(object sender, RoutedEventArgs e)
     {
-        _focusIsRunning = !_focusIsRunning;
+        if (_focusIsRunning)
+        {
+            _focusIsRunning = false;                       // Pause
+        }
+        else if (_focusSecondsRemaining > 0)
+        {
+            _focusIsRunning = true;                        // Resume / Start
+        }
+        else
+        {
+            _focusSecondsRemaining = FocusTotalSeconds;    // Completed -> fresh session
+            _focusRound = 1;
+            FocusPillRotate.Angle = 0;
+            _focusIsRunning = true;
+        }
+        OnPropertyChanged(nameof(FocusTimerText));
+        OnPropertyChanged(nameof(FocusRoundText));
+        OnPropertyChanged(nameof(FocusProgressFraction));
         OnPropertyChanged(nameof(FocusPlayPauseIconKind));
     }
 
