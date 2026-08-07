@@ -233,8 +233,6 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
     /// </summary>
     public List<FocusSession> FocusSessions => _focusSessions;
     private bool _focusIsRunning = false;
-    private int _focusRound = 1;
-    private int _focusTotalRounds = 4;
 
     /// <summary>
     /// Session length (seconds) for the currently selected focus session.
@@ -244,7 +242,6 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
     public string CurrentSessionName => _focusSessions[_selectedFocusSessionIndex].Name;
 
     public string FocusTimerText => $"{_focusSecondsRemaining / 60:D2}:{_focusSecondsRemaining % 60:D2}";
-    public string FocusRoundText => $"Round {_focusRound}/{_focusTotalRounds}";
     public AppIconKind FocusPlayPauseIconKind => _focusIsRunning ? AppIconKind.Pause : AppIconKind.Play;
 
     /// <summary>
@@ -310,7 +307,6 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
         // FocusSessions sees derived values on first render.
         _selectedFocusSessionIndex = 0;
         _focusSecondsRemaining = FocusTotalSeconds;
-        _focusRound = 1;
         _focusIsRunning = false;
 
         // Defensive clamp: the store guarantees >= 1 session, but never allow an
@@ -450,7 +446,6 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
                 }
             }
             OnPropertyChanged(nameof(FocusTimerText));
-            OnPropertyChanged(nameof(FocusRoundText));
             OnPropertyChanged(nameof(FocusProgressFraction));
             OnPropertyChanged(nameof(FocusPlayPauseIconKind)); // icon returns to Play
             FocusPillRotate.Angle = FocusProgressFraction * 360;
@@ -864,12 +859,10 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
         else
         {
             _focusSecondsRemaining = FocusTotalSeconds;    // Completed -> fresh session
-            _focusRound = 1;
             FocusPillRotate.Angle = 0;
             _focusIsRunning = true;
         }
         OnPropertyChanged(nameof(FocusTimerText));
-        OnPropertyChanged(nameof(FocusRoundText));
         OnPropertyChanged(nameof(FocusProgressFraction));
         OnPropertyChanged(nameof(FocusPlayPauseIconKind));
     }
@@ -878,10 +871,8 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
     {
         _focusIsRunning = false;
         _focusSecondsRemaining = FocusTotalSeconds; // Reset to the selected session's duration
-        _focusRound = 1;
         FocusPillRotate.Angle = 0;
         OnPropertyChanged(nameof(FocusTimerText));
-        OnPropertyChanged(nameof(FocusRoundText));
         OnPropertyChanged(nameof(FocusPlayPauseIconKind));
         OnPropertyChanged(nameof(FocusProgressFraction));
     }
