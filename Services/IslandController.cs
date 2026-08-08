@@ -45,6 +45,10 @@ public class IslandController
     // True while the mouse cursor is inside the expanded panel.
     private bool _mouseIsOver;
 
+    // Number of open interaction surfaces (gear flyout, Focus settings)
+    // that suppress all auto-collapse until released.
+    private int _awakeHoldCount;
+
     // Persistent MediaWidget instance (reused across track changes).
     private MediaWidget? _mediaWidget;
 
@@ -72,6 +76,11 @@ public class IslandController
     /// </summary>
     public event EventHandler<bool> IsExpandedChanged = delegate { };
 
+    /// <summary>
+    /// True while the manual click-expansion (dashboard) is showing.
+    /// </summary>
+    public bool IsExpanded => _clickExpanded;
+
     public IslandController(DispatcherQueue dispatcherQueue)
     {
         _dispatcherQueue = dispatcherQueue;
@@ -93,14 +102,16 @@ public class IslandController
     /// </summary>
     public void NotifyIslandClick()
     {
-        _clickExpanded = !_clickExpanded;
-        IsExpandedChanged.Invoke(this, _clickExpanded);
-        Commit();
+        // Only the pill surface toggles. Presses anywhere inside the expanded
+        // dashboard — NumberBox spin arrows, text input, cards — bubble up to
+        // MainWindow's RootGrid_PointerPressed and land here; toggling then would
+        // instantly collapse the dashboard mid-interaction, so ignore them.
+        if (_clickExpanded) return;
 
-        if (_clickExpanded)
-            ArmAutoCollapse(TimeSpan.FromSeconds(6));
-        else
-            DisarmAutoCollapse();
+        _clickExpanded = true;
+        IsExpandedChanged.Invoke(this, true);
+        Commit();
+        ArmAutoCollapse(TimeSpan.FromSeconds(6));
     }
 
     /// <summary>
@@ -121,6 +132,7 @@ public class IslandController
     public void NotifyMouseLeave()
     {
         _mouseIsOver = false;
+        if (_awakeHoldCount > 0) return; // Don't arm while an interaction surface is open.
         if (_clickExpanded)
             ArmAutoCollapse(TimeSpan.FromSeconds(2));
     }
@@ -131,13 +143,30 @@ public class IslandController
     /// </summary>
     public void NotifyFocusLost()
     {
+        if (_awakeHoldCount > 0) return; // Surface open — don't collapse.
         if (_clickExpanded)
         {
             _clickExpanded = false;
             IsExpandedChanged.Invoke(this, false);
             DisarmAutoCollapse();
+            _awakeHoldCount = 0;
             Commit();
         }
+    }
+
+    /// <summary>Marks an interaction surface as open; suppresses all auto-collapse until released.</summary>
+    public void BeginAwake()
+    {
+        _awakeHoldCount++;
+        DisarmAutoCollapse();
+    }
+
+    public void EndAwake()
+    {
+        _awakeHoldCount = Math.Max(0, _awakeHoldCount - 1);
+        // Restore normal behavior when the last surface closes and the pointer has left.
+        if (_awakeHoldCount == 0 && _clickExpanded && !_mouseIsOver)
+            ArmAutoCollapse(TimeSpan.FromSeconds(2));
     }
 
     // ── Auto-collapse timer ────────────────────────────────────────────────
@@ -151,11 +180,12 @@ public class IslandController
         _autoCollapseTimer.IsRepeating = false;
         _autoCollapseTimer.Tick += (_, _) =>
         {
-            // Only collapse if the user isn't hovering.
-            if (!_mouseIsOver && _clickExpanded)
+            // Only collapse if nothing holds the island awake and the user isn't hovering.
+            if (_awakeHoldCount == 0 && !_mouseIsOver && _clickExpanded)
             {
                 _clickExpanded = false;
                 IsExpandedChanged.Invoke(this, false);
+                _awakeHoldCount = 0;
                 Commit();
             }
         };

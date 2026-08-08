@@ -73,6 +73,11 @@ public partial class App : Application
         CompactLayoutController = new CompactLayoutController(Window);
         WindowService = new WindowService(Window, CompactLayoutController);
 
+        // Any mouse press outside the dock collapses the expanded island immediately.
+        // Guarded inside NotifyFocusLost by the awake-hold, so open settings surfaces
+        // (gear flyout, Focus settings) are never clobbered.
+        WindowService.MouseClickedOutside += (_, _) => IslandController.NotifyFocusLost();
+
         // Apply all DWM/borderless/toolwindow/owner styling while the window is
         // still HIDDEN so its very first present (triggered by InitializeWindow's
         // MoveAndResize / Window.Activate) is already styled. Previously this ran

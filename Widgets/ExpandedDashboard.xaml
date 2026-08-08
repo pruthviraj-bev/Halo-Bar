@@ -395,10 +395,14 @@
 
         <!-- Footer strip -->
         <Grid Grid.Row="2" ColumnDefinitions="*,Auto" Height="30" Margin="0,8,0,0">
-            <TextBlock Text="31°C" VerticalAlignment="Center" Margin="8,0,0,0"/>
-            <controls:AppIcon Kind="Settings" Width="16" Height="16"
-                              Fill="{ThemeResource TextSecondaryBrush}"
-                              VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,8,0"/>
+            <TextBlock Text="{x:Bind WeatherTemp, Mode=OneWay}" VerticalAlignment="Center" Margin="8,0,0,0"
+                       ToolTipService.ToolTip="{x:Bind WeatherCondition, Mode=OneWay}"/>
+            <Button Width="16" Height="16" Padding="0"
+                    Style="{StaticResource CardButtonStyle}"
+                    VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,8,0"
+                    Click="SettingsGear_Click" ToolTipService.ToolTip="Location settings">
+                <controls:AppIcon Kind="Settings" Width="16" Height="16" Fill="{ThemeResource TextSecondaryBrush}"/>
+            </Button>
         </Grid>
     </Grid>
 </Grid>

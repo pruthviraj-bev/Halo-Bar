@@ -730,7 +730,11 @@ What does not belong: widget-specific logic in `Controls`; raw
 | (recent) | Fullscreen detection excludes shell-host processes + 200 ms debounce | Otherwise Start/Search/taskbar overlays blink the pill. | — |
 | (recent) | Focus duration ring drag uses shortest-path delta across the 0/2π seam | Crossing the ring top must not teleport the handle. | Raw angle delta (rejected: jumps). |
 | 2026-08-07 | "06-ExpandedDashboard-Discrepancy-and-Risk-Report" reviewed against actual files and resolved for Phase 2 | That report was written from a mismatched pair of pasted files (a slider-based settings UX that the committed XAML never had) and explicitly gated Phase 2 pending confirmation. Confirmed against real code: the H:M:S `NumberBox` trio IS the current settings input (wired to `FocusSettingsNumberBox_ValueChanged`, `ExpandedDashboard.xaml:183-194`/`.cs:1051`); `FocusSettingsHeaderText` and `CurrentSessionName` ARE bound in XAML (`:117`, `:129`). No slider exists. The one real residual it flagged — `GetRevealTargets` needing an explicit marker before Clipboard nested into WidgetCard — is already shipped (`Tag="ClipboardFrontCard"`, PR 2). Two minor items still open: `CpuGraphLine`/`GpuGraphLine` null-check asymmetry (dead code) and the orphaned Stats/Weather/Tasks/FileShelf props (#1). **Conclusion: nothing blocks starting further WidgetCard migration.** | Comparing against the wrong snapshot (rejected); trusting the process-report over the repo (rejected). |
-| 2026-08-07 | Dashboard reconciliation verdicts (STEP 1 investigation): **restore Stats, Weather, Quick Tasks; prune File Shelf** | All four orphaned features were traced in `ExpandedDashboard.xaml.cs`. Stats (real RAM/battery/storage, simulated CPU/GPU) and Weather (fully service-wired) are live-but-invisible → pure-XAML restore. Tasks handlers are complete, never rendered → cheap restore. File Shelf is a power-user duplicate of Explorer/Clipboard with zero persistence and mock seed → weakest value/effort, prune. Bluetooth card already gone from the earlier redesign. | Restore File Shelf (rejected: duplicates Explorer, worst value/effort); prune Stats/Weather (rejected: they are live, service-backed data). |
+| 2026-08-08 | Location resolution + **manual city override wins** (`LocationService` Geolocator→IP `ipwho.is`→last-known; manual `IsManual` flag persisted in `location.json`; override UI = `LocationSettingsPopup` city search via Open-Meteo geocoding) | A Belagavi user is IP-geolocated to Mumbai (~700 km off) — auto-geo is too coarse for a real temp. Manual override is authoritative; `LoadLastKnown()` restores the flag on restart. | Hardcoded New Delhi (rejected: wrong for everyone except there); IP-only (rejected: too coarse). |
+| 2026-08-08 | Click-expansion toggle no-ops while already expanded | The root click toggle (:53) is now a no-op when expanded (`IslandController.NotifyIslandClick` gates on `IsExpanded`), so stray presses inside the dashboard (NumberBox spins, text fields, cards — none of which suppress the bubbled press) can never collapse it mid-interaction. Hold-awake could not stop this path (separate code path, never gated). | Per-element hop suppression (rejected: whack-a-mole); expanded-clicks still collapse (rejected). |
+| 2026-08-08 | Text input via temporary lift of `WS_EX_NOACTIVATE` (`WindowService.SetTextInputActive` + `App.Window.Activate()` while a field has focus) | `WS_EX_NOACTIVATE` windows never receive keyboard focus, so Focus H:M:S and location search TextBoxes/NumberBoxes could not be typed into. Lift on `GotFocus`, restore on `LostFocus`. | Remove the flag permanently (rejected: steals focus from the user's app); rely on popups (rejected: the dashboard fields live in the dock window). |
+| 2026-08-08 | Click-outside-to-close via a low-level `WH_MOUSE_LL` hook (`MouseClickedOutside` → `IslandController.NotifyFocusLost()`) | The dock is `WS_EX_NOACTIVATE`, so it is never foreground — clicking back into the previous app never raises a foreground change, making a foreground hook unreliable. The mouse hook hit-tests each press against the dock rect; awake-hold guards settings surfaces. | Foreground-change event (rejected: misses the common case); auto-collapse-only (rejected: UX). |
+| 2026-08-07 | Dashboard reconciliation verdicts (STEP 1 investigation): **restore Stats, Weather, Quick Tasks; prune File Shelf** | All four orphaned features were traced in `ExpandedDashboard.xaml.cs`. Stats (real RAM/battery/storage, simulated CPU/GPU) and Weather (fully service-wired) are live-but-invisible → pure-XAML restore. Tasks handlers are complete, never rendered → cheap restore. File Shelf is a power-user duplicate of Explorer/Clipboard with zero persistence and mock seed → weakest value/effort, prune. Bluetooth card already gone from the earlier redesign. (Later superseded: System Monitoring freeze, footer-weather, Quick Tasks deferred, File Shelf pruned.) | Restore File Shelf (rejected: duplicates Explorer, worst value/effort); prune Stats/Weather (rejected: they are live, service-backed data). |
 
 ---
 
@@ -814,11 +818,31 @@ What does not belong: widget-specific logic in `Controls`; raw
     guard against `null`** (e.g. `UpdateRepeatVisual`, `UpdateFocusDotsVisual`).
     The codebase consistently null-checks; keep doing so.
 
+15. **`WS_EX_NOACTIVATE` makes every text field dead** — a non-activating window
+    can never receive keyboard focus, so TextBox/NumberBox inside it can't be
+    typed into. To support typing, temporarily clear the flag while a field has
+    focus (`GotFocus`/`LostFocus`) and call `Activate()`; the finalizer-style
+    concern of the permanent NOACTIVATE still applies normally in the dock's
+    non-typing state.
+
+16. **A click-toggle attached to the window root becomes a landmine once child
+    content is interactive.** The expanded dashboard lives in the same RootGrid
+    as the pill's "click to expand" handler, so any press not sunk by the child
+    (NumberBox spins, text input) bubbled to the root and collapsed the island.
+    Result anchoring: gate `NotifyIslandClick()` to no-op when already expanded.
+
+17. **A `WS_EX_NOACTIVATE` topmost dock can't detect outside clicks via a
+    foreground/activation hook** — its window is never foreground, so clicking
+    back into the app you were using produces "no event" for the common case. A
+    low-level `WH_MOUSE_LL` hook that hit-tests each press against the dock's
+    rect is the reliable signal (guard with the awake-hold so open flyouts are
+    safe).
+
 ---
 
 # Current State (always reflect reality)
 
-## Completed / committed (HEAD `42ebe3b`, branch `main`, 4 commits ahead of origin/main — unpushed)
+## Completed / committed (HEAD `25abac5`; this snapshot commits the Weather-slice + interaction work)
 
 - ✅ Collapsed pill, acrylic backdrop, taskbar docking, z-order guard.
 - ✅ Taskbar width-awareness (adaptive compact width via CompactLayoutController).
@@ -835,30 +859,44 @@ What does not belong: widget-specific logic in `Controls`; raw
 - ✅ Fixed-home anchoring via app-strip boundary; dead anchor strategies removed.
 - ✅ Design token system (`Resources/Tokens.xaml`) + `WidgetCard` shell.
 - ✅ `AppIcon`/`AppIcons.cs` generated icon registry (but generator script missing).
+- ✅ System Monitoring freeze (`7a874dd`): real CPU (`GetSystemTimes`) / RAM
+  (`GetPerformanceInfo`) / disk (`DriveInfo`) as a live 3-cell card; simulated
+  CPU/GPU & sparkline polyline infra removed.
+- ✅ Weather slice — real coordinates + manual override + footer binding
+  (committed in this snapshot):
+  - `LocationService` (Geolocator → IP `ipwho.is` → last-known, persisted to
+    `%LOCALAPPDATA%\DynamicIsland\location.json`); hardcoded New Delhi removed.
+  - Manual city override via `LocationSettingsPopup` (toggle + Open-Meteo
+    geocoding search); `IsManual` flag persisted & restored.
+  - Footer temp/condition bound to `WeatherService`.
+- ✅ Interaction fixes (committed in this snapshot): stray presses inside the
+  expanded dashboard no longer collapse it; Focus & location text fields accept
+  keyboard input (temporary `WS_EX_NOACTIVATE` lift); click-anywhere-outside now
+  closes the island immediately (`WH_MOUSE_LL` → `NotifyFocusLost`).
 
 ## In progress
 
-- **ExpandedDashboard reconciliation — STEP 2 implementation.** STEP 1
-  investigation is complete and recorded under Active Task. Decision made:
-  restore **Stats**, **Weather**, and **Quick Tasks** into the dashboard XAML
-  (binding to existing code-behind, no new logic); **prune File Shelf**
-  (handlers + collection + `Widgets/StashedFile.cs`). Awaiting/comencing STEP 2
-  code changes; working tree otherwise clean at `42ebe3b`.
-- Repo is still 4 commits ahead of origin (PR 1, PR 2, + two anchor commits) —
-  push is pending.
+- **Weather slice — functionally complete; interaction fixes verified live.**
+  This snapshot records and commits the manual city override (`LocationSettings
+  Popup`), the click-toggle gate, text-input activation, and click-outside
+  close. Freeze the slice after this commit.
+- Next slice: **Quick Tasks persistence** (tasks reset each launch).
+- Repo is still ahead of origin (Focus/Clipboard/anchors/System Monitoring/
+  Weather PR 1 + this snapshot) — push is pending.
 
 ## Blocked / deferred
 
-- ExpandedDashboard reconciliation decision is **made** (restore Stats/Weather/
-  Tasks, prune File Shelf) — moving to STEP 2 implementation (see Active Task).
+- ExpandedDashboard reconciliation: fully realized via System Monitoring freeze
+  (stats), footer+override weather, and (next) Quick Tasks persistence; File
+  Shelf pruned.
 - FocusEngine (Phase 3) — scoped, not started.
 - Clipboard delete-confirmation UX (single-step vs two-step discrepancy parked).
 - `UpdateFilterVisual` → XAML visual states / WidgetCard Interaction States
   vocabulary (parked).
 - Clipboard retention scheduling (parked).
 - PomodoroTimerWidget fate (make it an `IIslandWidget` or delete).
-- Quick Tasks persistence (tasks reset each launch) — flagged, not part of the
-  restore work.
+- `WeatherCollapsedWidget` (ambient taskbar pill) still hardcodes a temperature —
+  defer binding it to `WeatherService` to a later slice.
 
 ## Abandoned / removed
 
@@ -872,10 +910,15 @@ What does not belong: widget-specific logic in `Controls`; raw
 
 # Active Task
 
-- **Objective:** perform the **ExpandedDashboard XAML ↔ code-behind
-  reconciliation** (Next Recommended Task #1). STEP 1 investigation is
-  complete (see below); STEP 2 implementation is approved and is the active
-  work.
+- **Objective:** freeze the **Weather slice** — real location + manual override +
+  footer binding + interaction fixes (toggle gate, text input, click-outside
+  close) are implemented and live-verified; this snapshot is the record +
+  commit. After it: **Quick Tasks persistence**.
+- The ExpandedDashboard reconciliation investigation below (STEP 1) is retained
+  as history. Its per-feature verdicts played out as: Stats → the live System
+  Monitoring 3-cell card (`7a874dd`); Weather → footer + manual override (this
+  slice); Quick Tasks → next slice (persistence); File Shelf → pruned; Bluetooth
+  card → absent from the redesign.
 - **Investigation verdicts (per-feature, from the "STEP 1 report"):**
   - **Stats — RESTORE.** Fully functional and live but invisible:
     `UpdateStats()` runs every 1 s via `_updateTimer`
@@ -1038,12 +1081,12 @@ What does not belong: widget-specific logic in `Controls`; raw
 
 | # | Symptom | Root cause | Workaround | Planned fix | Priority |
 |---|---------|-----------|------------|-------------|----------|
-| 1 | Dashboard renders only Focus/Clipboard/Stats-placeholders/Now-Playing; Tasks, File Shelf, Weather, real Stats absent | `ExpandedDashboard.xaml` redesigned without those sections; code-behind still has the logic | None | **Decision made (2026-08-07): restore Stats/Weather/Tasks, prune File Shelf — STEP 2 in progress (Active Task)** | High |
+| 1 | Quick Tasks card absent from dashboard (handlers exist, never rendered) | XAML section never existed; tasks reset each launch | None | Next slice: Quick Tasks persistence + card | Medium |
 | 2 | `ClipboardWidget.ExpandWidget` resizes window to 320×180 directly | Sole-mutator violation (raw `StartSizeAnimation`) | None | Route through `SetProfile` | High |
 | 3 | Unhandled exceptions are swallowed (`e.Handled = true`) after logging | Deliberate "attempt to recover" in App.xaml.cs | Check `%LOCALAPPDATA%\DynamicIsland\logs\app.log` | Consider partial crash recovery / dialog for dev builds | Medium |
 | 4 | Clipboard history grows unbounded | `CleanupExpiredItems` never scheduled | None | Daily timer + Settings UI | Medium |
 | 5 | `WeatherCollapsedWidget` shows hardcoded "28°C Partly Cloudy" | Not bound to `WeatherService` | None | Bind to service | Medium |
-| 6 | Weather coordinates New Delhi; README claims Seattle | Hardcoded `(28.61, 77.20)` | None | Config/auto-detect | Medium |
+| 6 | Weather coordinates hardcoded (New Delhi) | **Resolved** — real `LocationService` (auto IP + manual override, `location.json`). Pending: README town example refresh | None | README refresh | Low |
 | 7 | `MediaService.SessionTracing` and `[DEBUG]` logs flood app.log | Leftover diagnostics | None | Remove after confirmation | Low |
 | 8 | Duplicate `ExpandedDashboard` instantiation path | VM and IslandController both create it | None (only one wins via binding) | Single owner | Low |
 | 9 | `PomodoroTimerWidget` is a dead static stub | Never finished; not an `IIslandWidget` | Not registered | Decide/delete | Low |
@@ -1067,6 +1110,14 @@ What does not belong: widget-specific logic in `Controls`; raw
   re-copy, empty state. Real clicks, human-verified.
 - The `Tag="ClipboardFrontCard"` change alone was gate-tested before the shell
   move.
+- System Monitoring (3-cell CPU/RAM/DISK) verified live; simulated GPU/battery
+  dropped after confirmed UI stutter.
+- Weather+interaction (real clicks, human-verified): manual city search picks
+  a location and the footer temp updates; auto toggle returns location to
+  automatic; persisted manual city survives restart (`location.json`); NumberBox
+  spin/typing and location search in a **no-collapse** expanded dashboard;
+  clicking anywhere outside the dock closes it immediately; auto-collapse
+  (leave >2s / idle 6s) still works; open flyout holds the island awake.
 - Build is clean (0 errors / 0 warnings) per PR reports.
 
 ## What still requires testing / verification

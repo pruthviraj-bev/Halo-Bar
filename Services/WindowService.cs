@@ -65,6 +65,14 @@ public class WindowService
     private WinEventDelegate? _winEventDelegate;
     private IntPtr _hWinEventHook = IntPtr.Zero;
 
+    // Keeps the managed callback referenced so the GC never collects it while hooked.
+    private LowLevelMouseProc? _mouseHookDelegate;
+    private IntPtr _mouseHook = IntPtr.Zero;
+    private Microsoft.UI.Dispatching.DispatcherQueue? _dispatcherQueue;
+
+    /// <summary>Fires (on the UI thread) when a mouse-button press lands outside the dock window.</summary>
+    public event EventHandler? MouseClickedOutside;
+
     public event EventHandler<bool>? FullscreenStateChanged;
     private bool _lastFullscreenActive = false;
     private bool _isHiddenForFullscreen = false;
@@ -100,6 +108,23 @@ public class WindowService
         public RECT rcMonitor;
         public RECT rcWork;
         public uint dwFlags;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct POINT
+    {
+        public int X;
+        public int Y;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MSLLHOOKSTRUCT
+    {
+        public POINT pt;
+        public uint mouseData;
+        public uint flags;
+        public uint time;
+        public IntPtr dwExtraInfo;
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -171,6 +196,17 @@ public class WindowService
     private delegate void WinEventDelegate(
         IntPtr hWinEventHook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint dwEventThread, uint dwmsEventTime);
 
+    private delegate IntPtr LowLevelMouseProc(int nCode, IntPtr wParam, IntPtr lParam);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern IntPtr SetWindowsHookEx(int idHook, LowLevelMouseProc lpfn, IntPtr hMod, uint dwThreadId);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool UnhookWindowsHookEx(IntPtr hhk);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern IntPtr CallNextHookEx(IntPtr hhk, int nCode, IntPtr wParam, IntPtr lParam);
+
     // ── Constants ──────────────────────────────────────────────────────────
 
     private static readonly IntPtr HWND_TOPMOST = new(-1);
@@ -188,6 +224,12 @@ public class WindowService
     private const int DWMWA_COLOR_NONE   = -2;
     private const uint EVENT_SYSTEM_FOREGROUND = 0x0003;
     private const uint WINEVENT_OUTOFCONTEXT = 0x0000;
+
+    // Low-level mouse hook: detect clicks landing outside the dock.
+    private const int WH_MOUSE_LL   = 14;
+    private const int WM_LBUTTONDOWN = 0x0201;
+    private const int WM_RBUTTONDOWN = 0x0204;
+    private const int WM_MBUTTONDOWN = 0x0207;
 
     private const uint MONITOR_DEFAULTTONEAREST = 2;
     private const int QUNS_RUNNING_D3D_FULL_SCREEN = 3;
@@ -301,6 +343,15 @@ public class WindowService
             IntPtr.Zero, _winEventDelegate, 0, 0, WINEVENT_OUTOFCONTEXT);
         Logger.Info("WinEventHook (EVENT_SYSTEM_FOREGROUND) registered successfully.");
 
+        // Low-level mouse hook: the dock is WS_EX_NOACTIVATE so "click outside"
+        // never changes the foreground window — the mouse hook is the reliable signal.
+        _dispatcherQueue = dispatcherQueue;
+        _mouseHookDelegate = MouseHookProc;
+        _mouseHook = SetWindowsHookEx(WH_MOUSE_LL, _mouseHookDelegate, IntPtr.Zero, 0);
+        Logger.Info(_mouseHook == IntPtr.Zero
+            ? "MouseHook (WH_MOUSE_LL) failed to register."
+            : $"MouseHook (WH_MOUSE_LL) registered: 0x{_mouseHook.ToInt64():X}");
+
         StartZOrderGuard(dispatcherQueue);
         ForceAboveTaskbar(); // Immediate push to top of TOPMOST z-order.
     }
@@ -340,6 +391,25 @@ public class WindowService
         int updated = current | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE;
         SetWindowLong(_hwnd, GWL_EXSTYLE, updated);
         Logger.Info($"ApplyToolWindowStyle: style 0x{style:X} → 0x{newStyle:X}, exStyle 0x{current:X} → 0x{updated:X}");
+    }
+
+    /// <summary>
+    /// Temporarily lifts WS_EX_NOACTIVATE while a text field has focus so the dock
+    /// can receive keyboard input, then restores it when editing finishes. Restoring
+    /// is a safe no-op if the flag is already in the requested state.
+    /// </summary>
+    public void SetTextInputActive(bool active)
+    {
+        if (_hwnd == IntPtr.Zero) return;
+
+        int current = GetWindowLong(_hwnd, GWL_EXSTYLE);
+        int updated = active
+            ? (current & ~WS_EX_NOACTIVATE)
+            : (current | WS_EX_NOACTIVATE);
+        if (updated == current) return;
+
+        SetWindowLong(_hwnd, GWL_EXSTYLE, updated);
+        Logger.Info($"SetTextInputActive({active}): exStyle 0x{current:X} → 0x{updated:X}");
     }
 
     /// <summary>
@@ -414,8 +484,39 @@ public class WindowService
         }
     }
 
+    /// <summary>
+    /// Fires on every mouse-button press system-wide (low-level hook). When the
+    /// press lands outside the dock window we raise <see cref="MouseClickedOutside"/>
+    /// on the UI thread so the expanded island can collapse immediately.
+    /// </summary>
+    private IntPtr MouseHookProc(int nCode, IntPtr wParam, IntPtr lParam)
+    {
+        if (nCode >= 0)
+        {
+            int msg = wParam.ToInt32();
+            if (msg == WM_LBUTTONDOWN || msg == WM_RBUTTONDOWN || msg == WM_MBUTTONDOWN)
+            {
+                if (lParam != IntPtr.Zero)
+                {
+                    var data = Marshal.PtrToStructure<MSLLHOOKSTRUCT>(lParam);
+                    if (GetWindowRect(_hwnd, out RECT rect)
+                        && (data.pt.X < rect.Left || data.pt.X > rect.Right
+                            || data.pt.Y < rect.Top || data.pt.Y > rect.Bottom))
+                    {
+                        _dispatcherQueue?.TryEnqueue(() => MouseClickedOutside?.Invoke(this, EventArgs.Empty));
+                    }
+                }
+            }
+        }
+        return CallNextHookEx(_mouseHook, nCode, wParam, lParam);
+    }
+
     ~WindowService()
     {
+        if (_mouseHook != IntPtr.Zero)
+        {
+            UnhookWindowsHookEx(_mouseHook);
+        }
         if (_hWinEventHook != IntPtr.Zero)
         {
             UnhookWinEvent(_hWinEventHook);

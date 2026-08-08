@@ -36,12 +36,14 @@ public sealed class LocationService
     private readonly object _gate = new();
     private DispatcherQueueTimer? _pollTimer;
     private bool _isResolving;
+    private bool _isManual;
 
     public string LocationName { get; private set; } = "";
     public double Latitude { get; private set; }
     public double Longitude { get; private set; }
     public bool IsResolving => _isResolving;
     public bool IsAvailable { get; private set; }
+    public bool IsManual => _isManual;
     public DateTimeOffset LastUpdated { get; private set; }
 
     /// <summary>Raised when coordinates meaningfully change (or become available).</summary>
@@ -62,6 +64,8 @@ public sealed class LocationService
 
     private async Task ResolveAsync()
     {
+        if (_isManual) return; // manual city is authoritative — skip auto chain
+
         lock (_gate)
         {
             if (_isResolving) return;
@@ -150,6 +154,7 @@ public sealed class LocationService
         if (!string.IsNullOrWhiteSpace(name)) LocationName = name;
         IsAvailable = true;
         LastUpdated = DateTimeOffset.Now;
+        _isManual = false; // the auto chain always produces a non-manual location
 
         Persist();
 
@@ -158,6 +163,41 @@ public sealed class LocationService
             Logger.Info($"[LOCATION] resolved {LocationName} ({lat:F4}, {lon:F4})");
             LocationChanged?.Invoke(this, EventArgs.Empty);
         }
+    }
+
+    /// <summary>
+    /// Pins a user-chosen city as the location. The manual city becomes
+    /// authoritative: the auto chain is skipped until cleared.
+    /// </summary>
+    public async Task SaveManualCityAsync(string name, double latitude, double longitude)
+    {
+        // 1. Update in-memory state first
+        Latitude = latitude;
+        Longitude = longitude;
+        LocationName = name;
+        LastUpdated = DateTime.UtcNow;
+        IsAvailable = true;
+        _isManual = true;
+
+        // 2. Persist() writes IsManual=true so the override survives restarts
+        Persist();
+
+        // 3. Fire LocationChanged so WeatherService re-fetches immediately
+        LocationChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// Clears the manual override and re-runs the auto chain right away.
+    /// </summary>
+    public async Task ClearManualCityAsync()
+    {
+        _isManual = false;
+
+        // Persist IsManual=false so restarts don't reapply the override
+        Persist();
+
+        // Re-resolve so the auto chain takes over immediately
+        await ResolveAsync();
     }
 
     private void LoadLastKnown()
@@ -175,6 +215,7 @@ public sealed class LocationService
             LocationName = stored.Name ?? "";
             LastUpdated = stored.UpdatedAt;
             IsAvailable = true;
+            _isManual = stored.IsManual;
 
             Logger.Info($"[LOCATION] last known loaded: {LocationName} ({stored.Latitude:F4}, {stored.Longitude:F4})");
         }
@@ -190,7 +231,10 @@ public sealed class LocationService
         {
             var dir = Path.GetDirectoryName(LocationFile);
             if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
-            var stored = new StoredLocation(Latitude, Longitude, LocationName, LastUpdated);
+            var stored = new StoredLocation(Latitude, Longitude, LocationName, LastUpdated)
+            {
+                IsManual = _isManual
+            };
             File.WriteAllText(LocationFile, JsonSerializer.Serialize(stored, SerializerOptions));
         }
         catch (Exception ex)
@@ -223,5 +267,9 @@ public sealed class LocationService
     }
 }
 
-/// <summary>Persisted snapshot of a successful live location resolution.</summary>
-public record StoredLocation(double Latitude, double Longitude, string Name, DateTimeOffset UpdatedAt);
+/// <summary>Persisted snapshot of a successful location resolution.</summary>
+public record StoredLocation(double Latitude, double Longitude, string Name, DateTimeOffset UpdatedAt)
+{
+    /// <summary>True when the user pinned this city manually (auto chain skipped).</summary>
+    public bool IsManual { get; set; } = false;
+}

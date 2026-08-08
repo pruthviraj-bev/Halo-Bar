@@ -326,6 +326,13 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
         PlaybackSlider.AddHandler(UIElement.PointerCanceledEvent, new PointerEventHandler(PlaybackSlider_PointerReleased), true);
         PlaybackSlider.AddHandler(UIElement.PointerCaptureLostEvent, new PointerEventHandler(PlaybackSlider_PointerReleased), true);
 
+        // Text fields live in a WS_EX_NOACTIVATE window, which blocks keyboard focus.
+        // Temporarily lift it while any of them is focused so typing actually works.
+        AttachTextInputFocus(FocusSettingsNameBox);
+        AttachTextInputFocus(FocusSettingsHoursBox);
+        AttachTextInputFocus(FocusSettingsMinutesBox);
+        AttachTextInputFocus(FocusSettingsSecondsBox);
+
         UpdateRepeatVisual();
         MediaViewModel.PropertyChanged += (_, e) =>
         {
@@ -789,6 +796,22 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
         App.VolumeService.SetMute(!current.IsMuted);
     }
 
+    // ── Footer settings gear (location) ────────────────────────────────────
+
+    private void SettingsGear_Click(object sender, RoutedEventArgs e)
+    {
+        var popup = new LocationSettingsPopup();
+        var flyout = new Flyout
+        {
+            Content = popup,
+            Placement = FlyoutPlacementMode.Top
+        };
+        popup.RequestClose += (_, _) => flyout.Hide();
+        App.IslandController.BeginAwake();
+        flyout.Closed += (_, _) => App.IslandController.EndAwake();
+        flyout.ShowAt((FrameworkElement)sender);
+    }
+
     // ── Focus Session click handlers ───────────────────────────────────────
 
     private void FocusPlayPause_Click(object sender, RoutedEventArgs e)
@@ -1028,6 +1051,18 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
         FocusSettingsReadout.Text = h > 0 ? $"{h}:{m:D2}:{s:D2}" : $"{m:D2}:{s:D2}";
     }
 
+    private static void AttachTextInputFocus(Control control)
+    {
+        control.GotFocus += (_, _) => SetTextInputActive(true);
+        control.LostFocus += (_, _) => SetTextInputActive(false);
+    }
+
+    private static void SetTextInputActive(bool active)
+    {
+        App.WindowService.SetTextInputActive(active);
+        if (active) App.Window.Activate();
+    }
+
     private void OpenFocusSettings()
     {
         FocusSettingsNameBox.Text = _focusSettingsDraftName;
@@ -1041,6 +1076,7 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
         FocusSettingsHeader.Visibility = Visibility.Visible;
         FocusSettingsBody.Visibility = Visibility.Visible;
         FocusSettingsFooter.Visibility = Visibility.Visible;
+        App.IslandController.BeginAwake();
     }
 
     private void CloseFocusSettings()
@@ -1051,6 +1087,7 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
         FocusMainHeader.Visibility = Visibility.Visible;
         FocusMainBody.Visibility = Visibility.Visible;
         FocusMainFooter.Visibility = Visibility.Visible;
+        App.IslandController.EndAwake();
     }
 
     private void FocusSettingsClose_Click(object sender, RoutedEventArgs e) => CloseFocusSettings();
