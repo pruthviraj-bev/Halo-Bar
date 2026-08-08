@@ -143,6 +143,10 @@ public class IslandController
     /// </summary>
     public void NotifyFocusLost()
     {
+        // A press while the pointer is over the dock (e.g. clicking the gear to open a
+        // surface, possibly mid-expand-animation while the rect is still small) is never
+        // a click "outside" — don't collapse it.
+        if (_mouseIsOver) return;
         if (_awakeHoldCount > 0) return; // Surface open — don't collapse.
         if (_clickExpanded)
         {
@@ -348,9 +352,9 @@ public class IslandController
             if (existing != null)
                 Pop(existing.Widget, existing.Control);
 
-            // Create a fresh widget for this copy event and push with Brief auto-dismiss.
+            // Create a fresh widget for this copy event and push with a 2s transient.
             var clipWidget = new ClipboardWidget(item);
-            Push(clipWidget, clipWidget, NotificationDuration.Brief);
+            Push(clipWidget, clipWidget, NotificationDuration.Short);
         });
     }
 
@@ -373,6 +377,49 @@ public class IslandController
     /// Called by ClipboardWidgetViewModel action commands (Dismiss, Clear).
     /// </summary>
     public void DismissClipboard() => Dismiss<ClipboardWidget>();
+
+    /// <summary>
+    /// Tells the active clipboard widget to show its "Copied" confirmation for 2s
+    /// (then it dismisses itself). Called by the Re-copy command.
+    /// </summary>
+    public void ShowCopiedFeedback()
+    {
+        _dispatcherQueue.TryEnqueue(() =>
+        {
+            var entry = _stack.FirstOrDefault(e => e.Control is ClipboardWidget);
+            if (entry?.Control is ClipboardWidget widget)
+                widget.ShowCopiedConfirmation();
+        });
+    }
+
+    /// <summary>
+    /// Restarts the transient auto-dismiss timer without repushing the widget —
+    /// used to re-arm dismissal once the user stops hovering a transient pill.
+    /// </summary>
+    public void RenewAutoDismiss(TimeSpan duration)
+    {
+        if (_stack.Count == 0) return;
+
+        var top = _stack[0];
+        if (top.AutoDismiss is null) return;
+
+        _autoDismissTimer?.Stop();
+        _autoDismissTimer = _dispatcherQueue.CreateTimer();
+        _autoDismissTimer.Interval = duration;
+        _autoDismissTimer.IsRepeating = false;
+        _autoDismissTimer.Tick += (_, _) => Pop(top.Widget, top.Control);
+        _autoDismissTimer.Start();
+    }
+
+    /// <summary>
+    /// Stops the transient auto-dismiss timer entirely — used while the cursor
+    /// is present over a transient pill so it never times out mid-interaction.
+    /// </summary>
+    public void CancelAutoDismiss()
+    {
+        _autoDismissTimer?.Stop();
+        _autoDismissTimer = null;
+    }
 
     // ── Battery events ─────────────────────────────────────────────────────
 

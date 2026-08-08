@@ -23,6 +23,14 @@ public class ClipboardService
     public ClipboardItem? CurrentItem { get; private set; }
 
     /// <summary>
+    /// Timestamp of the most recent ReCopy SetContent call. QueryAsync uses it to
+    /// recognize the OS ContentChanged that OUR OWN re-copy triggers, so that
+    /// dedup does not fire ClipboardChanged and spawn a fresh transient pill.
+    /// Self-heals after a short window, so it can never suppress a real capture.
+    /// </summary>
+    private DateTime _selfCopyUtc = DateTime.MinValue;
+
+    /// <summary>
     /// Multi-item clipboard history, most-recent-first. Persisted to disk via ClipboardHistoryStore.
     /// </summary>
     public ObservableCollection<ClipboardItem> History { get; } = new();
@@ -180,7 +188,13 @@ public class ClipboardService
                             ClipboardHistoryStore.Save(History);
 
                             CurrentItem = match;
-                            ClipboardChanged?.Invoke(this, match);
+
+                            // A re-copy initiated from the pill must not spawn a fresh transient
+                            // pill — the widget shows its own "Copied" confirmation instead.
+                            bool selfCopy = (DateTime.UtcNow - _selfCopyUtc).TotalMilliseconds < 1500;
+                            if (!selfCopy)
+                                ClipboardChanged?.Invoke(this, match);
+
                             Helpers.Logger.Info("ClipboardService: moved existing item to top (re-copied)");
                             return;
                         }
@@ -393,6 +407,23 @@ public class ClipboardService
         }
     }
 
+    /// <summary>
+    /// Removes an item from the persisted clipboard history and deletes its
+    /// associated image file. Leaves the OS clipboard untouched.
+    /// </summary>
+    public void RemoveFromHistory(ClipboardItem item)
+    {
+        if (item == null || !History.Remove(item)) return;
+
+        ClipboardHistoryStore.DeleteImageFile(item.ImageFilePath);
+        ClipboardHistoryStore.Save(History);
+
+        if (ReferenceEquals(CurrentItem, item))
+            CurrentItem = null;
+
+        Helpers.Logger.Info("ClipboardService: removed item from history");
+    }
+
     public void ReCopy(ClipboardItem item)
     {
         if (item == null) return;
@@ -446,6 +477,7 @@ public class ClipboardService
                     break;
             }
             Clipboard.SetContent(pkg);
+            _selfCopyUtc = DateTime.UtcNow;
         }
         catch (Exception ex)
         {

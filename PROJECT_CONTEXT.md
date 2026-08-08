@@ -643,16 +643,20 @@ What does not belong: widget-specific logic in `Controls`; raw
 
 - **Purpose:** surface the last copied item as a transient pill; keep a
   persistent searchable history in the dashboard.
-- **UX:** pill appears on copy (3 s auto-dismiss), hover-expandable to a
-  320×180 preview (legacy); dashboard card shows thumbnails/titles with
-  All/Pinned filter, pin/unpin, swipe-to-reveal delete (single-step, no
-  confirmation), tap-to-re-copy.
+- **UX:** pill appears on copy (2 s transient), hover-expandable to a preview
+  whose **width matches the compact pill**; the big pill is cursor-driven (no
+  countdown — stays while the cursor is present, collapses on leave). Re-copy
+  shows a 2 s "• Copied" confirmation; Delete removes the entry from history;
+  Dismiss/Delete/Re-copy all collapse the window back to compact. Dashboard card
+  shows thumbnails/titles with All/Pinned filter, pin/unpin, swipe-to-reveal
+  delete (single-step, no confirmation), tap-to-re-copy.
 - **Architecture:** `ClipboardService` → `IslandController` → `ClipboardWidget`
   (pill) and `ExpandedDashboard` (history card, inside `WidgetCard` since PR 2).
 - **Edge cases:** duplicate suppression (full-history MRU dedup), single-shot
-  image streams, busy-clipboard retry, empty state.
-- **Known bugs/debt:** `ClipboardWidget.ExpandWidget` calls
-  `App.WindowService.StartSizeAnimation(320, 180)` directly — a **sole-mutator
+  image streams, busy-clipboard retry, self-copy suppression (ReCopy's own
+  `ContentChanged` never spawns a fresh pill), empty state.
+- **Known bugs/debt:** `ClipboardWidget.ExpandWidget` still calls
+  `App.WindowService.StartSizeAnimation(...)` directly — a **sole-mutator
   violation** (should route through `SetProfile`); retention cleanup never
   scheduled.
 - **Status:** ✅ pill working; ✅ history card (migrated into WidgetCard, PR 2).
@@ -735,6 +739,12 @@ What does not belong: widget-specific logic in `Controls`; raw
 | 2026-08-08 | Click-expansion toggle no-ops while already expanded | The root click toggle (:53) is now a no-op when expanded (`IslandController.NotifyIslandClick` gates on `IsExpanded`), so stray presses inside the dashboard (NumberBox spins, text fields, cards — none of which suppress the bubbled press) can never collapse it mid-interaction. Hold-awake could not stop this path (separate code path, never gated). | Per-element hop suppression (rejected: whack-a-mole); expanded-clicks still collapse (rejected). |
 | 2026-08-08 | Text input via temporary lift of `WS_EX_NOACTIVATE` (`WindowService.SetTextInputActive` + `App.Window.Activate()` while a field has focus) | `WS_EX_NOACTIVATE` windows never receive keyboard focus, so Focus H:M:S and location search TextBoxes/NumberBoxes could not be typed into. Lift on `GotFocus`, restore on `LostFocus`. | Remove the flag permanently (rejected: steals focus from the user's app); rely on popups (rejected: the dashboard fields live in the dock window). |
 | 2026-08-08 | Click-outside-to-close via a low-level `WH_MOUSE_LL` hook (`MouseClickedOutside` → `IslandController.NotifyFocusLost()`) | The dock is `WS_EX_NOACTIVATE`, so it is never foreground — clicking back into the previous app never raises a foreground change, making a foreground hook unreliable. The mouse hook hit-tests each press against the dock rect; awake-hold guards settings surfaces. | Foreground-change event (rejected: misses the common case); auto-collapse-only (rejected: UX). |
+| 2026-08-08 | Survive-awake while settings surfaces are open: `BeginAwake()`/`EndAwake()` hold counter suppresses every auto-collapse path until released; any actual collapse resets the hold | The gear `Flyout` is a separate HWND — entering it fires `PointerExited` → 2s collapse while editing; no surface kept the island alive. One hold counter gates `NotifyMouseLeave` arming, the auto-collapse tick, and the click-outside path uniformly. | Per-surface timers (rejected: fragile); setting a flag only on the flyout open (rejected: missed the Focus H:M:S in-place surface and the hook path). |
+| 2026-08-08 | Click-outside must not collapse on the press that *opens* a surface — `NotifyFocusLost()` also returns while `_mouseIsOver` | `WH_MOUSE_LL` fires on `WM_LBUTTONDOWN`, *before* the control's `Click` handler runs `BeginAwake()`, and hit-tests against the dock's current (still-animating/small) rect — so the gear press could be classified "outside" and collapse the island instantly. A press while the pointer is over the dock is never a dismissal. | Relocating the hold into the click handler (rejected: runs after the hook); press-rect delay hack (rejected). |
+| 2026-08-08 | Clipboard big pill is cursor-driven only — **no auto-dismiss countdown while expanded** | `OnPointerExited` re-armed a 3 s `Brief` timer even for the expanded preview, so the big pill could time out mid-interaction. Now the expanded state holds while the cursor is present and only collapses on leave (600 ms grace); the 2 s transient applies to the small pill only. | Timer while expanded (rejected); immediate collapse on exit (rejected: cursor can't reach the action ribbon). |
+| 2026-08-08 | Re-copy shows a 2 s "Copied" confirmation instead of dismissing instantly, and never spawns a fresh pill | ReCopy's own `SetContent` fires `ContentChanged` async → dedup re-pushed a new transient pill, interrupting feedback. `ClipboardService` stamps `_selfCopyUtc` at `SetContent`; `QueryAsync` skips `ClipboardChanged` for a match within 1.5 s (self-healing — a real capture is never suppressed). The widget collapses to the small "• Copied" pill for `NotificationDuration.Short` (2 s) via `ShowCopiedConfirmation`, then pops. | Suppress-forever flag (rejected: can stick and swallow real captures); immediate dismiss (rejected: no feedback). |
+| 2026-08-08 | Delete button = **remove entry from history** (OS clipboard untouched) | Users expected the trash icon to delete the captured item, not wipe the OS clipboard. `ClearCommand` → `DeleteCommand` → `ClipboardService.RemoveFromHistory` (removes from `History`, deletes the persisted image file, nulls `CurrentItem` if it matched). | Clear the OS clipboard (rejected: surprising, and history entry lingered). |
+| 2026-08-08 | Dismiss / Delete / Re-copy always collapse the window back to compact | The legacy preview resized the window via raw `StartSizeAnimation`, so popping the widget left the window stuck at the expanded size showing the media/weather pill. `ClipboardWidget.OnDeactivated()` now restores the compact geometry (and the expanded width uses the live compact width so the big pill matches the collapsed pill). | Rely on `SetProfile` in `Commit` (rejected: dedupe no-ops can leave the legacy target stale). |
 | 2026-08-07 | Dashboard reconciliation verdicts (STEP 1 investigation): **restore Stats, Weather, Quick Tasks; prune File Shelf** | All four orphaned features were traced in `ExpandedDashboard.xaml.cs`. Stats (real RAM/battery/storage, simulated CPU/GPU) and Weather (fully service-wired) are live-but-invisible → pure-XAML restore. Tasks handlers are complete, never rendered → cheap restore. File Shelf is a power-user duplicate of Explorer/Clipboard with zero persistence and mock seed → weakest value/effort, prune. Bluetooth card already gone from the earlier redesign. (Later superseded: System Monitoring freeze, footer-weather, Quick Tasks deferred, File Shelf pruned.) | Restore File Shelf (rejected: duplicates Explorer, worst value/effort); prune Stats/Weather (rejected: they are live, service-backed data). |
 
 ---
@@ -839,11 +849,20 @@ What does not belong: widget-specific logic in `Controls`; raw
     rect is the reliable signal (guard with the awake-hold so open flyouts are
     safe).
 
+18. **A low-level mouse hook that opens a surface races itself on press-DOWN.**
+    The `WH_MOUSE_LL` hook fires during `WM_LBUTTONDOWN`, which is *before* the
+    control's `Click` handler runs — so `BeginAwake()` in the click handler is
+    always too late to stop that same press from being classified as a click
+    outside the dock, and the hook hit-tests against the dock's *current* rect
+    (small / mid-expand-animation on first open). Fix: gate `NotifyFocusLost()`
+    on `_mouseIsOver` — a press while the pointer is over the dock is never
+    "clicked outside."
+
 ---
 
 # Current State (always reflect reality)
 
-## Completed / committed (HEAD `25abac5`; this snapshot commits the Weather-slice + interaction work)
+## Completed / committed (HEAD `02b812c`; this snapshot commits the clipboard interaction fixes)
 
 - ✅ Collapsed pill, acrylic backdrop, taskbar docking, z-order guard.
 - ✅ Taskbar width-awareness (adaptive compact width via CompactLayoutController).
@@ -874,16 +893,33 @@ What does not belong: widget-specific logic in `Controls`; raw
   expanded dashboard no longer collapse it; Focus & location text fields accept
   keyboard input (temporary `WS_EX_NOACTIVATE` lift); click-anywhere-outside now
   closes the island immediately (`WH_MOUSE_LL` → `NotifyFocusLost`).
+- ✅ Survive-awake for settings surfaces (`_awakeHoldCount` /
+  `BeginAwake`/`EndAwake`): the gear flyout and Focus H:M:S editing keep the
+  island open — every auto-collapse path (mouse-leave arming, tick, click-outside)
+  is gated, and any actual collapse resets the hold.
+- ✅ Click-outside race fix: `NotifyFocusLost()` also returns while `_mouseIsOver`,
+  so the press that *opens* a surface (it lands outside the still-small/animated
+  dock rect before `BeginAwake()` runs) can no longer collapse the island
+  instantly. Verified live.
+- ✅ Clipboard transient-pill interaction fixes (committed in this snapshot):
+  - Big pill is **cursor-driven only** — no auto-dismiss countdown while
+    expanded; it stays while the cursor is present and collapses on leave
+    (600 ms grace). The 2 s transient (`Short`) applies to the small pill.
+  - Re-copy shows a **2 s "• Copied" confirmation** (`ShowCopiedConfirmation`)
+    and dismisses; `ClipboardService._selfCopyUtc` suppresses the async
+    `ContentChanged` re-push so no fresh pill interrupts it.
+  - **Delete removes the entry from history** (`RemoveFromHistory`) — deletes
+    the persisted image file, OS clipboard untouched.
+  - Dismiss / Delete / Re-copy all collapse the window back to compact
+    (`OnDeactivated` restores geometry), and the expanded width now matches the
+    live compact pill width.
 
 ## In progress
 
-- **Weather slice — functionally complete; interaction fixes verified live.**
-  This snapshot records and commits the manual city override (`LocationSettings
-  Popup`), the click-toggle gate, text-input activation, and click-outside
-  close. Freeze the slice after this commit.
+- **Clipboard interaction slice — committed.**
 - Next slice: **Quick Tasks persistence** (tasks reset each launch).
 - Repo is still ahead of origin (Focus/Clipboard/anchors/System Monitoring/
-  Weather PR 1 + this snapshot) — push is pending.
+  Weather + this snapshot) — push is pending.
 
 ## Blocked / deferred
 
@@ -909,10 +945,12 @@ What does not belong: widget-specific logic in `Controls`; raw
 
 # Active Task
 
-- **Objective:** freeze the **Weather slice** — real location + manual override +
-  footer binding + interaction fixes (toggle gate, text input, click-outside
-  close) are implemented and live-verified; this snapshot is the record +
-  commit. After it: **Quick Tasks persistence**.
+- **Objective:** this snapshot records + commits the **clipboard interaction
+  fixes**: big pill is cursor-driven with no countdown, Re-copy shows a 2 s
+  "Copied" confirmation without spawning a fresh pill, Delete removes the entry
+  from history, and Dismiss/Delete/Re-copy all collapse the window back to
+  compact (expanded width now matches the compact pill). Next:
+  **Quick Tasks persistence**.
 - The ExpandedDashboard reconciliation investigation below (STEP 1) is retained
   as history. Its per-feature verdicts played out as: Stats → the live System
   Monitoring 3-cell card (`7a874dd`); Weather → footer + manual override (this

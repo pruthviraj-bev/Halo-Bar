@@ -85,12 +85,14 @@ public partial class ClipboardWidgetViewModel : ObservableObject
     {
         if (App.ClipboardService.CurrentItem != null)
             App.ClipboardService.ReCopy(App.ClipboardService.CurrentItem);
+        App.IslandController.ShowCopiedFeedback();
     }
 
     [RelayCommand]
-    private void Clear()
+    private void Delete()
     {
-        App.ClipboardService.Clear();
+        if (App.ClipboardService.CurrentItem != null)
+            App.ClipboardService.RemoveFromHistory(App.ClipboardService.CurrentItem);
         App.IslandController.DismissClipboard();
     }
 

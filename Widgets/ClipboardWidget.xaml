@@ -139,8 +139,8 @@
                 </Button>
 
                 <Button Grid.Column="2" Style="{StaticResource PillButton}"
-                        Command="{x:Bind ViewModel.ClearCommand}"
-                        ToolTipService.ToolTip="Clear" Margin="0,0,8,0">
+                        Command="{x:Bind ViewModel.DeleteCommand}"
+                        ToolTipService.ToolTip="Delete from history" Margin="0,0,8,0">
                     <controls:AppIcon Kind="Delete" Width="20" Height="20"/>
                 </Button>
 
