@@ -568,8 +568,9 @@ What does not belong: widget-specific logic in `Controls`; raw
   start, popped on empty state) and handles its own collapsed/expanded visual
   states. Clipboard/Battery/Volume are created fresh per event with an
   auto-dismiss duration and removed on `IslandController` dismiss timers.
-  `WeatherCollapsedWidget` is the ambient default (priority 0) — **hardcoded
-  "28°C Partly Cloudy"**, not bound to `WeatherService` (known debt).
+  `WeatherCollapsedWidget` is the ambient default (priority 0) — bound to
+  `WeatherService` (temp/condition/icon refresh via `WeatherUpdated`; neutral
+  "—/Unavailable" when the service has no data).
 
 ## ExpandedDashboard — the dashboard (Widgets/, 1214-line code-behind)
 
@@ -895,8 +896,6 @@ What does not belong: widget-specific logic in `Controls`; raw
   vocabulary (parked).
 - Clipboard retention scheduling (parked).
 - PomodoroTimerWidget fate (make it an `IIslandWidget` or delete).
-- `WeatherCollapsedWidget` (ambient taskbar pill) still hardcodes a temperature —
-  defer binding it to `WeatherService` to a later slice.
 
 ## Abandoned / removed
 
@@ -1085,7 +1084,7 @@ What does not belong: widget-specific logic in `Controls`; raw
 | 2 | `ClipboardWidget.ExpandWidget` resizes window to 320×180 directly | Sole-mutator violation (raw `StartSizeAnimation`) | None | Route through `SetProfile` | High |
 | 3 | Unhandled exceptions are swallowed (`e.Handled = true`) after logging | Deliberate "attempt to recover" in App.xaml.cs | Check `%LOCALAPPDATA%\DynamicIsland\logs\app.log` | Consider partial crash recovery / dialog for dev builds | Medium |
 | 4 | Clipboard history grows unbounded | `CleanupExpiredItems` never scheduled | None | Daily timer + Settings UI | Medium |
-| 5 | `WeatherCollapsedWidget` shows hardcoded "28°C Partly Cloudy" | Not bound to `WeatherService` | None | Bind to service | Medium |
+| 5 | `WeatherCollapsedWidget` showed hardcoded "28°C Partly Cloudy" | **Resolved** — bound to `WeatherService` (temp/condition/icon), neutral fallback when unavailable | None | Done | Medium → closed |
 | 6 | Weather coordinates hardcoded (New Delhi) | **Resolved** — real `LocationService` (auto IP + manual override, `location.json`). Pending: README town example refresh | None | README refresh | Low |
 | 7 | `MediaService.SessionTracing` and `[DEBUG]` logs flood app.log | Leftover diagnostics | None | Remove after confirmation | Low |
 | 8 | Duplicate `ExpandedDashboard` instantiation path | VM and IslandController both create it | None (only one wins via binding) | Single owner | Low |

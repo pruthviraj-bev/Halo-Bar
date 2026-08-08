@@ -14,9 +14,9 @@
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
 
-        <!-- Weather icon (Fluent System Icons, partly cloudy day) -->
+        <!-- Weather icon (live icon kind from WeatherService) -->
         <controls:AppIcon Grid.Column="0"
-                          Kind="WeatherPartlyCloudy"
+                          Kind="{x:Bind IconKind, Mode=OneWay}"
                           Width="16" Height="16"
                           Fill="#FFFFD700"
                           Margin="0,0,8,0"
@@ -26,8 +26,8 @@
                    VerticalAlignment="Center" 
                    FontSize="11" 
                    Foreground="{ThemeResource TextPrimaryBrush}">
-            <Run Text="28°C" FontWeight="SemiBold"/>
-            <Run Text="  Partly Cloudy" Foreground="{ThemeResource TextSecondaryBrush}"/>
+            <Run Text="{x:Bind TempText, Mode=OneWay}" FontWeight="SemiBold"/>
+            <Run Text="{x:Bind ConditionText, Mode=OneWay}" Foreground="{ThemeResource TextSecondaryBrush}"/>
         </TextBlock>
     </Grid>
 </UserControl>
