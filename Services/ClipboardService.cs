@@ -37,7 +37,8 @@ public class ClipboardService
 
     /// <summary>
     /// Non-pinned items older than this many days are removed by CleanupExpiredItems().
-    /// Not yet wired to any Settings UI.
+    /// Persisted to settings.json via ClipboardHistoryStore and selectable from the
+    /// clipboard card's retention dropdown. 0 keeps everything forever.
     /// </summary>
     public int RetentionDays { get; set; } = 30;
 
@@ -45,9 +46,13 @@ public class ClipboardService
 
     public void Initialize()
     {
+        // Clamp defensively (hand-edited settings.json could hold any value) — the
+        // same guard SetRetentionDays applies; <= 0 means "keep forever".
+        RetentionDays = Math.Max(0, ClipboardHistoryStore.LoadRetentionDays());
         LoadHistory();
         CleanupExpiredItems();
         _ = HydrateImageStreamsAsync();
+        StartCleanupTimer();
 
         try
         {
@@ -393,6 +398,40 @@ public class ClipboardService
         }
     }
 
+    private Microsoft.UI.Xaml.DispatcherTimer? _cleanupTimer;
+
+    /// <summary>
+    /// Starts a low-frequency timer so expired items are pruned even while the app
+    /// stays open for days on end (cleanup previously ran only at startup).
+    /// </summary>
+    private void StartCleanupTimer()
+    {
+        try
+        {
+            _cleanupTimer = new Microsoft.UI.Xaml.DispatcherTimer
+            {
+                Interval = TimeSpan.FromHours(6)
+            };
+            _cleanupTimer.Tick += (_, _) => CleanupExpiredItems();
+            _cleanupTimer.Start();
+        }
+        catch (Exception ex)
+        {
+            Helpers.Logger.Error("ClipboardService: failed to start retention cleanup timer", ex);
+        }
+    }
+
+    /// <summary>
+    /// Updates the retention period, persists the choice, and immediately prunes
+    /// items that exceed the new cutoff. Passing 0 keeps everything forever.
+    /// </summary>
+    public void SetRetentionDays(int days)
+    {
+        RetentionDays = Math.Max(0, days);
+        ClipboardHistoryStore.SaveRetentionDays(RetentionDays);
+        CleanupExpiredItems();
+    }
+
     public void Clear()
     {
         try
@@ -521,6 +560,7 @@ public class ClipboardService
 
     public void Dispose()
     {
+        _cleanupTimer?.Stop();
         Clipboard.ContentChanged -= OnContentChanged;
     }
 }

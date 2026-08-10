@@ -243,21 +243,46 @@
             <!-- RIGHT column – clipboard history in the shared WidgetCard shell -->
             <controls:WidgetCard Grid.Column="1" IsTabStop="False">
                 <controls:WidgetCard.HeaderContent>
-                    <!-- Header row: title + All/Pinned filter toggle -->
-                    <Grid ColumnDefinitions="Auto,Auto" HorizontalAlignment="Left" VerticalAlignment="Center">
+                    <!-- Header row: title + All/Pinned filter toggle + retention selector -->
+                    <Grid ColumnDefinitions="Auto,Auto,Auto" HorizontalAlignment="Left" VerticalAlignment="Center">
                         <TextBlock Grid.Column="0" Text="Clipboard" FontSize="14" FontWeight="Bold"/>
                         <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="12,0,0,0" Spacing="{StaticResource Spacing.XS}">
                             <Button x:Name="AllFilterButton" Style="{StaticResource FilterToggleButtonStyle}" Content="All" Click="AllFilter_Click" />
                             <Button x:Name="PinnedFilterButton" Style="{StaticResource FilterToggleButtonStyle}" Content="Pinned" Click="PinnedFilter_Click" />
                         </StackPanel>
+                        <ComboBox x:Name="RetentionCombo" Grid.Column="2" Margin="12,0,0,0"
+                                  FontSize="11" MaxDropDownHeight="240"
+                                  SelectionChanged="RetentionCombo_SelectionChanged"
+                                  ToolTipService.ToolTip="Auto-delete items older than the selected period">
+                            <ComboBoxItem Tag="0">Keep forever</ComboBoxItem>
+                            <ComboBoxItem Tag="7">7 days</ComboBoxItem>
+                            <ComboBoxItem Tag="15">15 days</ComboBoxItem>
+                            <ComboBoxItem Tag="30">30 days</ComboBoxItem>
+                            <ComboBoxItem Tag="90">90 days</ComboBoxItem>
+                        </ComboBox>
                     </Grid>
                 </controls:WidgetCard.HeaderContent>
                 <controls:WidgetCard.BodyContent>
-                    <Grid RowDefinitions="Auto,*" RowSpacing="6">
-                        <!-- Empty state -->
-                        <TextBlock Grid.Row="0" x:Name="ClipboardEmptyText" Text="Nothing copied yet" FontSize="11" Foreground="{ThemeResource TextSecondaryBrush}" Visibility="{x:Bind ClipboardEmptyVisibility, Mode=OneWay}" />
+                    <Grid RowDefinitions="Auto,Auto,*" RowSpacing="6">
+                        <!-- Search row: text filter over the list + clear button -->
+                        <Grid Grid.Row="0" ColumnDefinitions="*,Auto" ColumnSpacing="4">
+                            <TextBox x:Name="ClipboardSearchBox" Grid.Column="0"
+                                     PlaceholderText="Search clipboard…"
+                                     FontSize="11" Height="28"
+                                     TextChanged="ClipboardSearch_TextChanged" />
+                            <Button x:Name="ClipboardSearchClearButton" Grid.Column="1"
+                                    Style="{StaticResource CardButtonStyle}" Width="28" Height="28"
+                                    Visibility="Collapsed"
+                                    Click="ClipboardSearchClear_Click"
+                                    ToolTipService.ToolTip="Clear search">
+                                <controls:AppIcon Kind="Dismiss" Width="12" Height="12"/>
+                            </Button>
+                        </Grid>
 
-                        <ScrollViewer Grid.Row="1" VerticalAlignment="Stretch" VerticalScrollBarVisibility="Auto" Padding="0,0,12,0">
+                        <!-- Empty state -->
+                        <TextBlock Grid.Row="1" x:Name="ClipboardEmptyText" Text="Nothing copied yet" FontSize="11" Foreground="{ThemeResource TextSecondaryBrush}" Visibility="{x:Bind ClipboardEmptyVisibility, Mode=OneWay}" />
+
+                        <ScrollViewer Grid.Row="2" VerticalAlignment="Stretch" VerticalScrollBarVisibility="Auto" Padding="0,0,12,0">
                     <ItemsControl ItemsSource="{x:Bind ClipboardItems}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate x:DataType="services:ClipboardItem">

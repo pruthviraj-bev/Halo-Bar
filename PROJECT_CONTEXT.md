@@ -478,9 +478,12 @@ What does not belong: widget-specific logic in `Controls`; raw
   - ReCopy for images prefers a fresh file-backed stream; falls back to the
     cached live `ImageStreamRef` only when no file was persisted.
 - **Persistence:** `ClipboardHistoryStore` → `%LOCALAPPDATA%\DynamicIsland\
-  clipboard\history.json` + `images\`; image entries store absolute file paths.
-- **Known limitation:** `CleanupExpiredItems` (30-day retention, pinned exempt)
-  runs only at `Initialize` — **never scheduled**, so history grows unbounded.
+  clipboard\history.json` + `images\` + `settings.json`; image entries store
+  absolute file paths; `settings.json` persists the retention period.
+- **Retention:** `RetentionDays` (0 = keep forever; pinned items exempt) is
+  loaded at startup, applied by a 6-hour cleanup timer, and selectable from the
+  clipboard card's retention dropdown — `SetRetentionDays` prunes immediately
+  on change. Expired items are removed with their image files.
 
 ## BatteryService
 
@@ -648,8 +651,11 @@ What does not belong: widget-specific logic in `Controls`; raw
   countdown — stays while the cursor is present, collapses on leave). Re-copy
   shows a 2 s "• Copied" confirmation; Delete removes the entry from history;
   Dismiss/Delete/Re-copy all collapse the window back to compact. Dashboard card
-  shows thumbnails/titles with All/Pinned filter, pin/unpin, swipe-to-reveal
-  delete (single-step, no confirmation), tap-to-re-copy.
+  shows thumbnails/titles with All/Pinned filter, a **search box** (live filter
+  over title/full text/file names, with clear button), pin/unpin,
+  swipe-to-reveal delete (single-step, no confirmation), tap-to-re-copy, and a
+  **retention dropdown** that auto-deletes items older than 7/15/30/90 days or
+  keeps everything (persisted; pinned items exempt).
 - **Architecture:** `ClipboardService` → `IslandController` → `ClipboardWidget`
   (pill) and `ExpandedDashboard` (history card, inside `WidgetCard` since PR 2).
 - **Edge cases:** duplicate suppression (full-history MRU dedup), single-shot
@@ -657,8 +663,7 @@ What does not belong: widget-specific logic in `Controls`; raw
   `ContentChanged` never spawns a fresh pill), empty state.
 - **Known bugs/debt:** `ClipboardWidget.ExpandWidget` still calls
   `App.WindowService.StartSizeAnimation(...)` directly — a **sole-mutator
-  violation** (should route through `SetProfile`); retention cleanup never
-  scheduled.
+  violation** (should route through `SetProfile`).
 - **Status:** ✅ pill working; ✅ history card (migrated into WidgetCard, PR 2).
 
 ## Battery / Volume transient HUDs
@@ -913,6 +918,16 @@ What does not belong: widget-specific logic in `Controls`; raw
   - Dismiss / Delete / Re-copy all collapse the window back to compact
     (`OnDeactivated` restores geometry), and the expanded width now matches the
     live compact pill width.
+- ✅ Clipboard search + retention (this session):
+  - **Search:** clipboard card search box filters the list live across title,
+    full text, and file names (case-insensitive), with a clear button and a
+    "No matching items" empty state.
+  - **Auto-delete:** retention dropdown (Keep forever / 7 / 15 / 30 / 90 days)
+    persists to `clipboard/settings.json` via `ClipboardHistoryStore`;
+    `ClipboardService.SetRetentionDays` prunes immediately on change and a
+    6-hour `DispatcherTimer` keeps pruning while the app stays open. Pinned
+    items stay exempt. Resolves the long-standing "retention never scheduled"
+    debt.
 
 ## In progress
 
@@ -930,7 +945,6 @@ What does not belong: widget-specific logic in `Controls`; raw
 - Clipboard delete-confirmation UX (single-step vs two-step discrepancy parked).
 - `UpdateFilterVisual` → XAML visual states / WidgetCard Interaction States
   vocabulary (parked).
-- Clipboard retention scheduling (parked).
 - PomodoroTimerWidget fate (make it an `IIslandWidget` or delete).
 
 ## Abandoned / removed

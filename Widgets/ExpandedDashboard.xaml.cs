@@ -353,6 +353,13 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
         UpdateFilterVisual();
         RefreshClipboardFilter();
 
+        // Clipboard retention + search: reflect the persisted retention period and
+        // enable typing in the search box (WS_EX_NOACTIVATE requires the temporary
+        // flag-lift, same pattern as the Focus session text fields).
+        SelectRetentionOption(App.ClipboardService.RetentionDays);
+        AttachTextInputFocus(ClipboardSearchBox);
+        AttachTextInputFocus(RetentionCombo);
+
         // Timer for system stats and play time updates (1s)
         _updateTimer = new DispatcherTimer();
         _updateTimer.Interval = TimeSpan.FromSeconds(1);
@@ -620,18 +627,102 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
     // ── Clipboard history UI ───────────────────────────────────────────────
 
     private bool _showPinnedOnly;
+    private bool _syncingRetentionCombo;
+    private string _searchText = "";
     private (ClipboardItem Item, TranslateTransform Transform, Button Strip)? _revealedItem;
 
     private void RefreshClipboardFilter()
     {
         _revealedItem = null;
         ClipboardItems.Clear();
+        string query = _searchText;
         foreach (var item in App.ClipboardService.History)
         {
             if (_showPinnedOnly && !item.IsPinned) continue;
+            if (!string.IsNullOrEmpty(query) && !MatchesSearch(item, query)) continue;
             ClipboardItems.Add(item);
         }
+
+        if (!string.IsNullOrEmpty(query))
+        {
+            ClipboardEmptyText.Text = "No matching items";
+        }
+        else if (_showPinnedOnly)
+        {
+            ClipboardEmptyText.Text = App.ClipboardService.History.Count == 0 ? "Nothing copied yet" : "No pinned items";
+        }
+        else
+        {
+            ClipboardEmptyText.Text = "Nothing copied yet";
+        }
         ClipboardEmptyVisibility = ClipboardItems.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary>
+    /// Case-insensitive substring match across the item's title, full text content,
+    /// and detail line (file names for file copies).
+    /// </summary>
+    private static bool MatchesSearch(ClipboardItem item, string query)
+    {
+        if (item.Title.Contains(query, StringComparison.OrdinalIgnoreCase)) return true;
+        if (!string.IsNullOrEmpty(item.RawText) && item.RawText.Contains(query, StringComparison.OrdinalIgnoreCase)) return true;
+        return item.Detail.Contains(query, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // ── Clipboard search ───────────────────────────────────────────────────
+
+    private void ClipboardSearch_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        _searchText = ClipboardSearchBox.Text.Trim();
+        ClipboardSearchClearButton.Visibility = string.IsNullOrEmpty(_searchText)
+            ? Visibility.Collapsed
+            : Visibility.Visible;
+        RefreshClipboardFilter();
+    }
+
+    private void ClipboardSearchClear_Click(object sender, RoutedEventArgs e)
+    {
+        ClipboardSearchBox.Text = "";
+        ClipboardSearchBox.Focus(FocusState.Programmatic);
+    }
+
+    // ── Clipboard retention ────────────────────────────────────────────────
+
+    /// <summary>
+    /// Preselects the persisted retention period without firing the change handler
+    /// (the fallback index is visual only — the service value is never touched).
+    /// </summary>
+    private void SelectRetentionOption(int days)
+    {
+        _syncingRetentionCombo = true;
+        try
+        {
+            for (int i = 0; i < RetentionCombo.Items.Count; i++)
+            {
+                if (RetentionCombo.Items[i] is ComboBoxItem { Tag: string tag }
+                    && int.TryParse(tag, out int optionDays)
+                    && optionDays == days)
+                {
+                    RetentionCombo.SelectedIndex = i;
+                    return;
+                }
+            }
+            RetentionCombo.SelectedIndex = 0;
+        }
+        finally
+        {
+            _syncingRetentionCombo = false;
+        }
+    }
+
+    private void RetentionCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_syncingRetentionCombo) return;
+        if (RetentionCombo.SelectedItem is ComboBoxItem { Tag: string tag }
+            && int.TryParse(tag, out int days))
+        {
+            App.ClipboardService.SetRetentionDays(days);
+        }
     }
 
     private void OnClipboardHistoryChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
