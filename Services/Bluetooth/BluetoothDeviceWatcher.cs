@@ -167,17 +167,27 @@ public sealed class BluetoothDeviceWatcher
             : info.Name;
         if (string.IsNullOrWhiteSpace(name)) return null;
 
-        bool isLowEnergy = info.Properties.TryGetValue("System.Devices.Aep.ProtocolId", out var protoVal)
-            && protoVal is Guid protoGuid
+        info.Properties.TryGetValue("System.Devices.Aep.ProtocolId", out var protoVal);
+        bool isLowEnergy = protoVal is Guid protoGuid
             && protoGuid.ToString("D").Equals(LowEnergyProtocol, StringComparison.OrdinalIgnoreCase);
 
         bool connected = GetBool(info, "System.Devices.Aep.IsConnected");
         bool present = GetBool(info, "System.Devices.Aep.IsPresent");
         bool paired = GetBool(info, "System.Devices.Aep.IsPaired");
 
-        int? battery = info.Properties.TryGetValue("System.Devices.BatteryLife", out var batVal) && batVal is int batInt
+        info.Properties.TryGetValue("System.Devices.BatteryLife", out var batVal);
+        int? battery = batVal is int batInt
             ? (batInt >= 0 ? batInt : (int?)null)
             : null;
+
+        // Diagnostic snapshot line (INFO, matching ClipboardService's per-item
+        // observability): the property VALUE TYPES are logged so a ProtocolId or
+        // BatteryLife type mismatch (silent gate/parse failure) is visible.
+        Logger.Info(
+            $"BluetoothDeviceWatcher: '{name}' id='{info.Id}' " +
+            $"proto={protoVal?.GetType().Name}:{protoVal} le={isLowEnergy} " +
+            $"conn={connected} present={present} paired={paired} " +
+            $"battery={batVal?.GetType().Name}:{batVal}");
 
         return new BluetoothDeviceInfo
         {

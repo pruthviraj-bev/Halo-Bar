@@ -149,7 +149,14 @@ public class BluetoothService
         // attempt once per session (never repeatedly hammer the device).
         if (device.IsConnected && device.IsLowEnergy && device.Battery == null && _gattAttempted.Add(device.Id))
         {
+            Helpers.Logger.Info($"BluetoothService: attempting GATT battery read for '{device.Name}'");
             _ = ResolveGattBatteryAsync(device);
+        }
+        else if (device.IsConnected && device.Battery == null && !device.IsLowEnergy)
+        {
+            // Classic endpoint: GATT fallback is not applicable (BluetoothLEDevice
+            // cannot address a classic id). Logged so battery absence is provable.
+            Helpers.Logger.Info($"BluetoothService: '{device.Name}' connected without battery — classic endpoint, GATT fallback not attempted");
         }
 
         _cache[device.Id] = device;
