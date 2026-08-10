@@ -719,6 +719,20 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
     private void ClipboardRepeater_ElementPrepared(ItemsRepeater sender, ItemsRepeaterElementPreparedEventArgs args)
     {
         _realizedClipCount++;
+
+        // ItemsRepeater does NOT assign DataContext to realized template roots the
+        // way ItemsControl does (its ContentPresenter wrapper set DataContext per
+        // item). x:Bind still renders correctly because compiled bindings receive
+        // the data item via the generated LoadData path — but handlers resolving
+        // the item through sender.DataContext (pin / more / delete / row tap)
+        // silently failed after the Pass 5 ItemsControl→ItemsRepeater migration.
+        // Restore the item contract explicitly on prepare (recycled containers
+        // re-fire this with their new index, so DataContext stays current).
+        if (args.Element is FrameworkElement fe
+            && args.Index >= 0 && args.Index < ClipboardItems.Count)
+        {
+            fe.DataContext = ClipboardItems[args.Index];
+        }
     }
 
     /// <summary>
@@ -1029,24 +1043,31 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
     private void ClipboardPin_Click(object sender, RoutedEventArgs e)
     {
         Logger.Info($"[PROFILE] ClipboardPin_Click start ms={Environment.TickCount64}");
-        if ((sender as FrameworkElement)?.DataContext is ClipboardItem item)
+        try
         {
-            App.ClipboardService.TogglePin(item);
+            if ((sender as FrameworkElement)?.DataContext is ClipboardItem item)
+            {
+                App.ClipboardService.TogglePin(item);
 
-            // Pinned filter: membership follows pin state — move the single row in/out.
-            // All filter: the row's x:Bind OneWay bindings on IsPinned update the icon
-            // in place (INPC); no collection change is needed.
-            if (_showPinnedOnly)
-            {
-                if (item.IsPinned) InsertClipboardItemIncremental(item);
-                else RemoveClipboardItemIncremental(item);
+                // Pinned filter: membership follows pin state — move the single row in/out.
+                // All filter: the row's x:Bind OneWay bindings on IsPinned update the icon
+                // in place (INPC); no collection change is needed.
+                if (_showPinnedOnly)
+                {
+                    if (item.IsPinned) InsertClipboardItemIncremental(item);
+                    else RemoveClipboardItemIncremental(item);
+                }
+                else
+                {
+                    // Preserve legacy behavior: pinning while a reveal strip is open
+                    // closes it (the old full rebuild reset _revealedItem).
+                    CloseRevealedStrip();
+                }
             }
-            else
-            {
-                // Preserve legacy behavior: pinning while a reveal strip is open
-                // closes it (the old full rebuild reset _revealedItem).
-                CloseRevealedStrip();
-            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Error("ClipboardPin_Click exception", ex);
         }
         Logger.Info($"[PROFILE] ClipboardPin_Click end ms={Environment.TickCount64}");
     }
