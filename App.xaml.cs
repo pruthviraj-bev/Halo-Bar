@@ -20,6 +20,7 @@ public partial class App : Application
     public static LocationService LocationService { get; } = new();
     public static WeatherService WeatherService { get; } = new();
     public static BluetoothService BluetoothService { get; } = new();
+    public static FileShelfStore FileShelfStore { get; } = new();
     public static IslandController IslandController { get; private set; } = null!;
     public static DispatcherQueue DispatcherQueue { get; private set; } = null!;
 

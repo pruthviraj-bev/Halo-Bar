@@ -1,6 +1,7 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
 using DynamicIsland.ViewModels;
 using WinRT;
 using Microsoft.UI.Composition;
@@ -38,7 +39,7 @@ public sealed partial class MainWindow : Window
             _acrylicController = new DesktopAcrylicController();
 
             _configuration = new SystemBackdropConfiguration();
-            
+
             // Force active backdrop state permanently so the window never goes solid gray on deactivation
             _configuration.IsInputActive = true;
 
@@ -53,11 +54,23 @@ public sealed partial class MainWindow : Window
     private void RootGrid_PointerPressed(object sender, PointerRoutedEventArgs e)
     {
         var properties = e.GetCurrentPoint(RootGrid).Properties;
-        if (properties.IsLeftButtonPressed)
+        if (!properties.IsLeftButtonPressed) return;
+
+        // Don't trigger expand if the original source is a Button or
+        // is inside a Button — those handle their own click logic.
+        if (e.OriginalSource is FrameworkElement source)
         {
-            App.IslandController.NotifyIslandClick();
-            e.Handled = true;
+            var current = source as DependencyObject;
+            while (current != null)
+            {
+                if (current is Button) return;
+                if (current is FrameworkElement fe && fe.Name == "ShelfPanel") return;
+                current = VisualTreeHelper.GetParent(current);
+            }
         }
+
+        App.IslandController.NotifyIslandClick();
+        e.Handled = true;
     }
 
     // SetFullscreenSuppressed: actual hide/show is handled by WindowService.ForceAboveTaskbar

@@ -21,6 +21,8 @@ public enum AppIconKind
     Dismiss,
     Save,
     MusicNote,
+    Music,
+    ChevronRight,
     Previous,
     Next,
     Repeat,
@@ -36,6 +38,7 @@ public enum AppIconKind
     Image,
     Clipboard,
     Copy,
+    OpenInNew,
 
     Battery0,
     Battery1,

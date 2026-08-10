@@ -49,8 +49,8 @@ public class IslandController
     // that suppress all auto-collapse until released.
     private int _awakeHoldCount;
 
-    // Persistent MediaWidget instance (reused across track changes).
-    private MediaWidget? _mediaWidget;
+    // Persistent PillDashboard instance (ambient pill host for weather + music cards).
+    private PillDashboard? _pillDashboard;
 
     // Persistent ExpandedDashboard instance (shown when user clicks/expands).
     private UserControl? _dashboardWidget;
@@ -84,14 +84,15 @@ public class IslandController
     public IslandController(DispatcherQueue dispatcherQueue)
     {
         _dispatcherQueue = dispatcherQueue;
-        App.MediaService.MediaStateChanged += OnMediaStateChanged;
         App.ClipboardService.ClipboardChanged += OnClipboardChanged;
         App.BatteryService.NotificationRequired += OnBatteryNotification;
         App.VolumeService.NotificationRequired += OnVolumeNotification;
 
-        // Push default weather collapsed widget to serve as ambient taskbar display
-        var defaultWidget = new WeatherCollapsedWidget();
-        Push(defaultWidget, defaultWidget);
+        // Push default pill dashboard (weather card always, music card when a track
+        // is playing) to serve as ambient taskbar display.
+        _pillDashboard = new PillDashboard();
+        _pillDashboard.TotalWidthChanged += OnPillTotalWidthChanged;
+        Push(_pillDashboard, _pillDashboard);
     }
 
     // ── Interaction signals (from MainWindow) ─────────────────────────────
@@ -102,11 +103,11 @@ public class IslandController
     /// </summary>
     public void NotifyIslandClick()
     {
-        // Only the pill surface toggles. Presses anywhere inside the expanded
-        // dashboard — NumberBox spin arrows, text input, cards — bubble up to
-        // MainWindow's RootGrid_PointerPressed and land here; toggling then would
-        // instantly collapse the dashboard mid-interaction, so ignore them.
         if (_clickExpanded) return;
+
+        // Don't expand the dashboard if the file shelf is open —
+        // the click belongs to the shelf panel.
+        if (_pillDashboard?.IsShelfExpanded == true) return;
 
         _clickExpanded = true;
         IsExpandedChanged.Invoke(this, true);
@@ -313,30 +314,10 @@ public class IslandController
         App.WindowService.SetProfile(desired);
     }
 
-    // ── Media events ───────────────────────────────────────────────────────
-
-    private void OnMediaStateChanged(object? sender, MediaState state)
+    private void OnPillTotalWidthChanged(object? sender, double newWidth)
     {
-        _dispatcherQueue.TryEnqueue(() =>
-        {
-            if (!string.IsNullOrEmpty(state.Title))
-            {
-                // Lazily create the MediaWidget and push it once.
-                if (_mediaWidget == null)
-                    _mediaWidget = new MediaWidget();
-
-                Push(_mediaWidget, _mediaWidget);
-            }
-            else
-            {
-                // Track ended or player closed — remove media from the stack.
-                if (_mediaWidget != null)
-                {
-                    Pop(_mediaWidget, _mediaWidget);
-                    _mediaWidget = null;
-                }
-            }
-        });
+        App.WindowService?.SetOverrideCollapsedWidth(newWidth);
+        ApplyWindowProfile();
     }
 
     // ── Clipboard events ───────────────────────────────────────────────────

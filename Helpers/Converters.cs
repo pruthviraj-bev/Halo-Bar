@@ -76,3 +76,16 @@ public class BooleanToVisibilityConverter : IValueConverter
     public object ConvertBack(object value, Type targetType, object parameter, string language) => throw new NotImplementedException();
 }
 
+/// <summary>
+/// Converter that returns the Folder icon for folders and the Document icon
+/// for files, for File Shelf grid items.
+/// </summary>
+public class FolderFileIconConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, string language)
+        => value is bool b && b ? AppIconKind.Folder : AppIconKind.Document;
+
+    public object ConvertBack(object value, Type targetType, object parameter, string language)
+        => throw new NotImplementedException();
+}
+

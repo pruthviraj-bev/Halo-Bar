@@ -256,13 +256,6 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
 
     public ObservableCollection<TaskItem> Tasks { get; } = new();
 
-    // ── File Shelf Properties ──────────────────────────────────────────────
-
-    public ObservableCollection<StashedFile> StashedFiles { get; } = new();
-
-    public Visibility DropZoneVisibility => StashedFiles.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-    public Visibility StashedFilesVisibility => StashedFiles.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-
     // ── Win32 RAM structure ───────────────────────────────────────────────
 
     [StructLayout(LayoutKind.Sequential)]
@@ -348,9 +341,6 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
         // Initialize sample tasks
         Tasks.Add(new TaskItem { Text = "Review PR #42", IsCompleted = false });
         Tasks.Add(new TaskItem { Text = "Sync design tokens", IsCompleted = false });
-
-        // Initialize sample stashed files
-        StashedFiles.Add(new StashedFile { Name = "hero_shot.png", Path = "mock_path_hero_shot.png" });
 
         // Subscribe to real service updates
         App.WeatherService.WeatherUpdated += OnWeatherUpdated;
@@ -1131,64 +1121,6 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
             {
                 Tasks.Add(new TaskItem { Text = text, IsCompleted = false });
                 textBox.Text = "";
-            }
-        }
-    }
-
-    // ── File Shelf drag-and-drop handlers ──────────────────────────────────
-
-    private void FileDropZone_DragOver(object sender, DragEventArgs e)
-    {
-        e.AcceptedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Copy;
-        e.DragUIOverride.Caption = "Stash file";
-        e.DragUIOverride.IsCaptionVisible = true;
-    }
-
-    private async void FileDropZone_Drop(object sender, DragEventArgs e)
-    {
-        if (e.DataView.Contains(Windows.ApplicationModel.DataTransfer.StandardDataFormats.StorageItems))
-        {
-            var items = await e.DataView.GetStorageItemsAsync();
-            foreach (var item in items)
-            {
-                StashedFiles.Add(new StashedFile 
-                { 
-                    Name = item.Name, 
-                    Path = item.Path 
-                });
-            }
-            OnPropertyChanged(nameof(DropZoneVisibility));
-            OnPropertyChanged(nameof(StashedFilesVisibility));
-        }
-    }
-
-    private async void StashedFile_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is Button btn && btn.Tag is string path)
-        {
-            if (path == "mock_path_hero_shot.png") return; // ignore mock
-            try
-            {
-                var file = await Windows.Storage.StorageFile.GetFileFromPathAsync(path);
-                await Windows.System.Launcher.LaunchFileAsync(file);
-            }
-            catch (Exception ex)
-            {
-                Helpers.Logger.Error($"FileShelf: failed to open stashed file {path}", ex);
-            }
-        }
-    }
-
-    private void DeleteStashedFile_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is Button btn && btn.Tag is string path)
-        {
-            var file = StashedFiles.FirstOrDefault(f => f.Path == path);
-            if (file != null)
-            {
-                StashedFiles.Remove(file);
-                OnPropertyChanged(nameof(DropZoneVisibility));
-                OnPropertyChanged(nameof(StashedFilesVisibility));
             }
         }
     }

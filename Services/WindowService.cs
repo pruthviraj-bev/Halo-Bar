@@ -50,6 +50,18 @@ public class WindowService
     // that keep the same enum (e.g. media toggling while Collapsed) still re-apply.
     private (int Width, int Height)? _lastProfileTarget;
 
+    // Optional width override for the collapsed pill, supplied by PillDashboard
+    // (sum of visible card widths). When set, ResolveProfileSize caps the compact
+    // width to this value but never exceeds the CompactLayoutController's width.
+    private double? _overrideCollapsedWidth;
+
+    /// <summary>
+    /// Sets the collapsed pill width override on the fly, or null to restore the
+    /// adaptive CompactLayoutController width. Must be called on the UI thread.
+    /// </summary>
+    public void SetOverrideCollapsedWidth(double? width)
+        => _overrideCollapsedWidth = width;
+
     // Spring simulations for smooth size animation. Position is NOT spring-animated:
     // X is stateless, derived from CompactLayoutController.HaloX on every frame via
     // GetAnchoredPosition(), so no animation can ever restore a stale X.
@@ -608,7 +620,10 @@ public class WindowService
         {
             case WindowProfile.Collapsed:
                 // Compact pill — adaptive width (controller) × taskbar height.
-                return ((int)Math.Round(_compactLayout.CurrentWidth), _taskbarHeightDips);
+                double effective = _overrideCollapsedWidth.HasValue
+                    ? Math.Min(_overrideCollapsedWidth.Value, _compactLayout.CurrentWidth)
+                    : _compactLayout.CurrentWidth;
+                return ((int)Math.Round(effective), _taskbarHeightDips);
 
             case WindowProfile.Expanded:
                 // Premium wide grid dashboard flyout
