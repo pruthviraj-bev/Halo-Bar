@@ -74,13 +74,34 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
         set { _clipboardEmptyVisibility = value; OnPropertyChanged(); }
     }
 
+    // ── Bluetooth devices list ─────────────────────────────────────────────
+
+    /// <summary>
+    /// Devices currently shown by the Bluetooth card, mirrored from
+    /// App.BluetoothService.Devices on every BluetoothUpdated.
+    /// </summary>
+    public ObservableCollection<BluetoothDeviceInfo> BluetoothItems { get; } = new();
+
+    private Visibility _bluetoothEmptyVisibility = Visibility.Collapsed;
+    public Visibility BluetoothEmptyVisibility
+    {
+        get => _bluetoothEmptyVisibility;
+        set { _bluetoothEmptyVisibility = value; OnPropertyChanged(); }
+    }
+
+    private Visibility _bluetoothListVisibility = Visibility.Collapsed;
+    public Visibility BluetoothListVisibility
+    {
+        get => _bluetoothListVisibility;
+        set { _bluetoothListVisibility = value; OnPropertyChanged(); }
+    }
+
     private string _ramUsedText = "9.6 GB";
     public string RamUsedText
     {
         get => _ramUsedText;
         set { _ramUsedText = value; OnPropertyChanged(); }
     }
-
     private string _ramTotalText = "16.0 GB";
     public string RamTotalText
     {
@@ -352,6 +373,10 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
         App.ClipboardService.History.CollectionChanged += OnClipboardHistoryChanged;
         UpdateFilterVisual();
         RefreshClipboardFilter();
+
+        // Wire up the Bluetooth devices list
+        App.BluetoothService.BluetoothUpdated += OnBluetoothUpdated;
+        RefreshBluetoothList();
 
         // Clipboard retention + search: reflect the persisted retention period and
         // enable typing in the search box (WS_EX_NOACTIVATE requires the temporary
@@ -867,6 +892,39 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
         storyboard.Children.Add(animation);
         storyboard.Children.Add(stripAnimation);
         storyboard.Begin();
+    }
+
+    // ── Bluetooth list refresh ─────────────────────────────────────────────
+
+    private void OnBluetoothUpdated(object? sender, EventArgs e)
+        => _dispatcherQueue.TryEnqueue(RefreshBluetoothList);
+
+    /// <summary>
+    /// Mirrors the service's device snapshot and derives the honest empty-state
+    /// message from the adapter status (no adapter / off / scanning / no paired
+    /// devices) instead of rendering a blank list.
+    /// </summary>
+    private void RefreshBluetoothList()
+    {
+        var service = App.BluetoothService;
+
+        BluetoothItems.Clear();
+        foreach (var device in service.Devices)
+        {
+            BluetoothItems.Add(device);
+        }
+
+        bool hasDevices = BluetoothItems.Count > 0;
+        BluetoothListVisibility = hasDevices ? Visibility.Visible : Visibility.Collapsed;
+        BluetoothEmptyVisibility = hasDevices ? Visibility.Collapsed : Visibility.Visible;
+
+        BluetoothEmptyText.Text = service.AdapterStatus switch
+        {
+            BluetoothAdapterStatus.NoAdapter => "No Bluetooth adapter",
+            BluetoothAdapterStatus.Disabled => "Bluetooth is off",
+            BluetoothAdapterStatus.Initializing => "Scanning…",
+            _ => "No paired devices",
+        };
     }
 
     // ── Mute toggle click ──────────────────────────────────────────────────

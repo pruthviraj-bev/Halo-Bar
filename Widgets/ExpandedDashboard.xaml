@@ -61,6 +61,12 @@
         <helpers:IsPinnedToIconConverter x:Key="IsPinnedToIconConverter" />
         <helpers:IsPinnedToBrushConverter x:Key="IsPinnedToBrushConverter" />
 
+        <!-- Bluetooth list converters -->
+        <helpers:BluetoothTypeIconConverter x:Key="BluetoothTypeIconConverter" />
+        <helpers:BluetoothDeviceDetailConverter x:Key="BluetoothDeviceDetailConverter" />
+        <helpers:BluetoothDeviceStatusTextConverter x:Key="BluetoothDeviceStatusTextConverter" />
+        <helpers:BluetoothDeviceStatusBrushConverter x:Key="BluetoothDeviceStatusBrushConverter" />
+
         <!-- All/Pinned filter toggle buttons -->
         <Style x:Key="FilterToggleButtonStyle" TargetType="Button">
             <Setter Property="Background" Value="Transparent" />
@@ -88,35 +94,50 @@
             </Grid.RowDefinitions>
         <!-- Unified top area – left column: Stats + Focus Session, right column: Clipboard -->
         <Grid Grid.Row="0" RowDefinitions="*" ColumnDefinitions="2*,3*" RowSpacing="8" ColumnSpacing="8">
-            <!-- LEFT column – resources grid (top) + Focus Session (fills remaining height) -->
+            <!-- LEFT column – Bluetooth devices (hardcoded for now) + Focus Session (fills remaining height) -->
             <Grid Grid.Column="0" RowDefinitions="Auto,*" RowSpacing="12">
-                <!-- Live 2×2 stats grid (CPU/RAM/DISK) -->
-                <Grid Grid.Row="0" RowDefinitions="Auto,Auto" ColumnDefinitions="Auto,Auto" RowSpacing="4" ColumnSpacing="4">
-                    <!-- CPU -->
-                    <Border BorderBrush="Gray" BorderThickness="1" Padding="8,6">
-                        <StackPanel Spacing="2" HorizontalAlignment="Center">
-                            <TextBlock Text="CPU" FontSize="9" Foreground="{ThemeResource TextSecondaryBrush}" HorizontalAlignment="Center"/>
-                            <TextBlock Text="{x:Bind CpuPercentText, Mode=OneWay}" FontSize="13" FontWeight="SemiBold"
-                                       Foreground="{ThemeResource TextPrimaryBrush}" HorizontalAlignment="Center"/>
+                <!-- Bluetooth devices card – data-bound to App.BluetoothService (event-driven AEP watcher).
+                     Empty/loading states render from the adapter status; compact sizing keeps the
+                     Focus card below it from being squeezed. -->
+                <controls:WidgetCard Grid.Row="0" IsTabStop="False">
+                    <controls:WidgetCard.HeaderContent>
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <controls:AppIcon Kind="Bluetooth" Width="12" Height="12" Fill="{ThemeResource AccentBrush}"/>
+                            <TextBlock Text="BLUETOOTH DEVICES" FontSize="10" FontWeight="Bold" Foreground="{ThemeResource TextSecondaryBrush}" CharacterSpacing="50"/>
                         </StackPanel>
-                    </Border>
-                    <!-- RAM -->
-                    <Border Grid.Column="1" BorderBrush="Gray" BorderThickness="1" Padding="8,6">
-                        <StackPanel Spacing="2" HorizontalAlignment="Center">
-                            <TextBlock Text="RAM" FontSize="9" Foreground="{ThemeResource TextSecondaryBrush}" HorizontalAlignment="Center"/>
-                            <TextBlock Text="{x:Bind RamPercentText, Mode=OneWay}" FontSize="13" FontWeight="SemiBold"
-                                       Foreground="{ThemeResource TextPrimaryBrush}" HorizontalAlignment="Center"/>
-                        </StackPanel>
-                    </Border>
-                    <!-- DISK (spans bottom row) -->
-                    <Border Grid.Row="1" Grid.ColumnSpan="2" BorderBrush="Gray" BorderThickness="1" Padding="8,6">
-                        <StackPanel Spacing="2" HorizontalAlignment="Center">
-                            <TextBlock Text="DISK" FontSize="9" Foreground="{ThemeResource TextSecondaryBrush}" HorizontalAlignment="Center"/>
-                            <TextBlock Text="{x:Bind StoragePercentText, Mode=OneWay}" FontSize="13" FontWeight="SemiBold"
-                                       Foreground="{ThemeResource TextPrimaryBrush}" HorizontalAlignment="Center"/>
-                        </StackPanel>
-                    </Border>
-                </Grid>
+                    </controls:WidgetCard.HeaderContent>
+                    <controls:WidgetCard.BodyContent>
+                        <Grid MinHeight="96">
+                            <TextBlock x:Name="BluetoothEmptyText" Text="Scanning…" FontSize="10"
+                                       Foreground="{ThemeResource TextSecondaryBrush}"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                                       Visibility="{x:Bind BluetoothEmptyVisibility, Mode=OneWay}"/>
+                            <ItemsControl ItemsSource="{x:Bind BluetoothItems}" Visibility="{x:Bind BluetoothListVisibility, Mode=OneWay}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Spacing="4" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="models:BluetoothDeviceInfo">
+                                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                                            <Grid Grid.Column="0" Width="26" Height="26" CornerRadius="13" Background="#12FFFFFF" VerticalAlignment="Center">
+                                                <controls:AppIcon Kind="{x:Bind Type, Converter={StaticResource BluetoothTypeIconConverter}}" Width="13" Height="13" Fill="{ThemeResource AccentBrush}"/>
+                                            </Grid>
+                                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="0">
+                                                <TextBlock Text="{x:Bind Name}" FontSize="10.5" FontWeight="SemiBold" Foreground="{ThemeResource TextPrimaryBrush}" TextTrimming="CharacterEllipsis"/>
+                                                <TextBlock Text="{x:Bind Converter={StaticResource BluetoothDeviceDetailConverter}}" FontSize="8.5" Foreground="{ThemeResource TextSecondaryBrush}" TextTrimming="CharacterEllipsis"/>
+                                            </StackPanel>
+                                            <TextBlock Grid.Column="2" Text="{x:Bind Converter={StaticResource BluetoothDeviceStatusTextConverter}}"
+                                                       Foreground="{x:Bind Converter={StaticResource BluetoothDeviceStatusBrushConverter}}"
+                                                       FontSize="8.5" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Grid>
+                    </controls:WidgetCard.BodyContent>
+                </controls:WidgetCard>
 
                 <!-- Focus Session card – shared WidgetCard shell; stretches to fill remaining left-column height. -->
                 <controls:WidgetCard Grid.Row="1" IsTabStop="False">
@@ -418,11 +439,29 @@
             </Grid>
         </Border>
 
-        <!-- Footer strip -->
-        <Grid Grid.Row="2" ColumnDefinitions="*,Auto" Height="30" Margin="0,8,0,0">
-            <TextBlock Text="{x:Bind WeatherTemp, Mode=OneWay}" VerticalAlignment="Center" Margin="8,0,0,0"
+        <!-- Footer strip: system stats (moved from left column) + weather + settings -->
+        <Grid Grid.Row="2" ColumnDefinitions="Auto,Auto,Auto,*,Auto" Height="30" Margin="0,8,0,0">
+            <!-- CPU -->
+            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center" Margin="8,0,0,0">
+                <Ellipse Width="5" Height="5" Fill="{ThemeResource AccentBrush}" Opacity="0.75" VerticalAlignment="Center"/>
+                <TextBlock Text="CPU" FontSize="9" Foreground="{ThemeResource TextSecondaryBrush}" VerticalAlignment="Center"/>
+                <TextBlock Text="{x:Bind CpuPercentText, Mode=OneWay}" FontSize="10" FontWeight="SemiBold" Foreground="{ThemeResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+            </StackPanel>
+            <!-- RAM -->
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center" Margin="14,0,0,0">
+                <Ellipse Width="5" Height="5" Fill="{ThemeResource AccentBrush}" Opacity="0.5" VerticalAlignment="Center"/>
+                <TextBlock Text="RAM" FontSize="9" Foreground="{ThemeResource TextSecondaryBrush}" VerticalAlignment="Center"/>
+                <TextBlock Text="{x:Bind RamPercentText, Mode=OneWay}" FontSize="10" FontWeight="SemiBold" Foreground="{ThemeResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+            </StackPanel>
+            <!-- DISK -->
+            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center" Margin="14,0,0,0">
+                <Ellipse Width="5" Height="5" Fill="{ThemeResource AccentBrush}" Opacity="0.25" VerticalAlignment="Center"/>
+                <TextBlock Text="DISK" FontSize="9" Foreground="{ThemeResource TextSecondaryBrush}" VerticalAlignment="Center"/>
+                <TextBlock Text="{x:Bind StoragePercentText, Mode=OneWay}" FontSize="10" FontWeight="SemiBold" Foreground="{ThemeResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+            </StackPanel>
+            <TextBlock Grid.Column="3" Text="{x:Bind WeatherTemp, Mode=OneWay}" VerticalAlignment="Center" HorizontalAlignment="Left" Margin="18,0,0,0"
                        ToolTipService.ToolTip="{x:Bind WeatherCondition, Mode=OneWay}"/>
-            <Button Width="16" Height="16" Padding="0"
+            <Button Grid.Column="4" Width="16" Height="16" Padding="0"
                     Style="{StaticResource CardButtonStyle}"
                     VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,8,0"
                     Click="SettingsGear_Click" ToolTipService.ToolTip="Location settings">

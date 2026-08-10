@@ -519,12 +519,33 @@ What does not belong: widget-specific logic in `Controls`; raw
   README claims Seattle. AQI is a mock derived from wind/humidity. `ForecastDay`
   records day/icon/temp-range; the first day is labeled "Today".
 
-## BluetoothService
+## BluetoothService (V1 — event-driven rewrite)
 
-- **Purpose:** 5-second poll of adapter availability, enabled state, and paired
-  devices (with battery, connection state, icon classification by name).
-- **Known issue:** runs and publishes `BluetoothUpdated`, but **no widget
-  consumes it** yet.
+- **Purpose:** single source of truth for Bluetooth state: adapter status,
+  paired devices (classic + BLE), connection/presence state, and a single
+  battery percentage where Windows exposes it.
+- **Architecture (frozen):** `BluetoothService` (facade + cache) consumes
+  `BluetoothDeviceWatcher` (AEP `DeviceWatcher`, paired filter, both protocol
+  GUIDs; translates `DeviceInformation` → domain snapshots, marshals to the UI
+  dispatcher) and `BluetoothBatteryService` (GATT 0x180F fallback, on-demand
+  only). Domain models live in `Models/Bluetooth/` (`BluetoothDeviceInfo`,
+  `BluetoothBatteryInfo`, `BluetoothDeviceType`, `BluetoothConnectionState`,
+  `BluetoothAdapterStatus`) — no Windows objects ever reach the UI.
+- **Adapter status:** radio-driven (`Radio.GetRadiosAsync` +
+  `Radio.StateChanged`) → `NoAdapter / Disabled / Initializing / Ready`; the
+  radio toggle also starts/stops the watcher, and unexpected watcher stops
+  self-heal through the same path. **No polling.**
+- **Battery:** AEP `System.Devices.BatteryLife` arrives with snapshots; GATT
+  0x180F is attempted once per session for connected BLE devices with no AEP
+  battery. Unavailable battery renders as nothing — never a fake 0.
+- **Events:** coarse `BluetoothUpdated` (existing consumers) + granular
+  `DeviceChanged`.
+- **Dashboard:** the Bluetooth card binds to `App.BluetoothService.Devices`
+  with honest empty states (no adapter / off / scanning / no paired devices).
+- **Runtime verification pending (hardware tests):** GATT in the unpackaged
+  build, `BatteryLife` on real devices, AEP `IsConnected` updates for classic
+  devices, Bluetooth off/on lifecycle, startup render after
+  `EnumerationCompleted`.
 
 ## FocusSessionStore / FocusSession / Focus ring & settings (in ExpandedDashboard)
 
@@ -578,10 +599,11 @@ What does not belong: widget-specific logic in `Controls`; raw
 ## ExpandedDashboard — the dashboard (Widgets/, 1214-line code-behind)
 
 - **Purpose:** the click-to-expand dashboard hosting all cards.
-- **Current XAML renders:** 2×2 Stats placeholders (static labels RAM/CPU/GPU/
-  DISK), Focus Session card (WidgetCard), Clipboard card (WidgetCard), Now
-  Playing section, footer strip with hardcoded "31°C" + settings icon. Window
-  size 780×640 in XAML vs. 800×664 applied by WindowService.
+- **Current XAML renders:** Bluetooth devices card (WidgetCard, data-bound to
+  App.BluetoothService), Focus Session card (WidgetCard), Clipboard card
+  (WidgetCard, search + retention), Now Playing section, footer strip with live
+  CPU/RAM/DISK stats + weather + settings icon. Window size 780×640 in XAML vs.
+  800×664 applied by WindowService.
 - **Code-behind is LARGELY OUT OF SYNC with the XAML:** it still contains full
   logic for stats (real RAM via `GetPerformanceInfo`, simulated CPU/GPU,
   battery, real storage via `DriveInfo`), weather properties, tasks, and file
@@ -697,10 +719,11 @@ What does not belong: widget-specific logic in `Controls`; raw
 
 ## System Monitoring (stats card)
 
-- **Status:** ✅ FROZEN.
+- **Status:** ✅ FROZEN (renders compactly in the dashboard footer).
 - **Implemented:** CPU (real, via `GetSystemTimes`), RAM (`GetPerformanceInfo`),
-  Storage (`DriveInfo`) — a live 3-cell card (CPU | RAM / DISK spanning the
-  bottom row) in the left column's existing placeholder slot.
+  Storage (`DriveInfo`) — compact CPU/RAM/DISK readouts in the footer strip
+  (moved from the left-column 3-cell card; that slot now hosts the Bluetooth
+  devices card).
 - **Deferred:** GPU utilization, battery, historical graphs/sparklines,
   per-core metrics.
 - **Notes:** GPU is intentionally omitted to preserve UI responsiveness — an
@@ -928,11 +951,24 @@ What does not belong: widget-specific logic in `Controls`; raw
     6-hour `DispatcherTimer` keeps pruning while the app stays open. Pinned
     items stay exempt. Resolves the long-standing "retention never scheduled"
     debt.
+- ✅ Dashboard relayout: CPU/RAM/DISK stats moved to the footer strip; the left
+  column slot now hosts a **hardcoded Bluetooth devices card** (3 compact sample
+  rows: Headphone/Mouse/Bluetooth icons, Connected/Available statuses — real
+  BluetoothService wiring is the next step; kept slim so the Focus card below
+  is not squeezed).
+- ✅ **Bluetooth V1 (event-driven):** replaced the 5-second polling service with
+  the frozen architecture — AEP watcher (paired, classic + BLE) + radio
+  lifecycle + central cache + GATT battery fallback + platform-independent
+  models (`Models/Bluetooth/`); the dashboard card is now data-bound with
+  honest empty states and 4 converters. Hardware verification pending (see
+  BluetoothService section).
 
 ## In progress
 
-- **Clipboard interaction slice — committed.**
-- Next slice: **Quick Tasks persistence** (tasks reset each launch).
+- **Bluetooth V1 — implemented, hardware verification pending** (run the
+  frozen runtime tests on the laptop: GATT unpackaged, `BatteryLife` on the
+  real devices, AEP `IsConnected` toggle, Bluetooth off/on, startup render).
+- Next slice after that: **Quick Tasks persistence** (tasks reset each launch).
 - Repo is still ahead of origin (Focus/Clipboard/anchors/System Monitoring/
   Weather + this snapshot) — push is pending.
 
