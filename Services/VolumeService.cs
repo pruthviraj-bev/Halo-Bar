@@ -19,6 +19,14 @@ public class VolumeService
 
     public event EventHandler<(VolumeState State, TimeSpan Duration)>? NotificationRequired;
 
+    /// <summary>
+    /// Last known volume state, refreshed by the 150 ms poll. Consumers (e.g. the
+    /// dashboard's 1 s stats tick) should read this instead of calling
+    /// <see cref="ReadCurrentState"/> — each call is two COM calls into the audio
+    /// endpoint, which is wasteful at 1 Hz when the poll already keeps this fresh.
+    /// </summary>
+    public VolumeState CurrentState => _lastState ?? new VolumeState(0, false);
+
     private const int ClsctxAll = 23;
 
     public VolumeService()

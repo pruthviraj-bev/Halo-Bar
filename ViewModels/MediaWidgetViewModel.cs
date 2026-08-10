@@ -48,6 +48,15 @@ public partial class MediaWidgetViewModel : ObservableObject
     [ObservableProperty]
     public partial bool HasMultipleSources { get; set; }
 
+    // Thumbnail decode throttle: media events fire ~1 Hz during playback with the
+    // SAME album art; re-decoding it on every event is needless UI-thread image
+    // work. Re-decode only when the track changes or the previous decode is older
+    // than the cooldown.
+    private string _lastThumbKey = string.Empty;
+    private DateTime _lastThumbDecodeUtc = DateTime.MinValue;
+    private const double ThumbDecodeCooldownSeconds = 10;
+    private const int ThumbDecodePixelWidth = 160;
+
     public MediaWidgetViewModel()
     {
         // Populate initial state immediately from the cached MediaService source of truth
@@ -93,12 +102,23 @@ public partial class MediaWidgetViewModel : ObservableObject
         if (thumbRef == null)
         {
             Helpers.Logger.Info("[DEBUG] MediaWidgetViewModel: Thumbnail reference is null");
+            _lastThumbKey = string.Empty;
             _dispatcherQueue.TryEnqueue(() =>
             {
                 Thumbnail = null;
             });
             return;
         }
+
+        // Same track, recently decoded — skip the redundant re-decode.
+        string key = $"{Title}|{Artist}";
+        if (key == _lastThumbKey
+            && (DateTime.UtcNow - _lastThumbDecodeUtc).TotalSeconds < ThumbDecodeCooldownSeconds)
+        {
+            return;
+        }
+        _lastThumbKey = key;
+        _lastThumbDecodeUtc = DateTime.UtcNow;
 
         try
         {
@@ -112,7 +132,7 @@ public partial class MediaWidgetViewModel : ObservableObject
                 {
                     using (stream)
                     {
-                        var bitmap = new BitmapImage();
+                        var bitmap = new BitmapImage { DecodePixelWidth = ThumbDecodePixelWidth };
                         await bitmap.SetSourceAsync(stream);
                         Thumbnail = bitmap;
                         Helpers.Logger.Info("[DEBUG] MediaWidgetViewModel: Thumbnail BitmapImage created and set successfully");

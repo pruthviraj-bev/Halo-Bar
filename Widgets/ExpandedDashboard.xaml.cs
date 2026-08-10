@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Linq;
 using System.Runtime.CompilerServices;
@@ -24,7 +25,6 @@ namespace DynamicIsland.Widgets;
 public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChanged
 {
     private DispatcherTimer? _updateTimer;
-    private DispatcherTimer? _visualizerTimer;
     private readonly Microsoft.UI.Dispatching.DispatcherQueue _dispatcherQueue;
 
     // ── INotifyPropertyChanged ─────────────────────────────────────────────
@@ -43,21 +43,21 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
     public string CurrentPlaybackTimeText
     {
         get => _currentPlaybackTimeText;
-        set { _currentPlaybackTimeText = value; OnPropertyChanged(); }
+        set { if (_currentPlaybackTimeText == value) return; _currentPlaybackTimeText = value; OnPropertyChanged(); }
     }
 
     private string _totalPlaybackTimeText = "0:00";
     public string TotalPlaybackTimeText
     {
         get => _totalPlaybackTimeText;
-        set { _totalPlaybackTimeText = value; OnPropertyChanged(); }
+        set { if (_totalPlaybackTimeText == value) return; _totalPlaybackTimeText = value; OnPropertyChanged(); }
     }
 
     private string _liveClipboardTitle = "main.cpp";
     public string LiveClipboardTitle
     {
         get => _liveClipboardTitle;
-        set { _liveClipboardTitle = value; OnPropertyChanged(); }
+        set { if (_liveClipboardTitle == value) return; _liveClipboardTitle = value; OnPropertyChanged(); }
     }
 
     // ── Clipboard history list ─────────────────────────────────────────────
@@ -100,86 +100,87 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
     public string RamUsedText
     {
         get => _ramUsedText;
-        set { _ramUsedText = value; OnPropertyChanged(); }
+        set { if (_ramUsedText == value) return; _ramUsedText = value; OnPropertyChanged(); }
     }
     private string _ramTotalText = "16.0 GB";
     public string RamTotalText
     {
         get => _ramTotalText;
-        set { _ramTotalText = value; OnPropertyChanged(); }
+        set { if (_ramTotalText == value) return; _ramTotalText = value; OnPropertyChanged(); }
     }
 
     private int _ramPercent = 0;
     public int RamPercent
     {
         get => _ramPercent;
-        set { _ramPercent = value; OnPropertyChanged(); }
+        set { if (_ramPercent == value) return; _ramPercent = value; OnPropertyChanged(); }
     }
 
     private string _ramPercentText = "—";
     public string RamPercentText
     {
         get => _ramPercentText;
-        set { _ramPercentText = value; OnPropertyChanged(); }
+        set { if (_ramPercentText == value) return; _ramPercentText = value; OnPropertyChanged(); }
     }
 
     private string _cpuPercentText = "—";
     public string CpuPercentText
     {
         get => _cpuPercentText;
-        set { _cpuPercentText = value; OnPropertyChanged(); }
+        set { if (_cpuPercentText == value) return; _cpuPercentText = value; OnPropertyChanged(); }
     }
 
     private string _batteryPercentText = "—";
     public string BatteryPercentText
     {
         get => _batteryPercentText;
-        set { _batteryPercentText = value; OnPropertyChanged(); }
+        set { if (_batteryPercentText == value) return; _batteryPercentText = value; OnPropertyChanged(); }
     }
 
     private string _batteryStatusText = "Charging";
     public string BatteryStatusText
     {
         get => _batteryStatusText;
-        set { _batteryStatusText = value; OnPropertyChanged(); }
+        set { if (_batteryStatusText == value) return; _batteryStatusText = value; OnPropertyChanged(); }
     }
 
     private Visibility _batteryChargingVisibility = Visibility.Collapsed;
     public Visibility BatteryChargingVisibility
     {
         get => _batteryChargingVisibility;
-        set { _batteryChargingVisibility = value; OnPropertyChanged(); }
+        set { if (_batteryChargingVisibility == value) return; _batteryChargingVisibility = value; OnPropertyChanged(); }
     }
 
     private AppIconKind _batteryIconKind = AppIconKind.Battery9;
     public AppIconKind BatteryIconKind
     {
         get => _batteryIconKind;
-        set { _batteryIconKind = value; OnPropertyChanged(); }
+        set { if (_batteryIconKind == value) return; _batteryIconKind = value; OnPropertyChanged(); }
     }
 
     private string _storageFreeText = "215 GB";
     public string StorageFreeText
     {
         get => _storageFreeText;
-        set { _storageFreeText = value; OnPropertyChanged(); }
+        set { if (_storageFreeText == value) return; _storageFreeText = value; OnPropertyChanged(); }
     }
 
     private string _storageTotalText = "512 GB";
     public string StorageTotalText
     {
         get => _storageTotalText;
-        set { _storageTotalText = value; OnPropertyChanged(); }
+        set { if (_storageTotalText == value) return; _storageTotalText = value; OnPropertyChanged(); }
     }
 
     private int _storagePercent = 0;
     public int StoragePercent
     {
         get => _storagePercent;
-        set 
-        { 
-            _storagePercent = value; 
-            OnPropertyChanged(); 
+        set
+        {
+            if (_storagePercent == value) return;
+            _storagePercent = value;
+            OnPropertyChanged();
         }
     }
 
@@ -187,7 +188,7 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
     public string StoragePercentText
     {
         get => _storagePercentText;
-        set { _storagePercentText = value; OnPropertyChanged(); }
+        set { if (_storagePercentText == value) return; _storagePercentText = value; OnPropertyChanged(); }
     }
 
     // ── Volume Slider Integration ──────────────────────────────────────────
@@ -211,7 +212,7 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
 
     public double VolumePercentValue
     {
-        get => App.VolumeService.ReadCurrentState().VolumePercent;
+        get => App.VolumeService.CurrentState.VolumePercent;
         set
         {
             App.VolumeService.SetVolume((int)value);
@@ -374,6 +375,13 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
         UpdateFilterVisual();
         RefreshClipboardFilter();
 
+        // Virtualization profiling + recycling hygiene: track how many row
+        // containers are actually realized, and reset reveal-strip visuals when
+        // a container is recycled so an open strip never leaks onto a different item.
+        ClipboardRepeater.ElementPrepared += ClipboardRepeater_ElementPrepared;
+        ClipboardRepeater.ElementClearing += ClipboardRepeater_ElementClearing;
+        Loaded += ExpandedDashboard_Loaded;
+
         // Wire up the Bluetooth devices list
         App.BluetoothService.BluetoothUpdated += OnBluetoothUpdated;
         RefreshBluetoothList();
@@ -385,17 +393,18 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
         AttachTextInputFocus(ClipboardSearchBox);
         AttachTextInputFocus(RetentionCombo);
 
-        // Timer for system stats and play time updates (1s)
+        // Timer for system stats and play time updates (1s). Keeps ticking even
+        // while the dashboard is collapsed (it stays in the tree after the first
+        // expansion); UpdateStats gates the sampling work on visibility so a
+        // hidden dashboard costs almost nothing.
         _updateTimer = new DispatcherTimer();
         _updateTimer.Interval = TimeSpan.FromSeconds(1);
-        _updateTimer.Tick += (s, e) => { App.MediaService.TickValidation(); UpdateStats(); };
+        _updateTimer.Tick += (s, e) =>
+        {
+            App.MediaService.TickValidation();
+            UpdateStats();
+        };
         _updateTimer.Start();
-
-        // Timer for visualizer spectrum animation (120ms)
-        _visualizerTimer = new DispatcherTimer();
-        _visualizerTimer.Interval = TimeSpan.FromMilliseconds(120);
-        _visualizerTimer.Tick += (s, e) => UpdateVisualizer();
-        _visualizerTimer.Start();
     }
 
     // ── Weather Service handler ────────────────────────────────────────────
@@ -449,20 +458,24 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
 
 
 
-    // ── Audio visualizer tick ──────────────────────────────────────────────
-
-    private void UpdateVisualizer()
-    {
-        // Visualizer bars replaced with modern Fluent progress line
-    }
-
     // ── Stats updates ──────────────────────────────────────────────────────
 
     private int _lastVol = -1;
+    private double _lastPlaybackProgress = double.NegativeInfinity;
+
+    // The constructor's initial UpdateStats must always run (the element is not
+    // measured yet, so ActualWidth is 0), so the dashboard opens with real stats
+    // instead of placeholders. Only subsequent timer ticks honor the gate.
+    private bool _initialStatsPending = true;
+
+    // DriveInfo ctor is a Win32 probe; cache the instance and re-query its
+    // properties (cheap) instead of constructing it every second.
+    private System.IO.DriveInfo? _statsDrive;
 
     private void UpdateStats()
     {
-        // 1. Focus Session Timer
+        // 1. Focus Session Timer — always runs: the session countdown is global
+        // (it must keep ticking while the dashboard is collapsed).
         if (_focusIsRunning)
         {
             if (_focusSecondsRemaining > 0)
@@ -477,6 +490,20 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
             OnPropertyChanged(nameof(FocusProgressFraction));
             OnPropertyChanged(nameof(FocusPlayPauseIconKind)); // icon returns to Play
             FocusPillRotate.Angle = FocusProgressFraction * 360;
+        }
+
+        // Hidden while collapsed (MainWindow collapses the DashboardBorder
+        // ANCESTOR — a collapsed subtree reports ActualWidth=0): skip all
+        // sampling work. The dashboard's 1 s timer keeps ticking after the first
+        // expansion, and re-sampling CPU/RAM/storage/volume/playback at 1 Hz
+        // while hidden is pure waste.
+        if (_initialStatsPending)
+        {
+            _initialStatsPending = false;
+        }
+        else if (Visibility != Visibility.Visible || ActualWidth <= 0)
+        {
+            return;
         }
 
         // 2. Playback time (real timeline, interpolated live while playing)
@@ -516,9 +543,9 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
         // 7. Storage
         try
         {
-            var drive = new System.IO.DriveInfo("C");
-            double totalGB = drive.TotalSize / (1024.0 * 1024 * 1024);
-            double freeGB = drive.AvailableFreeSpace / (1024.0 * 1024 * 1024);
+            _statsDrive ??= new System.IO.DriveInfo("C");
+            double totalGB = _statsDrive.TotalSize / (1024.0 * 1024 * 1024);
+            double freeGB = _statsDrive.AvailableFreeSpace / (1024.0 * 1024 * 1024);
             double usedGB = totalGB - freeGB;
 
             StorageTotalText = $"{totalGB:F0} GB";
@@ -539,8 +566,9 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
             LiveClipboardTitle = "—";
         }
 
-        // 7. Sync external volume changes
-        int currentVol = App.VolumeService.ReadCurrentState().VolumePercent;
+        // 7. Sync external volume changes (cached state — the 150 ms poll keeps
+        // it fresh; avoid extra COM calls into the audio endpoint here).
+        int currentVol = App.VolumeService.CurrentState.VolumePercent;
         if (currentVol != _lastVol)
         {
             _lastVol = currentVol;
@@ -572,6 +600,14 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
         TotalPlaybackTimeText = FormatTime(vm.Duration);
 
         if (_isSeekDragging) return;
+
+        // Raise only when the slider value actually moved (it is static while
+        // paused) — identical per-second raises are wasted binding traffic.
+        double progress = vm.Duration <= TimeSpan.Zero
+            ? 0
+            : (pos.TotalSeconds / vm.Duration.TotalSeconds) * 100.0;
+        if (Math.Abs(progress - _lastPlaybackProgress) < 0.01) return;
+        _lastPlaybackProgress = progress;
         OnPropertyChanged(nameof(PlaybackProgressValue));
     }
 
@@ -656,8 +692,13 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
     private string _searchText = "";
     private (ClipboardItem Item, TranslateTransform Transform, Button Strip)? _revealedItem;
 
+    // Number of clipboard row containers currently realized by the virtualizing
+    // ItemsRepeater (Pass 5 profiling: 470 data items must NOT mean 470 UI
+    // containers — the repeater realizes only visible rows).
+
     private void RefreshClipboardFilter()
     {
+        Logger.Info($"[PROFILE] RefreshClipboardFilter start ms={Environment.TickCount64} items={App.ClipboardService.History.Count}");
         _revealedItem = null;
         ClipboardItems.Clear();
         string query = _searchText;
@@ -667,8 +708,63 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
             if (!string.IsNullOrEmpty(query) && !MatchesSearch(item, query)) continue;
             ClipboardItems.Add(item);
         }
+        UpdateClipboardEmptyState();
+        Logger.Info($"[PROFILE] RefreshClipboardFilter end ms={Environment.TickCount64} added={ClipboardItems.Count} realized={_realizedClipCount}");
+    }
 
-        if (!string.IsNullOrEmpty(query))
+    // ── Clipboard list virtualization (Pass 5) ─────────────────────────────
+
+    private int _realizedClipCount;
+
+    private void ClipboardRepeater_ElementPrepared(ItemsRepeater sender, ItemsRepeaterElementPreparedEventArgs args)
+    {
+        _realizedClipCount++;
+    }
+
+    /// <summary>
+    /// A row container is being recycled (scrolled out of view). Reset its
+    /// reveal-strip visuals so the recycled container never carries an open
+    /// strip onto a different item, and drop reveal tracking if the cleared
+    /// element was the revealed row.
+    /// </summary>
+    private void ClipboardRepeater_ElementClearing(ItemsRepeater sender, ItemsRepeaterElementClearingEventArgs args)
+    {
+        if (_realizedClipCount > 0) _realizedClipCount--;
+        if (args.Element is not FrameworkElement root) return;
+
+        if (root is Grid grid)
+        {
+            foreach (var child in grid.Children)
+            {
+                if (child is Button strip) strip.Opacity = 0;
+                if (child is Border { Tag: "ClipboardFrontCard" } front
+                    && front.RenderTransform is TranslateTransform t)
+                {
+                    t.X = 0;
+                    if (_revealedItem is { } revealed && ReferenceEquals(revealed.Transform, t))
+                        _revealedItem = null;
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// First layout-ready marker: after the dashboard's first real layout pass
+    /// this reports how many of the clipboard rows actually got realized — the
+    /// Pass 5 success metric (should be ~visible rows, not 470).
+    /// </summary>
+    private void ExpandedDashboard_Loaded(object sender, RoutedEventArgs e)
+    {
+        Logger.Info($"[PROFILE-CLIP] first layout ready: realized={_realizedClipCount} containers of {ClipboardItems.Count} items");
+    }
+
+    /// <summary>
+    /// Recomputes the empty-state text + visibility from the current filter, search,
+    /// and live ClipboardItems count. Shared by full rebuilds and incremental mutations.
+    /// </summary>
+    private void UpdateClipboardEmptyState()
+    {
+        if (!string.IsNullOrEmpty(_searchText))
         {
             ClipboardEmptyText.Text = "No matching items";
         }
@@ -681,6 +777,131 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
             ClipboardEmptyText.Text = "Nothing copied yet";
         }
         ClipboardEmptyVisibility = ClipboardItems.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary>
+    /// Animates any open reveal strip closed and drops the tracking reference.
+    /// Incremental mutations keep row containers alive, so the strip must be closed
+    /// explicitly (a full rebuild discarded the old containers for free).
+    /// </summary>
+    private void CloseRevealedStrip()
+    {
+        if (_revealedItem is not { } revealed) return;
+        AnimateFrontCard(revealed.Transform, revealed.Strip, 0, 0);
+        _revealedItem = null;
+    }
+
+    /// <summary>
+    /// 0-based index the given item would occupy in the filtered ClipboardItems view,
+    /// derived from its History position and the active Pinned filter + search query.
+    /// Returns -1 when the item does not belong in this view.
+    /// </summary>
+    private int FilteredPosition(ClipboardItem item)
+    {
+        if (_showPinnedOnly && !item.IsPinned) return -1;
+        if (!string.IsNullOrEmpty(_searchText) && !MatchesSearch(item, _searchText)) return -1;
+
+        int historyIndex = App.ClipboardService.History.IndexOf(item);
+        if (historyIndex < 0) return -1;
+
+        int position = 0;
+        for (int i = 0; i < historyIndex; i++)
+        {
+            var candidate = App.ClipboardService.History[i];
+            if (_showPinnedOnly && !candidate.IsPinned) continue;
+            if (!string.IsNullOrEmpty(_searchText) && !MatchesSearch(candidate, _searchText)) continue;
+            position++;
+        }
+        return position;
+    }
+
+    /// <summary>
+    /// Inserts a single item into the filtered view at its correct position.
+    /// No-op when the item is filtered out by the current Pinned/search state.
+    /// </summary>
+    private void InsertClipboardItemIncremental(ClipboardItem item)
+    {
+        int position = FilteredPosition(item);
+        if (position < 0) return;
+
+        CloseRevealedStrip();
+        ClipboardItems.Insert(Math.Min(position, ClipboardItems.Count), item);
+        UpdateClipboardEmptyState();
+    }
+
+    /// <summary>
+    /// Removes a single item from the filtered view. No-op when not currently shown.
+    /// </summary>
+    private void RemoveClipboardItemIncremental(ClipboardItem item)
+    {
+        int index = ClipboardItems.IndexOf(item);
+        if (index < 0) return;
+
+        if (_revealedItem is { Item: { } revealed } && ReferenceEquals(revealed, item))
+            _revealedItem = null;
+
+        ClipboardItems.RemoveAt(index);
+        UpdateClipboardEmptyState();
+    }
+
+    /// <summary>
+    /// Repositions a single item after a History.Move (re-copy to top), mirroring
+    /// the move in the filtered view without rebuilding the whole list.
+    /// </summary>
+    private void MoveClipboardItemIncremental(ClipboardItem item)
+    {
+        int currentIndex = ClipboardItems.IndexOf(item);
+        if (currentIndex < 0)
+        {
+            InsertClipboardItemIncremental(item);
+            return;
+        }
+
+        int target = FilteredPosition(item);
+        if (target < 0)
+        {
+            RemoveClipboardItemIncremental(item);
+            return;
+        }
+
+        if (target == currentIndex) return;
+
+        CloseRevealedStrip();
+        ClipboardItems.Move(currentIndex, Math.Min(target, ClipboardItems.Count - 1));
+        UpdateClipboardEmptyState();
+    }
+
+    /// <summary>
+    /// Applies a single History collection change to the dashboard list incrementally:
+    /// Add → one insert, Remove → one removal, Move → one reposition. Full rebuilds
+    /// (RefreshClipboardFilter) are reserved for filter/search changes and initial
+    /// population, so ordinary clipboard mutations never tear down the realized list.
+    ///
+    /// Deltas resolve their positions against LIVE History/ClipboardItems state when
+    /// they run (not the args snapshot), so a rapid capture→pin→delete batch enqueued
+    /// before any delta executes still composes to the correct final list — each
+    /// pending delta re-derives indices at dequeue time.
+    /// </summary>
+    private void ApplyHistoryChange(NotifyCollectionChangedEventArgs e)
+    {
+        switch (e.Action)
+        {
+            case NotifyCollectionChangedAction.Add:
+                if (e.NewItems?[0] is ClipboardItem added)
+                    InsertClipboardItemIncremental(added);
+                break;
+            case NotifyCollectionChangedAction.Remove:
+                if (e.OldItems?[0] is ClipboardItem removed)
+                    RemoveClipboardItemIncremental(removed);
+                break;
+            case NotifyCollectionChangedAction.Move:
+                if (e.OldItems?[0] is ClipboardItem moved)
+                    MoveClipboardItemIncremental(moved);
+                break;
+            default:
+                RefreshClipboardFilter();
+                break;
+        }
     }
 
     /// <summary>
@@ -750,9 +971,9 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
         }
     }
 
-    private void OnClipboardHistoryChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+    private void OnClipboardHistoryChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
-        _dispatcherQueue.TryEnqueue(RefreshClipboardFilter);
+        _dispatcherQueue.TryEnqueue(() => ApplyHistoryChange(e));
     }
 
     private void AllFilter_Click(object sender, RoutedEventArgs e)
@@ -807,11 +1028,27 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
 
     private void ClipboardPin_Click(object sender, RoutedEventArgs e)
     {
+        Logger.Info($"[PROFILE] ClipboardPin_Click start ms={Environment.TickCount64}");
         if ((sender as FrameworkElement)?.DataContext is ClipboardItem item)
         {
             App.ClipboardService.TogglePin(item);
-            RefreshClipboardFilter();
+
+            // Pinned filter: membership follows pin state — move the single row in/out.
+            // All filter: the row's x:Bind OneWay bindings on IsPinned update the icon
+            // in place (INPC); no collection change is needed.
+            if (_showPinnedOnly)
+            {
+                if (item.IsPinned) InsertClipboardItemIncremental(item);
+                else RemoveClipboardItemIncremental(item);
+            }
+            else
+            {
+                // Preserve legacy behavior: pinning while a reveal strip is open
+                // closes it (the old full rebuild reset _revealedItem).
+                CloseRevealedStrip();
+            }
         }
+        Logger.Info($"[PROFILE] ClipboardPin_Click end ms={Environment.TickCount64}");
     }
 
     private void ClipboardMore_Click(object sender, RoutedEventArgs e)
@@ -839,11 +1076,13 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
 
     private void ClipboardRevealedDelete_Click(object sender, RoutedEventArgs e)
     {
+        Logger.Info($"[PROFILE] ClipboardRevealedDelete_Click start ms={Environment.TickCount64}");
         if ((sender as FrameworkElement)?.DataContext is ClipboardItem item)
         {
             App.ClipboardService.DeleteItem(item);
         }
         _revealedItem = null;
+        Logger.Info($"[PROFILE] ClipboardRevealedDelete_Click end ms={Environment.TickCount64}");
     }
 
     private const double DeleteStripWidth = 56.0;

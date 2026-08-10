@@ -1,8 +1,9 @@
+using System;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using CommunityToolkit.Mvvm.ComponentModel;
-using DynamicIsland.Widgets;
+using DynamicIsland.Helpers;
 
 namespace DynamicIsland.ViewModels;
 
@@ -63,9 +64,13 @@ public partial class MainWindowViewModel : ObservableObject
         App.IslandController.IsExpandedChanged += (_, expanded) =>
             _dispatcherQueue.TryEnqueue(() =>
             {
+                Logger.Info($"[PROFILE] VM handler IsExpandedChanged start ms={Environment.TickCount64} expanded={expanded}");
                 IsExpanded = expanded;
-                if (expanded && Dashboard == null)
-                    Dashboard = new ExpandedDashboard();
+                // Single dashboard instance owned by IslandController (preloaded
+                // off the click path); never constructs a second copy here.
+                if (expanded)
+                    Dashboard = App.IslandController.EnsureDashboard();
+                Logger.Info($"[PROFILE] VM handler IsExpandedChanged end ms={Environment.TickCount64}");
             });
     }
 

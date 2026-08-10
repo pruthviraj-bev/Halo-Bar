@@ -103,6 +103,8 @@ public class IslandController
     /// </summary>
     public void NotifyIslandClick()
     {
+        Logger.Info($"[PROFILE] NotifyIslandClick start ms={Environment.TickCount64}");
+
         if (_clickExpanded) return;
 
         // Don't expand the dashboard if the file shelf is open —
@@ -112,6 +114,9 @@ public class IslandController
         _clickExpanded = true;
         IsExpandedChanged.Invoke(this, true);
         Commit();
+
+        Logger.Info($"[PROFILE] NotifyIslandClick after Commit ms={Environment.TickCount64}");
+
         ArmAutoCollapse(TimeSpan.FromSeconds(6));
     }
 
@@ -243,6 +248,37 @@ public class IslandController
         Commit();
     }
 
+    // ── Persistent dashboard instance ───────────────────────────────────────
+
+    /// <summary>
+    /// Returns the persistent dashboard instance, constructing it on first use.
+    /// This controller is the single owner: MainWindowViewModel consumes this
+    /// exact instance for DashboardHost, so the dashboard is never constructed
+    /// twice (previously one instance was built for DashboardHost and another
+    /// for the active-widget slot on first expand).
+    /// </summary>
+    public UserControl EnsureDashboard()
+    {
+        if (_dashboardWidget == null)
+        {
+            Logger.Info($"[PROFILE] EnsureDashboard constructing dashboard ms={Environment.TickCount64}");
+            _dashboardWidget = new ExpandedDashboard();
+            Logger.Info($"[PROFILE] EnsureDashboard constructed dashboard ms={Environment.TickCount64}");
+        }
+        return _dashboardWidget;
+    }
+
+    /// <summary>
+    /// Pre-constructs the dashboard off the click path (called shortly after
+    /// startup) so the first click-to-expand is not delayed by full dashboard
+    /// construction. Idempotent — the click path still creates it lazily if the
+    /// user expands before this runs.
+    /// </summary>
+    public void PreloadDashboard()
+    {
+        _dispatcherQueue.TryEnqueue(() => EnsureDashboard());
+    }
+
     /// <summary>
     /// Publishes the current active control and recalculates the window profile.
     /// Owns the auto-dismiss timer — starts/restarts it for the new top widget if it has AutoDismiss.
@@ -250,11 +286,16 @@ public class IslandController
     /// </summary>
     private void Commit()
     {
+        Logger.Info($"[PROFILE] Commit start ms={Environment.TickCount64} clickExpanded={_clickExpanded}");
+
         if (_clickExpanded)
         {
-            if (_dashboardWidget == null)
-                _dashboardWidget = new ExpandedDashboard();
-            ActiveControlChanged.Invoke(this, _dashboardWidget);
+            // The dashboard is hosted solely by MainWindowViewModel.Dashboard
+            // (DashboardHost). The active-widget slot keeps showing the pill —
+            // its row is collapsed while expanded, so nothing visible changes,
+            // and first expand never constructs the dashboard twice.
+            var top = _stack.Count > 0 ? _stack[0] : null;
+            ActiveControlChanged.Invoke(this, top?.Control);
             _autoDismissTimer?.Stop();
             _autoDismissTimer = null;
         }
@@ -307,6 +348,8 @@ public class IslandController
             bool expand = top.AutoExpand;
             desired = expand ? top.PreferredProfile : WindowProfile.Collapsed;
         }
+
+        Logger.Info($"[PROFILE] ApplyWindowProfile: desired={desired} ms={Environment.TickCount64}");
 
         // Deduplication happens inside WindowService.SetProfile, which compares the
         // resolved target size. Compact is stateless (one fixed width), so a change

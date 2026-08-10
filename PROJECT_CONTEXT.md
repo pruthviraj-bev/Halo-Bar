@@ -542,10 +542,18 @@ What does not belong: widget-specific logic in `Controls`; raw
   `DeviceChanged`.
 - **Dashboard:** the Bluetooth card binds to `App.BluetoothService.Devices`
   with honest empty states (no adapter / off / scanning / no paired devices).
-- **Runtime verification pending (hardware tests):** GATT in the unpackaged
-  build, `BatteryLife` on real devices, AEP `IsConnected` updates for classic
-  devices, Bluetooth off/on lifecycle, startup render after
-  `EnumerationCompleted`.
+- **Runtime verification (complete, real hardware):** radio off/on lifecycle,
+  connect/disconnect state, startup enumeration (one stable list after
+  "Scanning…"), and available/out-of-range presence all verified working.
+  **Battery is null by design on this hardware**: AEP `System.Devices.BatteryLife`
+  is absent for every paired device (phones, TWS buds, speaker — all classic
+  AEP endpoints, `ProtocolId` verified as `Guid`), and GATT fallback is not
+  applicable to classic endpoints (plus realme TWS buds expose battery via a
+  vendor-specific GATT protocol — explicitly out of V1 scope). "No battery"
+  is the expected, honestly-rendered V1 state. No dual-mode duplicates
+  observed → no MAC-merge added (frozen rule: don't add what hardware doesn't
+  show). Diagnostic INFO logging added: watcher snapshot line (with raw
+  property types) + service gate decision.
 
 ## FocusSessionStore / FocusSession / Focus ring & settings (in ExpandedDashboard)
 
@@ -960,15 +968,38 @@ What does not belong: widget-specific logic in `Controls`; raw
   the frozen architecture — AEP watcher (paired, classic + BLE) + radio
   lifecycle + central cache + GATT battery fallback + platform-independent
   models (`Models/Bluetooth/`); the dashboard card is now data-bound with
-  honest empty states and 4 converters. Hardware verification pending (see
-  BluetoothService section).
+  honest empty states and 4 converters. **Hardware verification complete** —
+  see BluetoothService section (battery null is the expected V1 state on this
+  hardware).
 
 ## In progress
 
-- **Bluetooth V1 — implemented, hardware verification pending** (run the
-  frozen runtime tests on the laptop: GATT unpackaged, `BatteryLife` on the
-  real devices, AEP `IsConnected` toggle, Bluetooth off/on, startup render).
-- Next slice after that: **Quick Tasks persistence** (tasks reset each launch).
+- **Bluetooth V1 — implemented and hardware-verified.** All frozen runtime
+  tests passed; battery null is the documented expected outcome on this
+  hardware (no code fix warranted).
+- **Performance Pass 1 (uncommitted):** music visualizer gated to playback
+  (killed the always-on 8 Hz timer + per-tick brush allocations);
+  `WindowService.ApplyGeometry` dedupes identical rects and suppresses
+  per-frame `[MOVE]` logs; the dashboard 1 s timer is gated when collapsed and
+  its setters are equality-guarded; media/clipboard thumbnails are downsampled
+  (`DecodePixelWidth`) and album-art decodes are throttled (10 s cooldown);
+  shell-host check cached (1 s TTL); volume reads cached via
+  `VolumeService.CurrentState`; dead dashboard visualizer timer removed.
+- **Performance Pass 2 (uncommitted):**
+  - First-expand stall removed: `IslandController` is now the single owner of
+    the dashboard (`EnsureDashboard`). The ViewModel consumes that same
+    instance — previously first expand constructed the dashboard TWICE (one for
+    `DashboardHost`, one for the active-widget slot). `App.OnLaunched` preloads
+    the dashboard ~800 ms after startup, off the click path; the click path
+    still lazily creates it if the user expands first.
+  - Clipboard persistence moved off the UI thread:
+    `ClipboardHistoryStore.Save` → `QueueSave` — a shallow snapshot plus a
+    single background drainer that writes the LATEST state (coalesced +
+    ordered). All 6 call sites migrated. `SaveRetentionDays` (tiny settings
+    write on a user action) intentionally left synchronous.
+  - Animation system untouched — spring tuning / frame-skip deferred until
+    these two fixes are verified.
+- Next slice: **Quick Tasks persistence** (tasks reset each launch).
 - Repo is still ahead of origin (Focus/Clipboard/anchors/System Monitoring/
   Weather + this snapshot) — push is pending.
 

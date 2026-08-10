@@ -24,6 +24,13 @@ public partial class App : Application
     public static IslandController IslandController { get; private set; } = null!;
     public static DispatcherQueue DispatcherQueue { get; private set; } = null!;
 
+    // Holds the dashboard preload timer for the app's lifetime. A local
+    // DispatcherQueueTimer can be GC'd before it fires (Pass 4 profiling showed
+    // the dashboard was still being constructed on the FIRST CLICK path — the
+    // ~180 ms construction cost sat between StartSizeAnimation and the first
+    // frame). A static field guarantees the one-shot actually fires at +800 ms.
+    private static DispatcherQueueTimer? _preloadTimer;
+
     public App()
     {
         InitializeComponent();
@@ -100,5 +107,16 @@ public partial class App : Application
         };
 
         Window.Activate();
+
+        // Pass 2/5 perf: pre-construct the expanded dashboard shortly after startup
+        // (off the click path) so the first click-to-expand is not delayed by full
+        // dashboard construction. The click path still lazily creates it if the
+        // user expands before this one-shot fires. Held in a static field so the
+        // timer cannot be collected before it fires (see _preloadTimer).
+        _preloadTimer = DispatcherQueue.CreateTimer();
+        _preloadTimer.Interval = TimeSpan.FromMilliseconds(800);
+        _preloadTimer.IsRepeating = false;
+        _preloadTimer.Tick += (_, _) => IslandController.PreloadDashboard();
+        _preloadTimer.Start();
     }
 }

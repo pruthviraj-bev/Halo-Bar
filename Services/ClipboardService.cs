@@ -1,5 +1,6 @@
 using System;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Text.Json.Serialization;
@@ -190,7 +191,7 @@ public class ClipboardService
                             int oldIndex = History.IndexOf(match);
                             match.Timestamp = DateTimeOffset.Now;
                             History.Move(oldIndex, 0);
-                            ClipboardHistoryStore.Save(History);
+                            ClipboardHistoryStore.QueueSave(History);
 
                             CurrentItem = match;
 
@@ -217,7 +218,7 @@ public class ClipboardService
 
                         item.Timestamp = DateTimeOffset.Now;
                         History.Insert(0, item);
-                        ClipboardHistoryStore.Save(History);
+                        ClipboardHistoryStore.QueueSave(History);
 
                         CurrentItem = item;
                         ClipboardChanged?.Invoke(this, item);
@@ -349,21 +350,25 @@ public class ClipboardService
     public void TogglePin(ClipboardItem item)
     {
         if (item == null) return;
+        Logger.Info($"[PROFILE] TogglePin start ms={Environment.TickCount64}");
         item.IsPinned = !item.IsPinned;
-        ClipboardHistoryStore.Save(History);
+        ClipboardHistoryStore.QueueSave(History);
+        Logger.Info($"[PROFILE] TogglePin end ms={Environment.TickCount64}");
     }
 
     public void DeleteItem(ClipboardItem item)
     {
         if (item == null) return;
+        Logger.Info($"[PROFILE] DeleteItem start ms={Environment.TickCount64}");
         if (History.Remove(item))
         {
             if (!string.IsNullOrEmpty(item.ImageFilePath))
             {
                 ClipboardHistoryStore.DeleteImageFile(item.ImageFilePath);
             }
-            ClipboardHistoryStore.Save(History);
+            ClipboardHistoryStore.QueueSave(History);
         }
+        Logger.Info($"[PROFILE] DeleteItem end ms={Environment.TickCount64}");
     }
 
     /// <summary>
@@ -394,7 +399,7 @@ public class ClipboardService
 
         if (changed)
         {
-            ClipboardHistoryStore.Save(History);
+            ClipboardHistoryStore.QueueSave(History);
         }
     }
 
@@ -455,7 +460,7 @@ public class ClipboardService
         if (item == null || !History.Remove(item)) return;
 
         ClipboardHistoryStore.DeleteImageFile(item.ImageFilePath);
-        ClipboardHistoryStore.Save(History);
+        ClipboardHistoryStore.QueueSave(History);
 
         if (ReferenceEquals(CurrentItem, item))
             CurrentItem = null;
@@ -572,7 +577,7 @@ public enum ClipboardItemType { Text, Image, Files }
 /// ImageStreamRef is a live stream kept in memory only; ImageFilePath is what
 /// gets persisted to disk and used to reconstruct the stream after a restart.
 /// </summary>
-public class ClipboardItem
+public class ClipboardItem : INotifyPropertyChanged
 {
     public ClipboardItemType Type { get; set; }
     public string Title { get; set; } = "";
@@ -581,9 +586,28 @@ public class ClipboardItem
     public string? ImageFilePath { get; set; }
     public string? ImageHash { get; set; }
     public List<string>? FilePaths { get; set; }
-    public bool IsPinned { get; set; }
+
+    private bool _isPinned;
+    /// <summary>
+    /// Pinned state. Raises PropertyChanged so the dashboard's pin icon
+    /// (x:Bind OneWay) updates in place — pinning under the All filter never
+    /// rebuilds the 470-item list anymore.
+    /// </summary>
+    public bool IsPinned
+    {
+        get => _isPinned;
+        set
+        {
+            if (_isPinned == value) return;
+            _isPinned = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsPinned)));
+        }
+    }
+
     public DateTimeOffset Timestamp { get; set; }
 
     [JsonIgnore]
     public RandomAccessStreamReference? ImageStreamRef { get; set; }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
 }

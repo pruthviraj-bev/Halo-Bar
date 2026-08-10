@@ -62,12 +62,20 @@ public class WindowService
     public void SetOverrideCollapsedWidth(double? width)
         => _overrideCollapsedWidth = width;
 
-    // Spring simulations for smooth size animation. Position is NOT spring-animated:
-    // X is stateless, derived from CompactLayoutController.HaloX on every frame via
-    // GetAnchoredPosition(), so no animation can ever restore a stale X.
-    private readonly MotionConfig _motionConfig = new();
-    private readonly SpringSimulation _widthSpring;
-    private readonly SpringSimulation _heightSpring;
+    // Fixed-duration tween for smooth size animation. Position is NOT animated:
+    // X is stateless, derived from CompactLayoutController.HaloX on every frame
+    // via GetAnchoredPosition(), so no animation can ever restore a stale X.
+    // The previous spring simulation settled nondeterministically (0.9–2.4 s,
+    // 64–242 frames) and could stall for seconds when the deduped rect stopped
+    // invalidating the compositor — replaced by a deterministic cubic ease-out
+    // (~350 ms expand / ~300 ms collapse) driven by composition frames.
+    private double _currentWidthDip;
+    private double _currentHeightDip;
+    private double _animFromWidth, _animFromHeight;
+    private double _animTargetWidth, _animTargetHeight;
+    private long _animStartMs;
+    private const double ExpandAnimMs = 350;
+    private const double CollapseAnimMs = 300;
 
     private bool _isAnimating = false;
     private readonly System.Diagnostics.Stopwatch _stopwatch = new();
@@ -269,9 +277,8 @@ public class WindowService
         _cachedDisplayArea = DisplayArea.GetFromWindowId(_appWindow.Id, DisplayAreaFallback.Primary);
         _compactLayout.Scale = _cachedScale;
 
-        int initialCompactWidth = (int)Math.Round(_compactLayout.CurrentWidth);
-        _widthSpring  = new SpringSimulation(initialCompactWidth, _motionConfig);
-        _heightSpring = new SpringSimulation(48,  _motionConfig);
+        _currentWidthDip = _compactLayout.CurrentWidth;
+        _currentHeightDip = 48;
 
         _fsClock.Start();
     }
@@ -301,10 +308,8 @@ public class WindowService
 
         _taskbarHeightDips = ComputeTaskbarHeightDips();
 
-        _widthSpring.Current  = width;
-        _widthSpring.Target   = width;
-        _heightSpring.Current = _taskbarHeightDips;
-        _heightSpring.Target  = _taskbarHeightDips;
+        _currentWidthDip = width;
+        _currentHeightDip = _taskbarHeightDips;
 
         int rawWidth  = (int)Math.Round(width              * _cachedScale);
         int rawHeight = (int)Math.Round(_taskbarHeightDips * _cachedScale);
@@ -574,6 +579,12 @@ public class WindowService
     public void UpdateDrag() { }
     public void EndDrag()   { }
 
+    // ── Profile counters (temporary — remove after profiling).
+    private int _profileFrameCount;
+    private int _profileAppliedCount;
+    private long _profileStartMs;
+    private long _profileFirstFrameMs;
+
     // ── Animation ──────────────────────────────────────────────────────────
 
     private void StopAnimations()
@@ -591,8 +602,43 @@ public class WindowService
     /// </summary>
     public void StartSizeAnimation(int targetWidth, int targetHeight)
     {
-        _widthSpring.Target  = targetWidth;
-        _heightSpring.Target = targetHeight;
+        // Robustness guard: if a previous tween is still flagged as running but
+        // its fixed wall-clock duration has already elapsed, the composition
+        // loop must have starved on fully-deduped frames before the settle
+        // condition could run (the dedupe keep-alive is an indirect
+        // invalidation and is not guaranteed). Snap the stale state to its own
+        // target so this retarget starts from correct geometry instead of a
+        // frozen mid-animation size.
+        if (_isAnimating)
+        {
+            long staleElapsed = Environment.TickCount64 - _animStartMs;
+            double staleDuration = _animTargetHeight >= _animFromHeight ? ExpandAnimMs : CollapseAnimMs;
+            if (staleElapsed >= staleDuration)
+            {
+                _currentWidthDip = _animTargetWidth;
+                _currentHeightDip = _animTargetHeight;
+                _isAnimating = false;
+                Microsoft.UI.Xaml.Media.CompositionTarget.Rendering -= OnRendering;
+            }
+        }
+
+        // Retarget from the CURRENT geometry: an interrupt mid-animation simply
+        // re-bases the tween (no stacked/overlapping loops — the Rendering
+        // subscription is created once and never duplicated).
+        _animFromWidth = _currentWidthDip;
+        _animFromHeight = _currentHeightDip;
+        _animTargetWidth = targetWidth;
+        _animTargetHeight = targetHeight;
+        _animStartMs = Environment.TickCount64;
+
+        // Profile counters reset per segment (a retarget starts a new segment)
+        // so the settled report reflects this animation only.
+        _profileFrameCount = 0;
+        _profileAppliedCount = 0;
+        _profileStartMs = _animStartMs;
+        _profileFirstFrameMs = 0;
+
+        Logger.Info($"[PROFILE] StartSizeAnimation → {targetWidth}×{targetHeight} ms={_profileStartMs}");
 
         if (!_isAnimating)
         {
@@ -600,7 +646,6 @@ public class WindowService
             _cachedDisplayArea = DisplayArea.GetFromWindowId(_appWindow.Id, DisplayAreaFallback.Primary);
             _taskbarHeightDips = ComputeTaskbarHeightDips();
 
-            Logger.Info($"Animation started → {targetWidth}×{targetHeight}");
             _isAnimating = true;
             _stopwatch.Restart();
             Microsoft.UI.Xaml.Media.CompositionTarget.Rendering += OnRendering;
@@ -657,6 +702,7 @@ public class WindowService
             return;
 
         _lastProfileTarget = (width, height);
+        Logger.Info($"[PROFILE] SetProfile({profile}) → ({width}×{height}) ms={Environment.TickCount64}");
         StartSizeAnimation(width, height);
     }
 
@@ -686,29 +732,54 @@ public class WindowService
         if (dt > 0.03) dt = 0.03;
         if (dt <= 0) return;
 
-        _widthSpring.Update(dt);
-        _heightSpring.Update(dt);
+        _profileFrameCount++;
+        long now = Environment.TickCount64;
 
-        int rawW = (int)Math.Round(_widthSpring.Current  * _cachedScale);
-        int rawH = (int)Math.Round(_heightSpring.Current * _cachedScale);
-        var pos  = GetAnchoredPosition(rawW, rawH);
-
-        if (_widthSpring.IsSettled() && _heightSpring.IsSettled())
+        if (_profileFirstFrameMs == 0)
         {
-            _widthSpring.SnapToTarget();
-            _heightSpring.SnapToTarget();
+            _profileFirstFrameMs = now;
+            Logger.Info($"[PROFILE] Rendering first frame: {now} gapFromStart={now - _profileStartMs}ms dt={dt * 1000:F1}ms");
+        }
 
-            int finalW   = (int)Math.Round(_widthSpring.Target  * _cachedScale);
-            int finalH   = (int)Math.Round(_heightSpring.Target * _cachedScale);
+        // Deterministic fixed-duration cubic ease-out, evaluated against
+        // wall-clock elapsed time since StartSizeAnimation (or the last retarget).
+        // The animation therefore always ends at the target (~350 ms expand /
+        // ~300 ms collapse) — it cannot linger for seconds due to spring convergence.
+        double elapsed = now - _animStartMs;
+        double duration = _animTargetHeight >= _animFromHeight ? ExpandAnimMs : CollapseAnimMs;
+        double t = Math.Clamp(elapsed / duration, 0.0, 1.0);
+        double eased = 1.0 - Math.Pow(1.0 - t, 3.0);
+
+        _currentWidthDip = _animFromWidth + (_animTargetWidth - _animFromWidth) * eased;
+        _currentHeightDip = _animFromHeight + (_animTargetHeight - _animFromHeight) * eased;
+
+        int rawW = (int)Math.Round(_currentWidthDip * _cachedScale);
+        int rawH = (int)Math.Round(_currentHeightDip * _cachedScale);
+        int finalW = (int)Math.Round(_animTargetWidth * _cachedScale);
+        int finalH = (int)Math.Round(_animTargetHeight * _cachedScale);
+
+        // Settle when the tween is complete OR the rounded rect has visually
+        // reached the target. Ease-out flattens the tail, so waiting for
+        // sub-pixel convergence is what let the old spring stall for seconds.
+        // Settling early also guarantees the settle frame itself applies
+        // geometry, keeping the compositor producing frames until we unsubscribe.
+        if (t >= 1.0 || (rawW == finalW && rawH == finalH))
+        {
+            _currentWidthDip = _animTargetWidth;
+            _currentHeightDip = _animTargetHeight;
             var finalPos = GetAnchoredPosition(finalW, finalH);
 
             ApplyGeometry(finalPos.X, finalPos.Y, finalW, finalH, "Settle");
             _isAnimating = false;
             Microsoft.UI.Xaml.Media.CompositionTarget.Rendering -= OnRendering;
-            Logger.Info("Animation settled.");
+            Logger.Info($"[PROFILE] Animation settled: frames={_profileFrameCount} applied={_profileAppliedCount} duration={now - _profileStartMs}ms");
             return;
         }
 
+        if (_profileFrameCount % 10 == 0)
+            Logger.Info($"[PROFILE] Rendering frame {_profileFrameCount}: ms={now} dt={dt * 1000:F1}ms");
+
+        var pos = GetAnchoredPosition(rawW, rawH);
         ApplyGeometry(pos.X, pos.Y, rawW, rawH, "Frame");
     }
 
@@ -757,12 +828,37 @@ public class WindowService
     /// </summary>
     private void ApplyGeometry(int x, int y, int widthPx, int heightPx, string origin)
     {
-        if (_lastApplied.X != x || _lastApplied.Y != y
-            || _lastApplied.Width != widthPx || _lastApplied.Height != heightPx)
+        // Identical rect — skip the Win32 call entirely. Re-issuing MoveAndResize
+        // for the same effective rectangle would churn the OS window manager and
+        // force a redundant DWM repaint of an unchanged window.
+        if (_lastApplied.X == x && _lastApplied.Y == y
+            && _lastApplied.Width == widthPx && _lastApplied.Height == heightPx)
         {
-            _lastApplied = new RectInt32(x, y, widthPx, heightPx);
+            // While animating, a fully-deduped frame would stop invalidating the
+            // window, and CompositionTarget.Rendering would stop firing before
+            // the tween's settle condition is ever evaluated. Request a cheap
+            // layout invalidation to keep the composition loop alive.
+            if (_isAnimating)
+            {
+                _window.Content.InvalidateArrange();
+            }
+            return;
+        }
+
+        // Profile counter: actual MoveAndResize calls (deduped skips excluded).
+        _profileAppliedCount++;
+
+        _lastApplied = new RectInt32(x, y, widthPx, heightPx);
+
+        // Per-frame animation steps are deliberately NOT logged: a spring settles
+        // over ~30-60 frames and every log line is a file write. The final
+        // "Settle" frame and all non-animation origins still log, so every real
+        // geometry change stays visible without disk I/O per animation frame.
+        if (origin != "Frame")
+        {
             Logger.Info($"[MOVE] {origin}: haloX={_compactLayout.HaloX:F1} finalX={x} finalY={y} w={widthPx} h={heightPx}");
         }
+
         _appWindow.MoveAndResize(new RectInt32(x, y, widthPx, heightPx));
     }
 
@@ -784,24 +880,48 @@ public class WindowService
         "ShellExperienceHost",
     };
 
-    private static bool IsShellHostWindow(IntPtr hwnd)
+    // Shell-host check cache: the z-order guard runs IsFullscreenModeActive every
+    // 150 ms, and the common case (any app window in the foreground) reaches
+    // IsShellHostWindow — a Process.GetProcessById().ProcessName query that used
+    // to allocate a Process object every single tick. Re-query at most once per
+    // second per PID; a recycled PID within the TTL only delays a classification
+    // by ≤1 s, which is invisible to the debounced fullscreen logic.
+    private uint _shellHostPid;
+    private bool _shellHostResult;
+    private long _shellHostCheckedAtMs = long.MinValue;
+    private static readonly long ShellHostCheckTtlMs = 1000;
+
+    private bool IsShellHostWindow(IntPtr hwnd)
     {
         GetWindowThreadProcessId(hwnd, out uint pid);
         if (pid == 0) return false;
+
+        long now = _fsClock.ElapsedMilliseconds;
+        if (pid == _shellHostPid && now - _shellHostCheckedAtMs < ShellHostCheckTtlMs)
+        {
+            return _shellHostResult;
+        }
+
+        _shellHostResult = false;
         try
         {
             using var process = System.Diagnostics.Process.GetProcessById((int)pid);
             foreach (string name in ShellHostProcesses)
             {
                 if (string.Equals(process.ProcessName, name, StringComparison.OrdinalIgnoreCase))
-                    return true;
+                {
+                    _shellHostResult = true;
+                    break;
+                }
             }
         }
         catch (ArgumentException)
         {
             // Process already exited — not a shell host.
         }
-        return false;
+        _shellHostPid = pid;
+        _shellHostCheckedAtMs = now;
+        return _shellHostResult;
     }
 
     private bool IsFullscreenModeActive()

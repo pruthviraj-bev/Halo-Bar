@@ -63,7 +63,7 @@ public partial class ClipboardWidgetViewModel : ObservableObject
                 {
                     try
                     {
-                        var bitmap = new BitmapImage();
+                        var bitmap = new BitmapImage { DecodePixelWidth = 256 };
                         using var stream = await item.ImageStreamRef.OpenReadAsync();
                         await bitmap.SetSourceAsync(stream);
                         ImagePreview = bitmap;

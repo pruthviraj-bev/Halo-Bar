@@ -25,7 +25,16 @@ public class ClipboardImagePathConverter : IValueConverter
 
         try
         {
-            return new BitmapImage(new Uri(path));
+            // Decode downsampled: history thumbnails render at ~64-96 DIP, but a
+            // screenshot source decodes at full resolution by default — wasting
+            // memory and decode time per item, per render. Width-bounded decode
+            // preserves aspect and keeps the pixel cost tiny.
+            var bitmap = new BitmapImage
+            {
+                DecodePixelWidth = 160,
+                UriSource = new Uri(path)
+            };
+            return bitmap;
         }
         catch
         {
