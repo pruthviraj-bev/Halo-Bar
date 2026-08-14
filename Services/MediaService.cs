@@ -15,9 +15,12 @@ namespace DynamicIsland.Services;
 /// </summary>
 public class MediaService
 {
-    // Temporary diagnostic instrumentation for media-session lifecycle tracing.
-    // Remove together with DescribeSession/DescribeApp/FindReferenceIndex once confirmed.
-    private static readonly bool SessionTracing = true;
+    // Media-session lifecycle tracing ([SESSION] logs). Disabled: it is temporary
+    // diagnostics — when enabled, every media event pays for COM queries
+    // (GetPlaybackInfo/GetTimelineProperties/AppInfo) plus 1-4 formatted log lines
+    // on the UI thread, at ~1 Hz during playback. Flip to true to re-enable;
+    // DescribeSession/DescribeApp/FindReferenceIndex are kept for that purpose.
+    private static readonly bool SessionTracing = false;
 
     private GlobalSystemMediaTransportControlsSessionManager? _sessionManager;
     private GlobalSystemMediaTransportControlsSession? _currentSession;

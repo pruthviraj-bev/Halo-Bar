@@ -357,23 +357,31 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
             }
         };
 
-        // Initial query
-        UpdateStats();
+        // Initial query. Pass 16 Mode C (HALO_P16_NODATA=1) skips ALL data
+        // initialization (stats, tasks, weather, clipboard, bluetooth, timer)
+        // while keeping the full visual tree — isolates data/binding cost from
+        // visual/layout cost. Production behavior unchanged.
+        if (!MotionDiagnostics.P16NoData)
+        {
+            UpdateStats();
 
-        // Initialize sample tasks
-        Tasks.Add(new TaskItem { Text = "Review PR #42", IsCompleted = false });
-        Tasks.Add(new TaskItem { Text = "Sync design tokens", IsCompleted = false });
+            // Initialize sample tasks
+            Tasks.Add(new TaskItem { Text = "Review PR #42", IsCompleted = false });
+            Tasks.Add(new TaskItem { Text = "Sync design tokens", IsCompleted = false });
+        }
 
         // Subscribe to real service updates
         App.WeatherService.WeatherUpdated += OnWeatherUpdated;
 
         // Force initial update calls to load values immediately
-        OnWeatherUpdated(null, EventArgs.Empty);
+        if (!MotionDiagnostics.P16NoData)
+            OnWeatherUpdated(null, EventArgs.Empty);
 
         // Wire up the clipboard history list
         App.ClipboardService.History.CollectionChanged += OnClipboardHistoryChanged;
         UpdateFilterVisual();
-        RefreshClipboardFilter();
+        if (!MotionDiagnostics.P16NoData)
+            RefreshClipboardFilter();
 
         // Virtualization profiling + recycling hygiene: track how many row
         // containers are actually realized, and reset reveal-strip visuals when
@@ -384,7 +392,8 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
 
         // Wire up the Bluetooth devices list
         App.BluetoothService.BluetoothUpdated += OnBluetoothUpdated;
-        RefreshBluetoothList();
+        if (!MotionDiagnostics.P16NoData)
+            RefreshBluetoothList();
 
         // Clipboard retention + search: reflect the persisted retention period and
         // enable typing in the search box (WS_EX_NOACTIVATE requires the temporary
@@ -404,7 +413,25 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
             App.MediaService.TickValidation();
             UpdateStats();
         };
-        _updateTimer.Start();
+        if (!MotionDiagnostics.P16NoData)
+            _updateTimer.Start();
+
+        // Pass 16: first real layout marker — the dashboard is constructed at
+        // preload but never measured until first expand (collapsed subtree), so
+        // the first non-zero SizeChanged pinpoints the first-layout instant on
+        // the animation critical path.
+        if (MotionDiagnostics.P16Enabled)
+        {
+            SizeChanged += (_, e) =>
+            {
+                if (!_p16LayoutLogged && e.NewSize.Width > 0 && e.NewSize.Height > 0)
+                {
+                    _p16LayoutLogged = true;
+                    MotionDiagnostics.P16Mark("DashboardFirstLayout", "dashboard",
+                        $"size={(int)e.NewSize.Width}x{(int)e.NewSize.Height}");
+                }
+            };
+        }
     }
 
     // ── Weather Service handler ────────────────────────────────────────────
@@ -716,6 +743,10 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
 
     private int _realizedClipCount;
 
+    // Pass 16: first non-zero layout observed (dashboard is constructed at
+    // preload but only measured on first expand).
+    private bool _p16LayoutLogged;
+
     private void ClipboardRepeater_ElementPrepared(ItemsRepeater sender, ItemsRepeaterElementPreparedEventArgs args)
     {
         _realizedClipCount++;
@@ -770,6 +801,7 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
     private void ExpandedDashboard_Loaded(object sender, RoutedEventArgs e)
     {
         Logger.Info($"[PROFILE-CLIP] first layout ready: realized={_realizedClipCount} containers of {ClipboardItems.Count} items");
+        MotionDiagnostics.P16Mark("DashboardLoaded", "dashboard", $"realized={_realizedClipCount} items={ClipboardItems.Count}");
     }
 
     /// <summary>

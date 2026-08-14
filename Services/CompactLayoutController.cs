@@ -137,6 +137,16 @@ public sealed class CompactLayoutController
 
     public void Start()
     {
+        // Pass 15 diagnostic: HALO_P15_NOCOMPACT=1 skips the repeating poll so
+        // the idle render stream can be attributed to the compact-width poll vs.
+        // other sustainers. One initial measurement still runs so the pill gets
+        // correct geometry. Default behavior unchanged.
+        if (Helpers.MotionDiagnostics.P15NoCompactPoll)
+        {
+            Logger.Info("[P15] compact-width polling disabled (HALO_P15_NOCOMPACT=1, diagnostic).");
+            Poll();
+            return;
+        }
         _pollTimer?.Stop();
         _pollTimer = _dispatcherQueue.CreateTimer();
         _pollTimer.Interval = PollInterval;

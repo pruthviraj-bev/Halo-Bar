@@ -170,18 +170,47 @@
                 </StackPanel>
             </Grid>
 
-            <!-- Drag-over message — visible only while a file is dragged over the pill -->
-            <Border x:Name="DragMessageStrip"
+            <!-- PASS 56: transient "Drop here" popup — appears ABOVE the compact
+                 pill while an external file drag hovers over it. It is an
+                 in-flow StackPanel row (chip + small gap) that occupies the band
+                 the popup region grows into above the pill, horizontally
+                 centered on the pill, so the compact card strip below never
+                 moves and the pill content stays visible underneath. The native
+                 PillDropOverlay HWND owns the actual drag interaction, so this
+                 layer is hit-test transparent and purely visual. -->
+            <Border x:Name="DropHerePopup"
                     Visibility="Collapsed"
-                    Height="32"
-                    Background="#15FFFFFF"
-                    CornerRadius="8"
-                    Margin="8,4">
-                <TextBlock Text="drop file here"
-                           FontSize="11"
-                           Foreground="{ThemeResource TextSecondaryBrush}"
-                           HorizontalAlignment="Center"
-                           VerticalAlignment="Center"/>
+                    Opacity="0"
+                    IsHitTestVisible="False"
+                    HorizontalAlignment="Center"
+                    CornerRadius="24"
+                    BorderThickness="1"
+                    BorderBrush="#33FFFFFF"
+                    Padding="22,0">
+                <Border.Background>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                        <GradientStop Color="#F41C1E26" Offset="0"/>
+                        <GradientStop Color="#F210131A" Offset="1"/>
+                    </LinearGradientBrush>
+                </Border.Background>
+                <Border.RenderTransform>
+                    <CompositeTransform x:Name="DropHerePopupTransform"
+                                        CenterX="0.5"
+                                        CenterY="0.5"/>
+                </Border.RenderTransform>
+                <StackPanel Orientation="Horizontal"
+                            Spacing="8"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center">
+                    <controls:AppIcon Kind="Folder"
+                                      Width="14" Height="14"
+                                      Fill="{ThemeResource TextPrimaryBrush}"/>
+                    <TextBlock Text="Drop here"
+                               FontSize="13"
+                               FontWeight="SemiBold"
+                               Foreground="{ThemeResource TextPrimaryBrush}"
+                               VerticalAlignment="Center"/>
+                </StackPanel>
             </Border>
 
             <!-- Card strip — always visible -->
@@ -198,20 +227,6 @@
                     <cards:FileShelfPillCard x:Name="ShelfCard"
                                             Visibility="Collapsed"/>
                 </StackPanel>
-
-                <!-- Drag overlay -->
-                <Border x:Name="DragOverlay"
-                        CornerRadius="24"
-                        Opacity="0"
-                        IsHitTestVisible="False">
-                    <Border.Background>
-                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                            <GradientStop Color="#44FFFFFF" Offset="0"/>
-                            <GradientStop Color="#11FFFFFF" Offset="0.5"/>
-                            <GradientStop Color="#44FFFFFF" Offset="1"/>
-                        </LinearGradientBrush>
-                    </Border.Background>
-                </Border>
             </Grid>
 
         </StackPanel>

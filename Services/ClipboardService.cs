@@ -67,11 +67,16 @@ public class ClipboardService
 
     private void LoadHistory()
     {
+        long startAlloc = GC.GetAllocatedBytesForCurrentThread();
         foreach (var item in ClipboardHistoryStore.Load())
         {
             History.Add(item);
         }
+        Logger.Info($"[MEM] clipboard load allocated: {(GC.GetAllocatedBytesForCurrentThread() - startAlloc) / 1024.0:F0} KB for {History.Count} items");
         Helpers.Logger.Info($"ClipboardService: loaded {History.Count} history item(s)");
+
+        // Pass 7 T2: process-level footprint after the full history is resident.
+        Helpers.ProcessMemoryProfiler.Checkpoint("ClipboardLoaded");
     }
 
     /// <summary>
@@ -273,34 +278,43 @@ public class ClipboardService
     /// image cannot be decoded. Operates on already-materialized bytes so the clipboard's
     /// single-shot image stream is opened exactly once.
     /// </summary>
-    private static async Task<string?> ComputeImageHashAsync(byte[] imageBytes)
+    /// <remarks>
+    /// Runs entirely on a thread-pool thread: the WinRT decode plus the synchronous
+    /// SHA-256 over the full decoded pixel buffer (a 1080p screenshot decodes to ~8 MB,
+    /// ~10-20 ms of CPU) previously executed on the UI thread's continuation because
+    /// QueryAsync awaits without ConfigureAwait(false).
+    /// </remarks>
+    private static Task<string?> ComputeImageHashAsync(byte[] imageBytes)
     {
-        try
+        return Task.Run(async () =>
         {
-            var stream = new InMemoryRandomAccessStream();
-            var writer = new DataWriter(stream.GetOutputStreamAt(0));
-            writer.WriteBytes(imageBytes);
-            await writer.StoreAsync();
-            writer.DetachStream();
-            stream.Seek(0);
+            try
+            {
+                var stream = new InMemoryRandomAccessStream();
+                var writer = new DataWriter(stream.GetOutputStreamAt(0));
+                writer.WriteBytes(imageBytes);
+                await writer.StoreAsync();
+                writer.DetachStream();
+                stream.Seek(0);
 
-            var decoder = await Windows.Graphics.Imaging.BitmapDecoder.CreateAsync(stream);
-            var frame = await decoder.GetFrameAsync(0);
-            var pixelData = await frame.GetPixelDataAsync(
-                Windows.Graphics.Imaging.BitmapPixelFormat.Bgra8,
-                Windows.Graphics.Imaging.BitmapAlphaMode.Premultiplied,
-                new Windows.Graphics.Imaging.BitmapTransform(),
-                Windows.Graphics.Imaging.ExifOrientationMode.IgnoreExifOrientation,
-                Windows.Graphics.Imaging.ColorManagementMode.DoNotColorManage);
+                var decoder = await Windows.Graphics.Imaging.BitmapDecoder.CreateAsync(stream);
+                var frame = await decoder.GetFrameAsync(0);
+                var pixelData = await frame.GetPixelDataAsync(
+                    Windows.Graphics.Imaging.BitmapPixelFormat.Bgra8,
+                    Windows.Graphics.Imaging.BitmapAlphaMode.Premultiplied,
+                    new Windows.Graphics.Imaging.BitmapTransform(),
+                    Windows.Graphics.Imaging.ExifOrientationMode.IgnoreExifOrientation,
+                    Windows.Graphics.Imaging.ColorManagementMode.DoNotColorManage);
 
-            using var sha = System.Security.Cryptography.SHA256.Create();
-            return Convert.ToHexString(sha.ComputeHash(pixelData.DetachPixelData()));
-        }
-        catch (Exception ex)
-        {
-            Logger.Error("ClipboardService: failed to hash image", ex);
-            return null;
-        }
+                using var sha = System.Security.Cryptography.SHA256.Create();
+                return Convert.ToHexString(sha.ComputeHash(pixelData.DetachPixelData()));
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("ClipboardService: failed to hash image", ex);
+                return null;
+            }
+        });
     }
 
     /// <summary>

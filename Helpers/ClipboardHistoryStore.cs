@@ -27,7 +27,11 @@ public static class ClipboardHistoryStore
 
     private static readonly JsonSerializerOptions SerializerOptions = new()
     {
-        WriteIndented = true
+        // Compact JSON: the 470+ item history was serialized indented at ~5.7 KB
+        // per item (2.68 MB today). Compact encoding roughly halves the file size,
+        // the per-save serialization string, and startup parse time. The file is
+        // internal — deserialization is format-agnostic.
+        WriteIndented = false
     };
 
     /// <summary>

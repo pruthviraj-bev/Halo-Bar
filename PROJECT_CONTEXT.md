@@ -183,11 +183,12 @@ depend on `WindowService`. ViewModels never touch `WindowService`.
   app-strip left edge, resolves the anchor via `IAnchorStrategy`, debounces
   (120 ms settle), applies hysteresis (20 DIP), honors pointer-freeze, and
   raises `WidthChanged` only for settled changes.
-- `WindowService` animates `width`/`height` via two `SpringSimulation`s driven
-  by `CompositionTarget.Rendering`. **X is never animated** — it is stateless,
-  derived every frame from `CompactLayoutController.HaloX` via
-  `GetAnchoredPosition()` (so no animation can restore a stale X). The bottom
-  edge never moves; growth lifts the window above the taskbar.
+- `WindowService` animates `width`/`height` via its own `StartSizeAnimation`
+  cubic ease-out tween driven by `CompositionTarget.Rendering` (`OnRendering`).
+  **X is never animated** — it is stateless, derived every frame from
+  `CompactLayoutController.HaloX` via `GetAnchoredPosition()` (so no animation
+  can restore a stale X). The bottom edge never moves; growth lifts the window
+  above the taskbar.
 - `ApplyGeometry` is the single funnel for every `MoveAndResize`; a `[MOVE]`
   log line makes any geometry write that bypasses the anchor immediately
   visible.
@@ -237,15 +238,15 @@ currentstatus.md          HISTORICAL status snapshot (stale — see Lessons Lear
 PROJECT_CONTEXT.md        This file
 *-Migration-PR*.md        Per-PR migration validation logs (PR 1 Focus, PR 2 Clipboard)
 04-WidgetCard-Validation.md  Live validation log for the WidgetCard shell
-build.log / msbuild_diag.log  Build diagnostics artifacts (not source)
+(build.log / msbuild_diag.log were removed in the PASS 57 cleanup)
 
 Controls/     Reusable UI controls. AppIcon (icon component + AppIcons.cs geometry
               registry + AppIconKind enum), WidgetCard (shared card shell).
               AppIcons.cs is GENERATED — do not hand-edit; source generator script
               (gen_icons.py) is MISSING from the repo (known debt).
-Helpers/      Stateless utilities & immutable snapshots: Logger, SpringSimulation,
-              MotionConfig, WindowProfile, WidgetPriority, NotificationDuration,
-              converters (ClipboardImagePathConverter, FocusProgressToArcConverter,
+Helpers/      Stateless utilities & immutable snapshots: Logger, WindowProfile,
+              WidgetPriority, NotificationDuration, converters
+              (ClipboardImagePathConverter, FocusProgressToArcConverter,
               NullToVisibility, PlayPauseIcon, etc.), persistence stores
               (ClipboardHistoryStore, FocusSessionStore is in Services/),
               state records (MediaState, BatteryState, VolumeState).
@@ -259,8 +260,7 @@ Services/     IslandController, WindowService, CompactLayoutController,
               MediaService, ClipboardService, BatteryService, VolumeService,
               WeatherService, BluetoothService, FocusSessionStore.
 ViewModels/   MainWindowViewModel, MediaWidgetViewModel, ClipboardWidgetViewModel,
-              BatteryWidgetViewModel, VolumeWidgetViewModel, MainPageViewModel
-              (dead/unused — debt).
+              BatteryWidgetViewModel, VolumeWidgetViewModel.
 Views/        MainWindow — the taskbar widget shell window (pill + dashboard).
 Widgets/      Per-widget UserControls: MediaWidget, ClipboardWidget, BatteryWidget,
               VolumeWidget, WeatherCollapsedWidget, PomodoroTimerWidget (dead stub),
@@ -346,17 +346,17 @@ What does not belong: widget-specific logic in `Controls`; raw
   - Window is permanently docked in the taskbar's free zone; X and width come
     from `CompactLayoutController` (`HaloX`/`HaloWidth`), never from a
     screen-relative constant.
-  - No drag, no free positioning, no inertia (`StartDrag/UpdateDrag/EndDrag`
-    are permanent no-ops).
+  - No drag, no free positioning, no inertia (the `StartDrag`/`UpdateDrag`/
+    `EndDrag` stubs were removed in the PASS 57 cleanup).
   - Z-order re-asserted by a 150 ms `HWND_TOPMOST` guard timer (WinEventHook
     delivery is unreliable; ~1 µs/call cost).
   - `WS_EX_TOOLWINDOW` hides from Alt+Tab/taskbar; `WS_EX_NOACTIVATE` prevents
     focus steal.
-- **Animation:** two `SpringSimulation`s (width, height) driven by
-  `CompositionTarget.Rendering` with dt clamping (0.03 s) and settle snap.
-  **X is stateless** — `GetAnchoredPosition` derives it each frame; growth
-  progress interpolates between collapsed height and 664 to lift the window
-  above the taskbar.
+- **Animation:** `StartSizeAnimation` — a cubic ease-out bezier tween (width,
+  height) driven by `CompositionTarget.Rendering` with dt clamping (0.03 s),
+  velocity-aware retargeting, and settle snap. **X is stateless** —
+  `GetAnchoredPosition` derives it each frame; growth progress interpolates
+  between collapsed height and 664 to lift the window above the taskbar.
 - **Fullscreen suppression:** `SHQueryUserNotificationState` (D3D fullscreen /
   presentation mode) + borderless-window fallback; shell-host windows
   (explorer, StartMenuExperienceHost, SearchHost, Widgets,
@@ -1019,8 +1019,8 @@ What does not belong: widget-specific logic in `Controls`; raw
 - Multi-width-tier taskbar content (320/250/170 with content fades) — replaced
   by continuous adaptive width. README still describes the old behavior.
 - Alternative anchor strategies (only `FixedHomeAnchorStrategy` remains).
-- Drag/free-positioning (`WindowService.StartDrag/UpdateDrag/EndDrag` are
-  permanent no-ops).
+- Drag/free-positioning — the `StartDrag`/`UpdateDrag`/`EndDrag` stubs
+  (permanent no-ops) were removed in the PASS 57 cleanup.
 
 ---
 
@@ -1136,10 +1136,11 @@ What does not belong: widget-specific logic in `Controls`; raw
    `IslandController._dashboardWidget` both instantiate `ExpandedDashboard`.
    Pick one owner.
 10. **Remove `SessionTracing` / `[DEBUG]` logging** once session lifecycle is
-    confirmed. Delete dead code (`MainPageViewModel`,
-    `WindowProfileExtensions.ToDimensions` stale branch), remove the orphaned
-    `SectionBorderStyle`, restore `gen_icons.py`, and update README to match
-    the current adaptive-width + dashboard reality.
+    confirmed. DONE in PASS 57: `MainPageViewModel`, `SpringSimulation`,
+    `MotionConfig`, `StartDrag/UpdateDrag/EndDrag`, orphaned `SectionBorderStyle`.
+    Kept: `ToDimensions` (still referenced by `ResolveProfileSize`). Remaining:
+    restore `gen_icons.py`, update README to match the current adaptive-width +
+    dashboard reality.
 
 ---
 
@@ -1211,7 +1212,7 @@ What does not belong: widget-specific logic in `Controls`; raw
 | 10 | Bluetooth poll runs with no consumer | Feature ahead of UI | None | Wire or disable | Low |
 | 11 | `gen_icons.py` missing; `AppIcons.cs` is generated | Generator script not committed | Hand-edit only as last resort | Restore script | Low |
 | 12 | README drift (width tiers, dashboard features, Seattle) | README not updated after redesign | None | Refresh README | Low |
-| 13 | Dead code: `StartDrag/UpdateDrag/EndDrag`, `MainPageViewModel`, stale `ToDimensions` branch, orphaned `SectionBorderStyle`, dead dashboard handlers | Accumulated | None | Prune | Low |
+| 13 | Dead code: `StartDrag/UpdateDrag/EndDrag`, `MainPageViewModel`, stale `ToDimensions` branch, orphaned `SectionBorderStyle`, dead dashboard handlers | Accumulated | None | **Resolved in PASS 57** — stubs/VMs/SpringSimulation/MotionConfig/orphaned style pruned; `ToDimensions` kept (referenced); Quick Tasks handlers kept (planned feature) | Low |
 | 14 | Battery widget opens full 800×664 dashboard for a small note | PreferredProfile = Expanded | None | Small-expanded profile (Open Question) | Medium |
 
 ---
@@ -1297,8 +1298,8 @@ taskbar and watch the width adapt.
   `%LOCALAPPDATA%\DynamicIsland\logs\app.log`. Follow the existing `[TAG]`
   prefixes (`[MOVE]`, `[COMPACT_WIDTH]`, `[SESSION]`, `[CRASH]`, `[ANCHOR-…]`).
 - **Animations:** token durations from `Resources/Tokens.xaml` (`Motion.*`);
-  spring physics via `SpringSimulation`/`MotionConfig` for geometry; predictable
-  settle with snap.
+  `WindowService.StartSizeAnimation` (cubic ease-out tween with velocity-aware
+  retarget) for geometry; predictable settle with snap.
 - **Design tokens:** consume `Spacing.*`, `Radius.*`, `Semantic.*`, `Type.*`,
   `Motion.*`, `Icon.*`, `Control.*`. No inline raw values in new `WidgetCard`
   content. Known exception: `x:Double` tokens cannot feed `Thickness` — see

@@ -19,12 +19,6 @@
         <helpers:NullToVisibilityConverter x:Key="NullToVisibilityConverter" />
         <helpers:NullToVisibilityInverseConverter x:Key="NullToVisibilityInverseConverter" />
         <helpers:FocusProgressToArcConverter x:Key="FocusProgressToArcConverter" />
-        <Style x:Key="SectionBorderStyle" TargetType="Border">
-            <Setter Property="Background" Value="Transparent" />
-            <Setter Property="BorderBrush" Value="Gray" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="Padding" Value="16" />
-        </Style>
 
         <!-- Button styles inside cards -->
         <Style x:Key="CardButtonStyle" TargetType="Button">

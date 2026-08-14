@@ -16,21 +16,29 @@
           PointerExited="RootGrid_PointerExited"
           AutomationProperties.Name="Dynamic Island Container">
 
-
-        <Grid.RowDefinitions>
-            <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
-        </Grid.RowDefinitions>
-
-        <!-- 1. Expanded Dashboard (Row 0) -->
-        <Border Grid.Row="0"
-                x:Name="DashboardBorder"
+        <!-- 1. Expanded Dashboard (fills the window; Pass 9 crossfade: fades +
+             scales in from the compact pill region while the window grows).
+             Opacity/scale are driven by ViewModel properties that follow the
+             geometry animation's shared progress. -->
+        <Border x:Name="DashboardBorder"
                 Background="{ThemeResource IslandBackgroundBrush}"
                 BorderBrush="Transparent"
                 BorderThickness="0"
                 CornerRadius="24"
                 Margin="0,0,0,8"
+                Opacity="{x:Bind ViewModel.DashboardOpacity, Mode=OneWay}"
                 Visibility="{x:Bind ViewModel.ExpandedVisibility, Mode=OneWay}">
+            <Border.RenderTransform>
+                <!-- Render-only transform (no layout cost): CenterX at the compact
+                     pill's horizontal center (~0.19 of the 780-DIP dashboard width),
+                     CenterY at the bottom edge adjacent to the pill — so the
+                     dashboard visually grows out of the pill, not from nowhere. -->
+                <ScaleTransform x:Name="DashboardScaleTransform"
+                                CenterX="0.19"
+                                CenterY="1.0"
+                                ScaleX="{x:Bind ViewModel.DashboardScale, Mode=OneWay}"
+                                ScaleY="{x:Bind ViewModel.DashboardScale, Mode=OneWay}" />
+            </Border.RenderTransform>
             <ContentControl
                 x:Name="DashboardHost"
                 Content="{x:Bind ViewModel.Dashboard, Mode=OneWay}"
@@ -38,16 +46,19 @@
                 VerticalContentAlignment="Stretch" />
         </Border>
 
-        <!-- 2. Collapsed Widget (Row 1) inside taskbar -->
-        <Border Grid.Row="1"
-                x:Name="PillBorder"
+        <!-- 2. Compact pill — bottom overlay (not a layout row) so it never
+             consumes space during the transition: both surfaces coexist and
+             crossfade while the window geometry animates, then the pill is
+             collapsed at the end of expansion. -->
+        <Border x:Name="PillBorder"
                 Background="Transparent"
                 BorderBrush="Transparent"
                 BorderThickness="0"
                 CornerRadius="24"
                 HorizontalAlignment="Stretch"
-                VerticalAlignment="Stretch"
+                VerticalAlignment="Bottom"
                 Margin="0"
+                Opacity="{x:Bind ViewModel.PillOpacity, Mode=OneWay}"
                 Visibility="{x:Bind ViewModel.PillVisibility, Mode=OneWay}"
                 AutomationProperties.Name="Dynamic Island Pill">
 

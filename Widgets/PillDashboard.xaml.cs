@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using DynamicIsland.Helpers;
 using DynamicIsland.Interfaces;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Animation;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Storage;
@@ -17,6 +19,12 @@ public sealed partial class PillDashboard : UserControl, IIslandWidget
 {
     private const double CardGap = 8;
     private const uint ThumbnailSize = 64;
+    // PASS 56: floating "Drop here" popup geometry (DIP). These are the single
+    // source of truth for the chip and the popup region target height; the
+    // chip's Height/Margin are applied in the constructor from these.
+    private const double DropPopupChipWidthDip = 200;
+    private const double DropPopupChipHeightDip = 60;
+    private const double DropPopupGapDip = 4;
     private bool _shelfExpanded;
     private bool _isDragOver;
 
@@ -57,6 +65,11 @@ public sealed partial class PillDashboard : UserControl, IIslandWidget
     public PillDashboard()
     {
         InitializeComponent();
+        // PASS 56: popup chip geometry from the code constants (single source of
+        // truth shared with the region target-height math).
+        DropHerePopup.Width = DropPopupChipWidthDip;
+        DropHerePopup.Height = DropPopupChipHeightDip;
+        DropHerePopup.Margin = new Thickness(0, 0, 0, DropPopupGapDip);
         MusicCard.StateChanged += OnCardStateChanged;
         ShelfCard.StateChanged += OnCardStateChanged;
         ShelfCard.ShelfButtonClicked += OnShelfButtonClicked;
@@ -178,67 +191,274 @@ public sealed partial class PillDashboard : UserControl, IIslandWidget
         App.FileShelfStore.Clear();
     }
 
-    // ── Drag handling ─────────────────────────────────────────────────────────
+    // ── Drag handling (PASS 37 + PASS 38 + PASS 54 + PASS 56) ────────────────
+    // Drag-and-drop hover over the pill shows ONLY the small floating "Drop
+    // here" popup ABOVE the pill (DropHerePopup) — the File Shelf is never
+    // expanded by hover alone and the compact pill content stays untouched.
+    // Drop is the single point where files are staged (then the shelf's normal
+    // icon/count behavior applies).
+    //
+    // PASS 38 (GOAL 2) layer forensics: the real Explorer drag is a WinUI/
+    // Windows drag lifecycle (OLE DragEnter/DragOver/Drop), NOT mouse hover.
+    // Every event is logged as [DRAG] with cursor / data formats /
+    // containsStorageItems / shelf state / hwnd+window rect so the failing
+    // layer (Explorer → Windows drag manager → Halo HWND → XAML drop target →
+    // ExpandShelf) is attributed by evidence. The StorageItems gate is relaxed
+    // to any shell-file format because real Explorer drags are known to arrive
+    // without StorageItems synthesis in unpackaged WinUI 3 apps, and drop-path
+    // resolution prefers the OLE FileDrop format over the flaky
+    // GetStorageItemsAsync (microsoft/microsoft-ui-xaml#9296).
+    // True when the current expansion was opened BY DRAG (vs. the shelf icon
+    // button) — drag-leave must close a drag-opened shelf but must NOT close a
+    // button-opened one. (PASS 54: drags no longer open the shelf, so this only
+    // guards the pre-existing button-opened state.)
+    private bool _dragOpenedShelf;
+    private int _dragOverLogCount;
+
+    private static void LogDrag(string evt, DragEventArgs e, bool hasStorage, bool shelfExpanded, bool dragOver, bool allowDrop)
+    {
+        try
+        {
+            var pt = e.GetPosition(null); // app-window coordinates
+            string formats = string.Join(",", e.DataView.AvailableFormats);
+            bool hasFileDrop = formats.Contains("FileDrop", StringComparison.OrdinalIgnoreCase);
+            bool hasShellIdList = formats.Contains("Shell IDList Array", StringComparison.OrdinalIgnoreCase);
+            // PASS 39 (GOAL 2): HWND-level hit-test attribution — cursor pixel
+            // owner, halo hwnd, insideHaloRegion/insidePillRegion — so the drag
+            // decision tree (hit-test → OLE registration → data formats) can be
+            // answered from a single line.
+            string hitTest = App.Window.DescribeDragHitTest();
+            Logger.Info($"[P39-DRAG] event={evt} cursor=({pt.X:F0},{pt.Y:F0}) dataFormats=[{formats}] " +
+                        $"hasStorageItems={hasStorage} hasFileDrop={hasFileDrop} hasShellIdList={hasShellIdList} " +
+                        $"allowDrop={allowDrop} shelfExpanded={shelfExpanded} dragOver={dragOver} " +
+                        $"{hitTest}");
+        }
+        catch (Exception ex)
+        {
+            Logger.Error("[P39-DRAG] log failed", ex);
+        }
+    }
+
+    // ── PASS 56: floating "Drop here" popup ──────────────────────────────────
+    // During an external file-drag hover the Halo shows a small popup ABOVE the
+    // compact pill. Geometry uses the existing popup system: the pill region
+    // grows upward from the taskbar strip (StartSizeAnimation → the MainWindow
+    // popup stage) while the compact pill stays anchored and its content stays
+    // visible; the popup chip is an in-flow StackPanel row that occupies the
+    // revealed band. The chip also plays a small in/out animation (opacity
+    // 0→1, scale 0.92→1, translateY down→0).
+
+    /// <summary>
+    /// Shows the floating popup. DragEnter must NOT open the File Shelf, expand
+    /// the dashboard, or replace the pill content — it only reveals the popup
+    /// and grows the pill region by the chip height.
+    /// </summary>
+    private void ShowDropHerePopup()
+    {
+        _isDragOver = true;
+        _dragOpenedShelf = !_shelfExpanded;
+        if (App.FileShelfStore.IsFull) return;
+        // The popup belongs to the compact pill — never show it (or resize the
+        // region) while the dashboard is expanded, where the pill is hidden.
+        if (App.IslandController.IsExpanded) return;
+        // An open shelf occupies the band above the pill — never popup over it.
+        if (_shelfExpanded) return;
+
+        DropHerePopup.Visibility = Visibility.Visible;
+        AnimateDropHerePopup(show: true);
+
+        var (w, h) = App.WindowService.CompactSize;
+        App.WindowService.StartSizeAnimation(
+            w, h + (int)DropPopupChipHeightDip + (int)DropPopupGapDip);
+    }
+
+    /// <summary>
+    /// Hides the floating popup and returns the pill region to the compact
+    /// strip. A shelf the user opened with the icon button is left alone.
+    /// </summary>
+    private void HideDropHerePopup()
+    {
+        _isDragOver = false;
+        if (DropHerePopup.Visibility != Visibility.Visible) return;
+
+        AnimateDropHerePopup(show: false);
+
+        // Never shrink an expanded dashboard; the chip is only shown while the
+        // compact pill is the base object, so this never collapses an
+        // icon-opened shelf either.
+        if (App.IslandController.IsExpanded) return;
+        var (w, h) = App.WindowService.CompactSize;
+        App.WindowService.StartSizeAnimation(w, h);
+    }
+
+    private Storyboard? _dropPopupStoryboard;
+
+    private void AnimateDropHerePopup(bool show)
+    {
+        _dropPopupStoryboard?.Stop();
+        _dropPopupStoryboard = null;
+
+        var storyboard = new Storyboard();
+        double ms = 160;
+
+        var opacity = new DoubleAnimation
+        {
+            From = show ? 0.0 : 1.0,
+            To = show ? 1.0 : 0.0,
+            Duration = TimeSpan.FromMilliseconds(ms),
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+        };
+        Storyboard.SetTarget(opacity, DropHerePopup);
+        Storyboard.SetTargetProperty(opacity, "Opacity");
+        storyboard.Children.Add(opacity);
+
+        foreach (var axis in new[] { "ScaleX", "ScaleY" })
+        {
+            var scale = new DoubleAnimation
+            {
+                From = show ? 0.92 : 1.0,
+                To = show ? 1.0 : 0.92,
+                Duration = TimeSpan.FromMilliseconds(ms),
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+            };
+            Storyboard.SetTarget(scale, DropHerePopupTransform);
+            Storyboard.SetTargetProperty(scale, axis);
+            storyboard.Children.Add(scale);
+        }
+
+        var translateY = new DoubleAnimation
+        {
+            From = show ? 10.0 : 0.0,
+            To = show ? 0.0 : 10.0,
+            Duration = TimeSpan.FromMilliseconds(ms),
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+        };
+        Storyboard.SetTarget(translateY, DropHerePopupTransform);
+        Storyboard.SetTargetProperty(translateY, "TranslateY");
+        storyboard.Children.Add(translateY);
+
+        if (!show)
+            storyboard.Completed += OnDropPopupHideCompleted;
+
+        _dropPopupStoryboard = storyboard;
+        storyboard.Begin();
+    }
+
+    private void OnDropPopupHideCompleted(object? sender, object e)
+    {
+        _dropPopupStoryboard = null;
+        if (!_isDragOver)
+            DropHerePopup.Visibility = Visibility.Collapsed;
+    }
+
+    /// <summary>
+    /// PASS 38 (GOAL 2): accepts Explorer file/folder drags regardless of
+    /// whether WinRT surfaces them as StorageItems — real Explorer drags can
+    /// arrive with only the OLE formats (FileDrop / Shell IDList Array) when
+    /// StorageItems synthesis is unavailable. All three mean "a shell item
+    /// drag" and should open the shelf.
+    /// </summary>
+    private static bool DragCarriesFiles(DragEventArgs e)
+    {
+        if (e.DataView.Contains(StandardDataFormats.StorageItems)) return true;
+        foreach (var fmt in e.DataView.AvailableFormats)
+        {
+            if (fmt.Equals("FileDrop", StringComparison.OrdinalIgnoreCase)
+                || fmt.Equals("Shell IDList Array", StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// PASS 38 (GOAL 2): resolves the dropped paths robustly. WinRT's
+    /// GetStorageItemsAsync is known to be unreliable for Explorer drags in
+    /// WinUI 3 (#9296) — prefer the OLE FileDrop format (CF_HDROP → string[]),
+    /// fall back to StorageItems.
+    /// </summary>
+    private static async Task<List<string>> ResolveDroppedPathsAsync(DataPackageView view)
+    {
+        var paths = new List<string>();
+        try
+        {
+            if (view.Contains("FileDrop") && await view.GetDataAsync("FileDrop") is string[] drop)
+                paths.AddRange(drop);
+            if (paths.Count == 0)
+            {
+                var items = await view.GetStorageItemsAsync();
+                foreach (var item in items)
+                    paths.Add(item.Path);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Error("[DRAG] dropped-path resolution failed", ex);
+        }
+        return paths;
+    }
+
     private void OnDragEnter(object sender, DragEventArgs e)
     {
-        if (!e.DataView.Contains(
-                Windows.ApplicationModel.DataTransfer.StandardDataFormats.StorageItems))
-            return;
+        LogDrag("enter", e, e.DataView.Contains(StandardDataFormats.StorageItems), _shelfExpanded, _isDragOver, RootGrid.AllowDrop);
+        if (!DragCarriesFiles(e)) return;
 
         if (App.FileShelfStore.IsFull) return;
 
-        _isDragOver = true;
         e.AcceptedOperation =
             Windows.ApplicationModel.DataTransfer.DataPackageOperation.Copy;
 
-        DragOverlay.Opacity = 1;
-        if (DragMessageStrip != null)
-            DragMessageStrip.Visibility = Visibility.Visible;
-
-        // Only grow pill slightly on drag-over, don't open full
-        if (!_shelfExpanded)
-        {
-            var (width, _) = App.WindowService.CompactSize;
-            App.WindowService.StartSizeAnimation(width, 80);
-        }
+        // PASS 54 + PASS 56: drag-hover over the pill shows ONLY the small
+        // floating "Drop here" popup above the pill — the File Shelf must NOT
+        // expand merely because an item hovers. It opens only when files are
+        // actually dropped.
+        ShowDropHerePopup();
     }
 
     private void OnDragOver(object sender, DragEventArgs e)
     {
-        if (!e.DataView.Contains(
-                Windows.ApplicationModel.DataTransfer.StandardDataFormats.StorageItems))
-            return;
+        // DragOver fires many times per second — log the first one per session
+        // and then only in verbose mode (HALO_P38_DRAGLOG=1 / HALO_P39_DRAGLOG=1).
+        bool hasStorage = e.DataView.Contains(StandardDataFormats.StorageItems);
+        if (Helpers.MotionDiagnostics.EnableP38DragLog
+            || Helpers.MotionDiagnostics.EnableP39DragLog
+            || (++_dragOverLogCount % 20) == 1)
+            LogDrag("over", e, hasStorage, _shelfExpanded, _isDragOver, RootGrid.AllowDrop);
 
-        if (!App.FileShelfStore.IsFull)
-            e.AcceptedOperation =
-                Windows.ApplicationModel.DataTransfer.DataPackageOperation.Copy;
+        if (!DragCarriesFiles(e)) return;
+
+        if (App.FileShelfStore.IsFull) return;
+
+        e.AcceptedOperation =
+            Windows.ApplicationModel.DataTransfer.DataPackageOperation.Copy;
+
+        // PASS 54: hover never expands the shelf — the "Drop here" popup
+        // (already shown by OnDragEnter) is the only hover visual.
     }
 
     private void OnDragLeave(object sender, DragEventArgs e)
     {
+        LogDrag("leave", e, e.DataView.Contains(StandardDataFormats.StorageItems), _shelfExpanded, _isDragOver, RootGrid.AllowDrop);
         if (!_isDragOver) return;
         _isDragOver = false;
 
-        DragOverlay.Opacity = 0;
-        if (DragMessageStrip != null)
-            DragMessageStrip.Visibility = Visibility.Collapsed;
+        HideDropHerePopup();
 
-        if (!_shelfExpanded)
-        {
-            var (width, height) = App.WindowService.CompactSize;
-            App.WindowService.StartSizeAnimation(width, height);
-        }
+        // Close only a shelf that was opened by the drag itself; a shelf the
+        // user opened with the icon button stays open.
+        if (_dragOpenedShelf && _shelfExpanded)
+            CollapseShelf();
+        _dragOpenedShelf = false;
     }
 
     private async void OnDrop(object sender, DragEventArgs e)
     {
+        LogDrag("drop", e, e.DataView.Contains(StandardDataFormats.StorageItems), _shelfExpanded, _isDragOver, RootGrid.AllowDrop);
         _isDragOver = false;
-        DragOverlay.Opacity = 0;
-        if (DragMessageStrip != null)
-            DragMessageStrip.Visibility = Visibility.Collapsed;
+        _dragOpenedShelf = false;
+        HideDropHerePopup();
 
-        if (!e.DataView.Contains(
-                Windows.ApplicationModel.DataTransfer.StandardDataFormats.StorageItems))
+        var paths = await ResolveDroppedPathsAsync(e.DataView);
+        if (paths.Count == 0)
         {
             // Nothing valid dropped — collapse back to pill
             if (_shelfExpanded)
@@ -251,12 +471,82 @@ public sealed partial class PillDashboard : UserControl, IIslandWidget
             return;
         }
 
-        var items = await e.DataView.GetStorageItemsAsync();
-        foreach (var item in items)
-            App.FileShelfStore.TryAdd(item.Path);
+        foreach (var path in paths)
+            App.FileShelfStore.TryAdd(path);
 
         // Collapse back to pill after drop — shelf icon will appear
         // showing the count. User clicks shelf icon to see contents.
+        CollapseShelf();
+    }
+
+    // ── PASS 47 (GOAL 2) — native OLE drag signal entry points ─────────────
+    // Explorer file drags do not surface as XAML DragEnter on this window, so
+    // WindowService's OLE drop target calls these instead of OnDragEnter etc.
+    // They mirror the XAML handlers minus the event args: the ENTER signal is
+    // accepted without resolving the payload (QueryGetData only), the DROP is
+    // the single place that resolves it.
+
+    /// <summary>
+    /// Native OLE drag-enter signal. Mirrors <see cref="OnDragEnter"/>: accepts
+    /// any shell-file drag. PASS 54/PASS 56: this must NOT mutate the shelf's
+    /// expanded state — it shows only the transient floating "Drop here" popup
+    /// above the compact pill. The File Shelf opens only when files are
+    /// actually dropped. The payload is NOT resolved here.
+    /// </summary>
+    public void NotifyExternalDragEnter()
+    {
+        Logger.Info($"[SHELF-EXT] NotifyExternalDragEnter isDragOver={_isDragOver} shelfExpanded={_shelfExpanded} full={App.FileShelfStore.IsFull}");
+        if (App.FileShelfStore.IsFull) return;
+        if (_isDragOver) return;
+
+        ShowDropHerePopup();
+    }
+
+    /// <summary>
+    /// Native OLE drag-leave signal. Mirrors <see cref="OnDragLeave"/>: closes
+    /// only a shelf that the drag itself opened.
+    /// </summary>
+    public void NotifyExternalDragLeave()
+    {
+        Logger.Info($"[SHELF-EXT] NotifyExternalDragLeave isDragOver={_isDragOver} shelfExpanded={_shelfExpanded}");
+        if (!_isDragOver) return;
+        _isDragOver = false;
+
+        HideDropHerePopup();
+
+        if (_dragOpenedShelf && _shelfExpanded)
+            CollapseShelf();
+        _dragOpenedShelf = false;
+    }
+
+    /// <summary>
+    /// Native OLE drop completion. Mirrors <see cref="OnDrop"/> with the paths
+    /// already resolved by the OLE target: adds them to the shelf and collapses
+    /// back to the pill.
+    /// </summary>
+    public void AcceptExternalDrop(string[] paths)
+    {
+        Logger.Info($"[SHELF-EXT] AcceptExternalDrop pathCount={paths.Length} shelfExpanded={_shelfExpanded}");
+        _isDragOver = false;
+        _dragOpenedShelf = false;
+        HideDropHerePopup();
+
+        if (paths.Length == 0)
+        {
+            // Nothing valid dropped — collapse back to pill
+            if (_shelfExpanded)
+                CollapseShelf();
+            else
+            {
+                var (w, h) = App.WindowService.CompactSize;
+                App.WindowService.StartSizeAnimation(w, h);
+            }
+            return;
+        }
+
+        foreach (var path in paths)
+            App.FileShelfStore.TryAdd(path);
+
         CollapseShelf();
     }
 

@@ -74,6 +74,16 @@ public partial class ClipboardWidgetViewModel : ObservableObject
                         ImagePreview = null;
                     }
                 }
+
+                // Retention: ImageStreamRef holds the FULL captured byte buffer in
+                // memory (~1.7 MB avg per image on this machine; 205 MB across the
+                // 118 persisted images) for the item's entire history lifetime.
+                // This one-time preview is its only consumer — ReCopy prefers the
+                // file-backed stream whenever a file was persisted — so release it
+                // now that the preview rendered (or failed). The transient pill is
+                // dismissed within ~2 s, so nothing can re-read it.
+                if (!string.IsNullOrEmpty(item.ImageFilePath))
+                    item.ImageStreamRef = null;
                 break;
         }
     }

@@ -42,11 +42,21 @@ public class VolumeService
             _lastState = ReadCurrentState();
             Logger.Info($"VolumeService: initialized at {_lastState.VolumePercent}% (muted={_lastState.IsMuted})");
 
-            _pollTimer = _dispatcherQueue.CreateTimer();
-            _pollTimer.Interval = TimeSpan.FromMilliseconds(150);
-            _pollTimer.IsRepeating = true;
-            _pollTimer.Tick += (_, _) => Poll();
-            _pollTimer.Start();
+            // Pass 15 diagnostic: HALO_P15_NOVOLUME=1 skips the 150 ms volume
+            // poll so the idle render stream can be attributed to it vs. other
+            // sustainers. Default behavior unchanged.
+            if (!Helpers.MotionDiagnostics.P15NoVolumePoll)
+            {
+                _pollTimer = _dispatcherQueue.CreateTimer();
+                _pollTimer.Interval = TimeSpan.FromMilliseconds(150);
+                _pollTimer.IsRepeating = true;
+                _pollTimer.Tick += (_, _) => Poll();
+                _pollTimer.Start();
+            }
+            else
+            {
+                Logger.Info("[P15] volume polling disabled (HALO_P15_NOVOLUME=1, diagnostic).");
+            }
         }
         catch (Exception ex)
         {

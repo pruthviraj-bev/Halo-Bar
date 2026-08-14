@@ -62,15 +62,28 @@ public sealed partial class ClipboardWidget : UserControl, IIslandWidget
         ViewModel = new ClipboardWidgetViewModel(item);
     }
 
-    private void OnPointerEntered(object sender, PointerRoutedEventArgs e)
+    /// <summary>
+    /// Hover-enter from the region monitor (PASS 35). The stable-window
+    /// per-frame SetWindowRgn can drop the XAML PointerEntered, so MainWindow's
+    /// region-accurate hover monitor is the hover authority and feeds this
+    /// method directly. Idempotent: a repeat enter while the countdown is
+    /// already running (or the preview already expanded) does not restart it.
+    /// </summary>
+    public void NotifyHoverEnter()
     {
+        if (_isWidgetExpanded)
+        {
+            // Already expanded — the cursor is back over the preview; cancel
+            // any pending collapse so it stays open while hovered.
+            _leaveTimer?.Stop();
+            _leaveTimer = null;
+            return;
+        }
+        if (_hoverTimer != null) return; // countdown already running
+
         // While the cursor is over the pill it must never time out; re-entering
         // the area also cancels any pending collapse.
         App.IslandController.CancelAutoDismiss();
-        _leaveTimer?.Stop();
-        _leaveTimer = null;
-
-        _hoverTimer?.Stop();
         _hoverTimer = DispatcherQueue.CreateTimer();
         _hoverTimer.Interval = TimeSpan.FromMilliseconds(400); // 400ms hover delay
         _hoverTimer.IsRepeating = false;
@@ -81,7 +94,11 @@ public sealed partial class ClipboardWidget : UserControl, IIslandWidget
         _hoverTimer.Start();
     }
 
-    private void OnPointerExited(object sender, PointerRoutedEventArgs e)
+    /// <summary>
+    /// Hover-leave from the region monitor (PASS 35) — the mirror of
+    /// <see cref="NotifyHoverEnter"/>.
+    /// </summary>
+    public void NotifyHoverExit()
     {
         _hoverTimer?.Stop();
         _hoverTimer = null;
@@ -107,6 +124,12 @@ public sealed partial class ClipboardWidget : UserControl, IIslandWidget
             App.IslandController.RenewAutoDismiss(NotificationDuration.Short);
         }
     }
+
+    private void OnPointerEntered(object sender, PointerRoutedEventArgs e)
+        => NotifyHoverEnter();
+
+    private void OnPointerExited(object sender, PointerRoutedEventArgs e)
+        => NotifyHoverExit();
 
     private void OnPointerPressed(object sender, PointerRoutedEventArgs e)
     {
