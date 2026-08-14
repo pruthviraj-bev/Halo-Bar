@@ -84,12 +84,16 @@
             <Grid.RowDefinitions>
                 <RowDefinition Height="*" MinHeight="320"/>
                 <RowDefinition Height="Auto"/>
-                <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
-        <!-- Unified top area – left column: Stats + Focus Session, right column: Clipboard -->
-        <Grid Grid.Row="0" RowDefinitions="*" ColumnDefinitions="2*,3*" RowSpacing="8" ColumnSpacing="8">
-            <!-- LEFT column – Bluetooth devices (hardcoded for now) + Focus Session (fills remaining height) -->
-            <Grid Grid.Column="0" RowDefinitions="Auto,*" RowSpacing="12">
+        <!-- PASS 2 (V1 REDESIGN): asymmetric two-column composition of the four
+             primary cards. Left column (2/5): Bluetooth (compact, Auto) over
+             Focus Session (fills — square-ish area for the ring). Right column
+             (3/5): Clipboard (fills — tall) over Music (Auto — wide/landscape).
+             Gutters: Spacing.M (12) on both axes. Card surfaces, internal
+             contents, the header zone, and the footer are untouched. -->
+        <Grid Grid.Row="0" ColumnDefinitions="2*,3*" ColumnSpacing="{StaticResource Spacing.M}">
+            <!-- LEFT column – Bluetooth (compact, top) + Focus Session (fills remaining height) -->
+            <Grid Grid.Column="0" RowDefinitions="Auto,*" RowSpacing="{StaticResource Spacing.M}">
                 <!-- Bluetooth devices card – data-bound to App.BluetoothService (event-driven AEP watcher).
                      Empty/loading states render from the adapter status; compact sizing keeps the
                      Focus card below it from being squeezed. -->
@@ -255,8 +259,9 @@
                 </controls:WidgetCard>
             </Grid>
 
-            <!-- RIGHT column – clipboard history in the shared WidgetCard shell -->
-            <controls:WidgetCard Grid.Column="1" IsTabStop="False">
+            <!-- RIGHT column – Clipboard (fills — tall, upper-right) + Music (Auto — wide, lower-right) -->
+            <Grid Grid.Column="1" RowDefinitions="*,Auto" RowSpacing="{StaticResource Spacing.M}">
+                <controls:WidgetCard Grid.Row="0" IsTabStop="False">
                 <controls:WidgetCard.HeaderContent>
                     <!-- Header row: title + All/Pinned filter toggle + retention selector -->
                     <Grid ColumnDefinitions="Auto,Auto,Auto" HorizontalAlignment="Left" VerticalAlignment="Center">
@@ -372,11 +377,12 @@
                         </ScrollViewer>
                     </Grid>
                 </controls:WidgetCard.BodyContent>
-            </controls:WidgetCard>
-        </Grid>
+                </controls:WidgetCard>
 
-        <!-- Now Playing (original content wrapped in outline) -->
-        <Border Grid.Row="1" BorderBrush="Gray" BorderThickness="1" Padding="0">
+                <!-- Music card (PASS 2): the existing Now Playing section, moved
+                     unchanged from its full-width row into the lower-right card
+                     slot. Card surface redesign is deferred to the material pass. -->
+                <Border Grid.Row="1" BorderBrush="Gray" BorderThickness="1" Padding="0">
             <Grid RowDefinitions="Auto,*,Auto">
                 <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,6">
                     <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6">
@@ -439,10 +445,12 @@
                     </Grid>
                 </Grid>
             </Grid>
-        </Border>
+                </Border>
+            </Grid>
+        </Grid>
 
-        <!-- Footer strip: system stats (moved from left column) + weather + settings -->
-        <Grid Grid.Row="2" ColumnDefinitions="Auto,Auto,Auto,*,Auto" Height="30" Margin="0,8,0,0">
+        <!-- Footer strip: system stats + weather + settings (row 1, unchanged) -->
+        <Grid Grid.Row="1" ColumnDefinitions="Auto,Auto,Auto,*,Auto" Height="30" Margin="0,8,0,0">
             <!-- CPU -->
             <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center" Margin="8,0,0,0">
                 <Ellipse Width="5" Height="5" Fill="{ThemeResource AccentBrush}" Opacity="0.75" VerticalAlignment="Center"/>
