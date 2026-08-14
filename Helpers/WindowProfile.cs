@@ -16,7 +16,7 @@ public enum WindowProfile
     /// <summary>Compact pill — controller-owned adaptive width × live taskbar height. Content-only changes.</summary>
     Collapsed,
 
-    /// <summary>800 × 664 — the expanded dashboard flyout.</summary>
+    /// <summary>Expanded dashboard — 620×640 surface + 3 DIP edge clearance (see HaloGeometry).</summary>
     Expanded,
 }
 
@@ -25,7 +25,10 @@ public static class WindowProfileExtensions
     /// <summary>Returns the logical DIP dimensions (width, height) for a profile.</summary>
     public static (int Width, int Height) ToDimensions(this WindowProfile profile) => profile switch
     {
-        WindowProfile.Expanded => (800, 664),
+        // PASS 1 (V1 REDESIGN): the expanded envelope = the 620×640 dashboard
+        // surface + 3 DIP edge clearance (left + bottom). The taskbar strip is
+        // added by WindowService at init; the compact pill is unchanged.
+        WindowProfile.Expanded => ((int)HaloGeometry.ExpandedEnvelopeWidthDip, (int)HaloGeometry.ExpandedEnvelopeHeightDip),
         _                      => (CompactLayoutController.CompactIdealWidth, 40),
     };
 }

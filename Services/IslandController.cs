@@ -60,7 +60,7 @@ public class IslandController
     private UserControl? _dashboardWidget;
 
     // Pass 17: true once the dashboard's first real measure/arrange (its
-    // explicit 780×640) has completed OFF the click path — either via the
+    // explicit 620×640, PASS 1) has completed OFF the click path — either via the
     // invisible preload warm-up or via an earlier real expansion. When true,
     // the first user expand re-lays-out the already-warm tree (Pass 16 warm
     // mode: ~15–18 samples, max 31–32 ms, h33=0) instead of paying the
@@ -369,15 +369,16 @@ public class IslandController
     }
 
     /// <summary>
-    /// Pass 17 core (UI thread). The dashboard XAML root declares Width=780 /
-    /// Height=640, so a temporary window sized to the production expanded
-    /// profile (800×664 DIP via WindowService.ResolveProfileSize) arranges it
-    /// at exactly its production size. The temp window is positioned far
-    /// outside every monitor, styled tool-window + no-activate (no taskbar
-    /// button, no focus steal) BEFORE first show, and closed immediately after
-    /// the synchronous layout. No production motion runs, no window geometry
-    /// changes, no pill state changes — the warm-up is never visible. Any
-    /// failure falls back to the existing cold expand path unchanged.
+    /// Pass 17 core (UI thread). The dashboard XAML root declares Width=620 /
+    /// Height=640 (PASS 1), so a temporary window sized to the production
+    /// expanded profile (623×643 DIP via WindowService.ResolveProfileSize —
+    /// HaloGeometry) arranges it at exactly its production size. The temp
+    /// window is positioned far outside every monitor, styled tool-window +
+    /// no-activate (no taskbar button, no focus steal) BEFORE first show, and
+    /// closed immediately after the synchronous layout. No production motion
+    /// runs, no window geometry changes, no pill state changes — the warm-up
+    /// is never visible. Any failure falls back to the existing cold expand
+    /// path unchanged.
     /// </summary>
     private async void WarmupDashboardLayoutCore()
     {
@@ -418,7 +419,8 @@ public class IslandController
             // Same content area the production window gives the dashboard
             // (DIPs → physical at this window's scale; primary-monitor scale,
             // matching the docked window).
-            var (dipW, dipH) = App.WindowService?.ResolveProfileSize(WindowProfile.Expanded) ?? (800, 664);
+            var (dipW, dipH) = App.WindowService?.ResolveProfileSize(WindowProfile.Expanded)
+                ?? ((int)HaloGeometry.ExpandedEnvelopeWidthDip, (int)HaloGeometry.ExpandedEnvelopeHeightDip);
             double scale = GetDpiForWindow(hwnd) / 96.0;
             appWindow.Resize(new SizeInt32(
                 (int)Math.Round(dipW * scale),
@@ -428,15 +430,15 @@ public class IslandController
 
             // Force the first measure/arrange synchronously; if the first
             // present is still pending, yield a few dispatcher turns and
-            // re-check against the dashboard's explicit 780×640.
+            // re-check against the dashboard's explicit 620×640 (PASS 1).
             for (int i = 0; i < 6; i++)
             {
                 dashboard.UpdateLayout();
-                if (dashboard.ActualWidth >= 760.0 && dashboard.ActualHeight >= 620.0) break;
+                if (dashboard.ActualWidth >= 610.0 && dashboard.ActualHeight >= 630.0) break;
                 await Task.Yield();
             }
 
-            bool ok = dashboard.ActualWidth >= 760.0 && dashboard.ActualHeight >= 620.0;
+            bool ok = dashboard.ActualWidth >= 610.0 && dashboard.ActualHeight >= 630.0;
 
             // Window teardown is best-effort: even if Close() throws, the layout
             // succeeded, so the warm state must be recorded regardless.

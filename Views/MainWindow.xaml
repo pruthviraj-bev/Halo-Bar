@@ -19,22 +19,28 @@
         <!-- 1. Expanded Dashboard (fills the window; Pass 9 crossfade: fades +
              scales in from the compact pill region while the window grows).
              Opacity/scale are driven by ViewModel properties that follow the
-             geometry animation's shared progress. -->
+             geometry animation's shared progress.
+             PASS 1 (V1 REDESIGN): outer radius 16 DIP and a 3 DIP edge
+             clearance on the left + bottom (Margin 3,0,0,3), so the dashboard
+             no longer visually touches the left edge or the taskbar boundary.
+             Height is set in code (640); the compact pill below keeps its own
+             24 DIP radius and flush-left home (pill not redesigned). -->
         <Border x:Name="DashboardBorder"
                 Background="{ThemeResource IslandBackgroundBrush}"
                 BorderBrush="Transparent"
                 BorderThickness="0"
-                CornerRadius="24"
-                Margin="0,0,0,8"
+                CornerRadius="16"
+                Margin="3,0,0,3"
                 Opacity="{x:Bind ViewModel.DashboardOpacity, Mode=OneWay}"
                 Visibility="{x:Bind ViewModel.ExpandedVisibility, Mode=OneWay}">
             <Border.RenderTransform>
                 <!-- Render-only transform (no layout cost): CenterX at the compact
-                     pill's horizontal center (~0.19 of the 780-DIP dashboard width),
-                     CenterY at the bottom edge adjacent to the pill — so the
-                     dashboard visually grows out of the pill, not from nowhere. -->
+                     pill's horizontal center (~0.28 of the 620-DIP dashboard width:
+                     pill center ≈175 / 620), CenterY at the bottom edge adjacent to
+                     the pill — so the dashboard visually grows out of the pill,
+                     not from nowhere. -->
                 <ScaleTransform x:Name="DashboardScaleTransform"
-                                CenterX="0.19"
+                                CenterX="0.28"
                                 CenterY="1.0"
                                 ScaleX="{x:Bind ViewModel.DashboardScale, Mode=OneWay}"
                                 ScaleY="{x:Bind ViewModel.DashboardScale, Mode=OneWay}" />

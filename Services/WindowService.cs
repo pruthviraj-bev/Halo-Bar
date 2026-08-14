@@ -464,7 +464,7 @@ public class WindowService
     private const int WM_MOUSEACTIVATE = 0x0021;
     private const int MA_NOACTIVATE    = 3;
     private const int WM_ERASEBKGND    = 0x0014;
-    private const double DropOverlayRegionRadiusDip = 24; // matches MainWindow RegionRadiusDip
+    private const double DropOverlayRegionRadiusDip = 24; // pill radius — matches HaloGeometry.PillRadiusDip (pill not redesigned)
     private const string DropOverlayClass = "DynowinDropOverlay";
 
     private const uint MONITOR_DEFAULTTONEAREST = 2;
@@ -475,8 +475,9 @@ public class WindowService
     private const int DWMWA_NCRENDERING_POLICY = 2;
     private const int DWMNCRP_DISABLED = 1;
     // PASS 46 (GOAL 1): DONOTROUND is the PRODUCTION corner preference. The
-    // visible rounding is owned by SetWindowRgn (CreateRoundRectRgn with
-    // RegionRadiusDip) — DWMWCP_ROUND made DWM additionally draw its own
+    // visible rounding is owned by SetWindowRgn (CreateRoundRectRgn with the
+    // region radius — 16 for the dashboard, 24 for the pill, per
+    // HaloGeometry) — DWMWCP_ROUND made DWM additionally draw its own
     // rounded-corner fringe AROUND the region shape (the dark edge P45 proved
     // follows the region, is content-independent, and has no envelope seam).
     private const int DWMWCP_DONOTROUND = 1;
@@ -689,8 +690,8 @@ public class WindowService
     /// <summary>
     /// PASS 46 (GOAL 1): sets the DWM corner preference to DONOTROUND. The
     /// visible shape rounding is owned by the SetWindowRgn region
-    /// (CreateRoundRectRgn, RegionRadiusDip=24 — matches the design's
-    /// CornerRadius), so DWM must NOT round the window itself: DWMWCP_ROUND made
+    /// (CreateRoundRectRgn — 16 for the dashboard / 24 for the pill, per
+    /// HaloGeometry), so DWM must NOT round the window itself: DWMWCP_ROUND made
     /// Windows 11 DWM draw a dark rounded-corner fringe around the region shape
     /// (P45: boundaryFollows=shape, surfaceDependent=false — present with fully
     /// transparent content, no envelope seam). DONOTROUND removes it while the
@@ -1611,7 +1612,7 @@ public class WindowService
         //  1. Per-pixel alpha — DWM composites the DirectComposition surface
         //     with the XAML alpha channel, so the unpainted window surface is
         //     genuinely transparent and the desktop shows through everywhere
-        //     outside the visible Halo shape (the fixed 800×712 envelope no
+        //     outside the visible Halo shape (the fixed 623×691 envelope no
         //     longer clears to the opaque theme color — the persistent black
         //     surface behind the pill/dashboard, Pass 29-30). This is the only
         //     mechanism that satisfies "desktop visible outside the visible
@@ -1643,7 +1644,7 @@ public class WindowService
         // reach DWM after a SWP_FRAMECHANGED re-frame — the documented
         // requirement for changing window data via SetWindowLong ("you must
         // call SetWindowPos for the changes to take effect"). Without it DWM
-        // keeps its cached non-client frame/shadow for the fixed 800×712
+        // keeps its cached non-client frame/shadow for the fixed 623×691
         // envelope rect, which is the machine-specific dark rectangle around
         // the Halo: the style bits (WS_POPUP / WS_EX_LAYERED) read correctly
         // from GetWindowLong, so every previous headless probe looked clean,
@@ -2139,8 +2140,10 @@ public class WindowService
                 return ((int)Math.Round(effective), _taskbarHeightDips);
 
             case WindowProfile.Expanded:
-                // Premium wide grid dashboard flyout
-                return (800, 664);
+                // PASS 1 (V1 REDESIGN): expanded envelope = 620×640 dashboard
+                // surface + 3 DIP left/bottom clearance (HaloGeometry — single
+                // source of truth; the taskbar strip is added at init).
+                return profile.ToDimensions();
 
             default:
                 return profile.ToDimensions();
@@ -2329,7 +2332,10 @@ public class WindowService
 
         double currentHeightDips = rawHeightPhysical / scale;
         double collapsedHeight = _taskbarHeightDips;
-        double expandedHeight = 664;
+        // PASS 1: expanded envelope height (640 dashboard + 3 clearance) — the
+        // tween target SetProfile animates to, so progress reaches 1.0 exactly
+        // at the expanded size.
+        double expandedHeight = HaloGeometry.ExpandedEnvelopeHeightDip;
 
         double progress = 0;
         if (expandedHeight > collapsedHeight)

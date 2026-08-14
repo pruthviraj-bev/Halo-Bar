@@ -11,7 +11,7 @@
     xmlns:services="using:DynamicIsland.Services"
     xmlns:controls="using:DynamicIsland.Controls"
     mc:Ignorable="d"
-    Width="780"
+    Width="620"
     Height="640">
 
     <!-- Resources -->

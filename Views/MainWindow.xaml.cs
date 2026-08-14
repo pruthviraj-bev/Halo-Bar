@@ -49,10 +49,12 @@ public sealed partial class MainWindow : Window
     // ── Stable-window geometry (source of truth: WindowService.ResolveProfileSize) ──
     // The expanded profile defines the fixed HWND envelope; the taskbar strip
     // height is measured by WindowService. Resolved from the service at arm time.
-    private double _windowWidthDip = 800;
-    private double _dashboardHeightDip = 664;
+    // PASS 1 (V1 REDESIGN): _windowWidthDip is the envelope width (620 dashboard
+    // + 3 clearance); _dashboardHeightDip is the dashboard's vertical extent in
+    // the window — 640 surface + 3 bottom clearance — i.e. the strip top.
+    private double _windowWidthDip = HaloGeometry.ExpandedEnvelopeWidthDip;      // 623
+    private double _dashboardHeightDip = HaloGeometry.ExpandedEnvelopeHeightDip; // 643 (strip top)
     private double _stripHeightDip = 48;
-    private const double RegionRadiusDip = 24; // matches the design's CornerRadius
 
     // Visual stage state: clip reveal + pill translate + region.
     private RectangleGeometry? _revealClip;
@@ -62,7 +64,7 @@ public sealed partial class MainWindow : Window
     private bool _expanding;
     private bool _drivingDashboard; // clip/translate (real compact↔expanded)
     private bool _drivingWidth;     // compact pill width tweak
-    private double _clipTop = 664;  // DIPs; dashboard height → pill strip only
+    private double _clipTop = HaloGeometry.ExpandedEnvelopeHeightDip; // DIPs; dashboard extent → pill strip only
     private double _clipFrom, _clipTo;
     private double _tyFrom, _tyTo;
     private double _pillBottomDip;  // DIPs; bottom edge of the pill strip (window-client)
@@ -75,7 +77,7 @@ public sealed partial class MainWindow : Window
     // preview (180) and drag-over (80) grow the pill upward from the taskbar
     // strip. The stable-window stage models this as a third shape alongside the
     // compact pill and the expanded dashboard: the reveal clip top animates
-    // between the strip top (664) and (strip top − popup height), and the region
+    // between the strip top (643) and (strip top − popup height), and the region
     // tracks a pill-width × popup-height rect anchored at the window bottom.
     private bool _drivingPopup;
     private bool _settledPopup;
@@ -226,8 +228,13 @@ public sealed partial class MainWindow : Window
             // dark tint (TintOpacity) keeps the Halo content readable on any
             // wallpaper. Tune these two floats only if the glass reads too
             // light/dark on the user's desktop.
-            _acrylicController.TintColor = Windows.UI.Color.FromArgb(255, 20, 20, 20);
-            _acrylicController.TintOpacity = 0.45f;
+            // PASS 1 (V1 REDESIGN): the dark/black Halo tint is ~15% — black at
+            // 0.15 opacity over the existing translucent backdrop, per
+            // DesignRules §3.4 (Surface.HaloTint starting value). The wallpaper
+            // stays subtly visible through the Halo surface; no extra glass
+            // layers, no opaque surface.
+            _acrylicController.TintColor = Windows.UI.Color.FromArgb(255, 0, 0, 0);
+            _acrylicController.TintOpacity = 0.15f;
             _acrylicController.LuminosityOpacity = 0.55f;
 
             var supportsSystemBackdrop = this.As<ICompositionSupportsSystemBackdrop>();
@@ -246,10 +253,12 @@ public sealed partial class MainWindow : Window
         // full-envelope frost; note it reads more solid than the system
         // backdrop because there is nothing behind it to blur inside the
         // layered window.
+        // PASS 1: the fallback brush follows the same ~15% dark-tint intent as
+        // the window-level backdrop (black @ 0.15).
         var shaped = new AcrylicBrush
         {
-            TintColor = Windows.UI.Color.FromArgb(255, 46, 46, 46),
-            TintOpacity = 0.55,
+            TintColor = Windows.UI.Color.FromArgb(255, 0, 0, 0),
+            TintOpacity = 0.15,
             TintLuminosityOpacity = 0.35,
         };
         PillBorder.Background = shaped;
@@ -282,8 +291,11 @@ public sealed partial class MainWindow : Window
         RootGrid.LayoutUpdated += OnRootLayoutUpdated;
 
         // Dashboard pinned to the window top at its production height; the pill
-        // stays bottom-anchored in the remaining taskbar strip.
-        DashboardBorder.Height = _dashboardHeightDip;
+        // stays bottom-anchored in the remaining taskbar strip. PASS 1: the
+        // border is the 620×640 dashboard surface (its left/bottom Margin in
+        // XAML applies the 3 DIP edge clearance); _dashboardHeightDip is the
+        // strip top (surface + clearance), not the surface itself.
+        DashboardBorder.Height = HaloGeometry.DashboardHeightDip;
         DashboardBorder.VerticalAlignment = VerticalAlignment.Top;
 
         _pillTranslate = new TranslateTransform();
@@ -307,11 +319,11 @@ public sealed partial class MainWindow : Window
         _hoverMonitorTimer.Start();
 
         // Constrain the compact pill to its production width at its home
-        // position (X=0). In the fixed 800-wide window the pill content would
-        // otherwise stretch to the full window width and the compact region
-        // would expose a full-width frost/hit-test band over the taskbar. The
-        // pill then behaves exactly like the production compact window (width
-        // from ResolveProfileSize, cards centered within it).
+        // position (X=0). In the fixed 623-wide envelope (PASS 1) the pill
+        // content would otherwise stretch to the full window width and the
+        // compact region would expose a full-width frost/hit-test band over the
+        // taskbar. The pill then behaves exactly like the production compact
+        // window (width from ResolveProfileSize, cards centered within it).
         _compactPillW = Math.Max(windowService.ResolveProfileSize(WindowProfile.Collapsed).Width, 1);
         PillBorder.HorizontalAlignment = HorizontalAlignment.Left;
         PillBorder.Width = _compactPillW;
@@ -329,7 +341,13 @@ public sealed partial class MainWindow : Window
     private void OnRootLayoutUpdated(object? sender, object e)
     {
         if (_clipArmed || _revealClip == null) return;
-        if (RootGrid.ActualWidth < 700 || RootGrid.ActualHeight < 600) return;
+        // Arm-time root is 0×0 — wait until the root is laid out at the fixed
+        // envelope (PASS 1: 623 wide × 691 tall = dashboard 640 + 3 clearance
+        // + taskbar strip 48). Generous -20 DIP tolerance so fractional scale
+        // settles don't delay the arm.
+        if (RootGrid.ActualWidth < HaloGeometry.ExpandedEnvelopeWidthDip - 20
+            || RootGrid.ActualHeight < HaloGeometry.ExpandedEnvelopeHeightDip + _stripHeightDip - 20)
+            return;
         _clipArmed = true;
         RootGrid.LayoutUpdated -= OnRootLayoutUpdated; // once-only; stop the per-layout no-op
         // The taskbar strip is measured by WindowService during InitializeWindow
@@ -389,7 +407,8 @@ public sealed partial class MainWindow : Window
         SetPillHeight(_stripHeightDip);
         IntPtr hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
         double s = GetDpiForWindow(hwnd) / 96.0;
-        int rad = (int)Math.Round(RegionRadiusDip * s);
+        // Compact first frame is the pill — pill radius (24), unchanged by PASS 1.
+        int rad = (int)Math.Round(HaloGeometry.PillRadiusDip * s);
         int y0 = (int)Math.Round(_dashboardHeightDip * s);
         int x1 = (int)Math.Round(_compactPillW * s);
         int y1 = (int)Math.Round((_dashboardHeightDip + _stripHeightDip) * s);
@@ -409,12 +428,14 @@ public sealed partial class MainWindow : Window
         // Region rect (window-client DIPs) depends on the current state:
         //  - collapsed settle → the compact pill rect at its home position,
         //  - expanded settle   → the dashboard rect ONLY (PASS 37: the pill
-        //    disappears on click; dashboardBottom = pillTop = 664 sits flush
-        //    with the taskbar top, and the strip below stays outside the Halo
-        //    — visible + clickable),
+        //    disappears on click; PASS 1: the rect is inset 3 DIP from the
+        //    left edge and its bottom sits 3 DIP above the strip/taskbar top —
+        //    the dashboard no longer touches either edge; the strip below
+        //    stays outside the Halo — visible + clickable),
         //  - animating         → the reveal band between the clip top and the
-        //    reveal bottom (full dashboard width; pill-width only while the
-        //    band is confined to the pill strip on the collapse tail).
+        //    reveal bottom (dashboard width, inset from the left edge;
+        //    pill-width only while the band is confined to the pill strip on
+        //    the collapse tail).
         double x0 = 0, y0, w, h;
         if (_settledCollapsed)
         {
@@ -424,7 +445,12 @@ public sealed partial class MainWindow : Window
         {
             // PASS 37: only the dashboard exists when expanded (the pill strip
             // below is outside the region — taskbar visible + clickable).
-            y0 = 0; w = _windowWidthDip; h = _dashboardHeightDip;
+            // PASS 1: the dashboard rect = surface (620×640) inset from the
+            // left edge and from the strip top by the edge clearance.
+            x0 = HaloGeometry.EdgeClearanceDip;
+            y0 = 0;
+            w = HaloGeometry.DashboardWidthDip;
+            h = HaloGeometry.DashboardHeightDip;
         }
         else if (_settledPopup)
         {
@@ -436,19 +462,27 @@ public sealed partial class MainWindow : Window
         else
         {
             y0 = _clipTop;
-            // PASS 37: during a real dashboard reveal the band is the full
-            // dashboard width (the dashboard spans the window); it stays
-            // pill-width only while the band is confined to the pill strip on
-            // the collapse tail. Popups always stay pill-width.
-            w = (_drivingPopup || _settledPopup || _clipTop >= _dashboardHeightDip - 0.5) ? _compactPillW : _windowWidthDip;
-            // Reveal bottom: dashboard band (bottom fixed at dashboardHeight),
-            // extended to include the pill strip only on the collapse tail
-            // when the pill is fading back in.
+            // PASS 37: during a real dashboard reveal the band is the dashboard
+            // shape (PASS 1: inset from the left edge by the clearance); it
+            // stays pill-width at X=0 only while the band is confined to the
+            // pill strip on the collapse tail. Popups always stay pill-width.
+            bool isPillBand = _drivingPopup || _settledPopup || _clipTop >= _dashboardHeightDip - 0.5;
+            x0 = isPillBand ? 0 : HaloGeometry.EdgeClearanceDip;
+            w = isPillBand ? _compactPillW : HaloGeometry.DashboardWidthDip;
+            // Reveal bottom: dashboard band (bottom fixed at the dashboard's
+            // bottom edge — 3 DIP above the strip top), extended to include
+            // the pill strip only on the collapse tail when the pill is
+            // fading back in.
             h = RevealBottomDip() - _clipTop;
             if (h < 1) h = 1;
         }
 
-        int rad = (int)Math.Round(RegionRadiusDip * s);
+        // PASS 1: the region radius follows the visible shape — 16 for the
+        // dashboard, 24 for the compact pill / popup shapes (pill not redesigned).
+        bool dashboardShape = _settledExpanded
+            || (!_settledCollapsed && !_settledPopup && !_drivingPopup && _clipTop < _dashboardHeightDip - 0.5);
+        double radiusDip = dashboardShape ? HaloGeometry.DashboardRadiusDip : HaloGeometry.PillRadiusDip;
+        int rad = (int)Math.Round(radiusDip * s);
         _regX0 = (int)Math.Round(x0 * s);
         _regY0 = (int)Math.Round(y0 * s);
         _regW = (int)Math.Round((x0 + w) * s) - _regX0;
@@ -482,7 +516,9 @@ public sealed partial class MainWindow : Window
         if (!_drivingDashboard) return _pillBottomDip;
         if (!_expanding && _clipTop >= _dashboardHeightDip - 0.5)
             return _dashboardHeightDip + _stripHeightDip;
-        return _dashboardHeightDip;
+        // PASS 1: the dashboard band is bottom-anchored at the dashboard's
+        // bottom edge (640) — 3 DIP above the strip/taskbar top (643).
+        return HaloGeometry.DashboardHeightDip;
     }
 
     // ── PASS 30 diagnostics (HALO_P30_DUMP=1) ─────────────────────────────
@@ -661,8 +697,8 @@ public sealed partial class MainWindow : Window
             // PASS 29: the pill height follows the REGION height, not the strip:
             // a compact-width tweak can arrive while a popup is settled or
             // mid-animation (region still popup-sized) and must keep the acrylic
-            // filling it. Yields 48 in normal compact (664→712) and the popup
-            // height when one is open.
+            // filling it. Yields 48 in normal compact (643→691, PASS 1) and the
+            // popup height when one is open.
             SetPillHeight(Math.Max(_pillBottomDip - _clipTop, 1));
         }
     }
