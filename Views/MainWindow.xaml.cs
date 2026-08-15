@@ -228,14 +228,13 @@ public sealed partial class MainWindow : Window
             // dark tint (TintOpacity) keeps the Halo content readable on any
             // wallpaper. Tune these two floats only if the glass reads too
             // light/dark on the user's desktop.
-            // PASS 1 (V1 REDESIGN): the dark/black Halo tint is ~15% — black at
-            // 0.15 opacity over the existing translucent backdrop, per
-            // DesignRules §3.4 (Surface.HaloTint starting value). The wallpaper
-            // stays subtly visible through the Halo surface; no extra glass
-            // layers, no opaque surface.
+            // PASS 9 (pill transparency): lowered the window tint so the pill
+            // (and dashboard) bleed the wallpaper — black 0.04 tint + 0.25
+            // luminosity. Iterated from 0.15/0.55 (solid slab) → 0.08/0.35
+            // (bleeding, still blackish) → 0.04/0.25 (more translucent).
             _acrylicController.TintColor = Windows.UI.Color.FromArgb(255, 0, 0, 0);
-            _acrylicController.TintOpacity = 0.15f;
-            _acrylicController.LuminosityOpacity = 0.55f;
+            _acrylicController.TintOpacity = 0.04f;
+            _acrylicController.LuminosityOpacity = 0.25f;
 
             var supportsSystemBackdrop = this.As<ICompositionSupportsSystemBackdrop>();
             _acrylicController.AddSystemBackdropTarget(supportsSystemBackdrop);
@@ -253,13 +252,14 @@ public sealed partial class MainWindow : Window
         // full-envelope frost; note it reads more solid than the system
         // backdrop because there is nothing behind it to blur inside the
         // layered window.
-        // PASS 1: the fallback brush follows the same ~15% dark-tint intent as
-        // the window-level backdrop (black @ 0.15).
+        // PASS 9 (pill transparency): fallback brush follows the same intent
+        // as the window-level backdrop — black @ 0.04, matching the lowered
+        // global tint.
         var shaped = new AcrylicBrush
         {
             TintColor = Windows.UI.Color.FromArgb(255, 0, 0, 0),
-            TintOpacity = 0.15,
-            TintLuminosityOpacity = 0.35,
+            TintOpacity = 0.04,
+            TintLuminosityOpacity = 0.25,
         };
         PillBorder.Background = shaped;
         DashboardBorder.Background = shaped;

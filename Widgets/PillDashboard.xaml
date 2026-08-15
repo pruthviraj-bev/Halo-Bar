@@ -215,11 +215,11 @@
 
             <!-- PASS 9 (final geometry): outer widget — fully translucent
                  black ~2% tint (#05000000), a MODERATE rounded rectangle
-                 (CornerRadius 14 — NOT a capsule; no 999 / half-height
+                 (CornerRadius 12 — NOT a capsule; no 999 / half-height
                  radius), 2 DIP from the taskbar's left edge. Height =
                  TaskbarHeightDips − 2 (set in code-behind — never hardcoded).
-                 3 DIP padding all sides; the inner white 2% rounded panel
-                 (MusicPillCard, CornerRadius 14 — matched) sits inside with a
+                 3 DIP padding all sides; the inner white 1% rounded panel
+                 (MusicPillCard, CornerRadius 12 — matched) sits inside with a
                  faint dark glass rim.
 
                  KEY FIX: CardStrip is a Grid (not StackPanel) so children
@@ -229,7 +229,7 @@
                  cards keep their own explicit sizes (28/32 DIP, centered). -->
             <Border x:Name="CardStripBorder"
                     Background="#05000000"
-                    CornerRadius="14"
+                    CornerRadius="12"
                     Padding="3"
                     HorizontalAlignment="Left">
                 <Grid x:Name="CardStrip"

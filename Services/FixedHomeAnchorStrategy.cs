@@ -3,8 +3,9 @@ using DynamicIsland.Helpers;
 namespace DynamicIsland.Services;
 
 /// <summary>
-/// Single, fixed home position for the pill: X = 0 (the screen/taskbar left
-/// edge). Only the width responds to the taskbar — it takes however much room
+/// Single, fixed home position for the pill: X = 4 (the screen/taskbar left
+/// edge plus a 4 DIP offset, so the pill does not sit flush against the screen
+/// wall). Only the width responds to the taskbar — it takes however much room
 /// genuinely exists between the left edge and the start of the app-button
 /// strip, minus <see cref="CompactLayoutController.SafetyMargin"/> and an
 /// <see cref="UnmeasuredIconBuffer"/> for the Start/Search visuals that sit
@@ -41,11 +42,13 @@ public sealed class FixedHomeAnchorStrategy : IAnchorStrategy
     /// <inheritdoc/>
     public AnchorResult Resolve(TaskbarSnapshot snapshot)
     {
-        // Home is X=0 (screen/taskbar left edge). Width responds to how much
-        // room is free until the app strip begins, less the margins (SafetyMargin
-        // for the strip itself + UnmeasuredIconBuffer for the Start/Search visuals
-        // that sit left of the strip but are not reliably measurable); position
+        // Home is X=4 (taskbar left edge + 4 DIP offset so the pill is not
+        // glued to the screen wall). Width responds to how much room is free
+        // until the app strip begins, less the margins (SafetyMargin for the
+        // strip itself + UnmeasuredIconBuffer for the Start/Search visuals that
+        // sit left of the strip but are not reliably measurable); position
         // never moves.
+        const double LeftOffsetDip = 4;
         double boundary = snapshot.AppStripLeft;
         double available = boundary - CompactLayoutController.SafetyMargin - UnmeasuredIconBuffer;
         double width = Math.Min(CompactLayoutController.CompactIdealWidth, Math.Max(0, available));
@@ -55,9 +58,9 @@ public sealed class FixedHomeAnchorStrategy : IAnchorStrategy
         {
             _lastLoggedBoundary = boundary;
             _lastLoggedWidth = width;
-            Logger.Info($"[ANCHOR-FIXEDHOME] x=0 width={width:F1} available={available:F1} boundary={boundary:F1} buffer={UnmeasuredIconBuffer} source=appStripLeft");
+            Logger.Info($"[ANCHOR-FIXEDHOME] x={LeftOffsetDip} width={width:F1} available={available:F1} boundary={boundary:F1} buffer={UnmeasuredIconBuffer} source=appStripLeft");
         }
 
-        return new AnchorResult(0, width);
+        return new AnchorResult(LeftOffsetDip, width);
     }
 }

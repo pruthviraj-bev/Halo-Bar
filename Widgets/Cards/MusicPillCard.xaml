@@ -24,13 +24,13 @@
     </UserControl.Resources>
 
     <!-- PASS 9 (final geometry): inner music surface — fully translucent
-         white ~2% tint (#05FFFFFF), a MODERATE rounded rectangle
-         (CornerRadius 14 — NOT a capsule; no 999 / half-height radius).
-         2 DIP internal padding all sides. Sits INSIDE the outer black 5%
+         white ~1% tint (#03FFFFFF), a MODERATE rounded rectangle
+         (CornerRadius 12 — NOT a capsule; no 999 / half-height radius).
+         2 DIP internal padding all sides. Sits INSIDE the outer black 2%
          rounded-rectangle shell (PillDashboard CardStripBorder, CornerRadius
-         14 — matched, 3 DIP padding) so a thin dark glass rim separates the
-         two layers: taskbar → black 5% rounded shell → 3 DIP rim → white
-         2% rounded panel → 2 DIP → content.
+         12 — matched, 3 DIP padding) so a thin dark glass rim separates the
+         two layers: taskbar → black 2% rounded shell → 3 DIP rim → white
+         1% rounded panel → 2 DIP → content.
 
          ContentGrid height + album art size are set DYNAMICALLY from
          code-behind (ContentAreaHeight = taskbar − 10) so the content fills
@@ -38,8 +38,8 @@
          size — the parent CardStrip is now a Grid (not StackPanel) so the
          capsule stretches to the pill height and the content scales with it. -->
     <Border x:Name="RootCapsule"
-            Background="#05FFFFFF"
-            CornerRadius="14"
+            Background="#03FFFFFF"
+            CornerRadius="12"
             Padding="2">
 
         <Grid x:Name="ContentGrid"
