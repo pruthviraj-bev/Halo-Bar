@@ -244,10 +244,27 @@
     </UserControl.Resources>
 
     <Grid x:Name="RootLayoutGrid">
-        <!-- Home icon top‑left -->
-        <controls:AppIcon Kind="Home" Width="20" Height="20"
-                          Fill="{ThemeResource TextSecondaryBrush}"
-                          HorizontalAlignment="Left" VerticalAlignment="Top" Margin="8" />
+        <!-- PASS 8.1: minimal top bar — "Halo Bar" identity far left, Home action far right.
+             PASS 8.1 FIX: the Pass 8 header had NO Height/VerticalAlignment, so the Grid
+             stretched to the full 640 DIP dashboard and its VerticalAlignment="Center"
+             children landed at the dashboard's vertical center, behind the cards (invisible
+             at runtime). This bar is now a fixed 24 DIP band pinned to the top (VerticalAlignment
+             =Top) inside the dashboard's 40 DIP top zone (main grid margin 8,40,8,8 unchanged,
+             so 620×640 geometry is untouched). Home is a real Button (CardButtonStyle =
+             transparent, no chrome) wired to collapse back to the compact pill. -->
+        <Grid ColumnDefinitions="*,Auto" Height="24" VerticalAlignment="Top" Margin="8,8,8,0">
+            <!-- PASS 8.3: 4 DIP left inset so the identity sits optically aligned with
+                 card header content (cards start at the 8 DIP grid margin), Bold weight. -->
+            <TextBlock Grid.Column="0" Text="Halo Bar" FontSize="16" FontWeight="Bold"
+                       Foreground="{ThemeResource TextSecondaryBrush}"
+                       Margin="4,0,0,0" VerticalAlignment="Center"/>
+            <Button Grid.Column="1" Width="24" Height="24" Padding="0"
+                    Style="{StaticResource CardButtonStyle}"
+                    HorizontalAlignment="Right" VerticalAlignment="Center"
+                    Click="HomeButton_Click" ToolTipService.ToolTip="Collapse to compact view">
+                <controls:AppIcon Kind="Home" Width="14" Height="14" Fill="{ThemeResource TextSecondaryBrush}"/>
+            </Button>
+        </Grid>
 
         <!-- Main layout grid -->
         <Grid RowSpacing="0" Margin="8,40,8,8">
@@ -773,34 +790,42 @@
             </Grid>
         </Grid>
 
-        <!-- Footer strip: system stats + weather + settings (row 1, unchanged) -->
-        <Grid Grid.Row="1" ColumnDefinitions="Auto,Auto,Auto,*,Auto" Height="30" Margin="0,8,0,0">
-            <!-- CPU -->
-            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center" Margin="8,0,0,0">
-                <Ellipse Width="5" Height="5" Fill="{ThemeResource AccentBrush}" Opacity="0.75" VerticalAlignment="Center"/>
-                <TextBlock Text="CPU" FontSize="9" Foreground="{ThemeResource TextSecondaryBrush}" VerticalAlignment="Center"/>
-                <TextBlock Text="{x:Bind CpuPercentText, Mode=OneWay}" FontSize="10" FontWeight="SemiBold" Foreground="{ThemeResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+        <!-- PASS 8: footer — two clearly separated groups. LEFT: system metrics
+             RAM → CPU → DISK (Fluent icons + label + value, ~10 DIP compact units).
+             RIGHT: weather immediately before the settings gear, anchored to the
+             right edge via a star spacer (stable regardless of metric text length). -->
+        <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto" Height="30" Margin="0,8,0,0">
+            <!-- LEFT GROUP: RAM | CPU | DISK -->
+            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="16" VerticalAlignment="Center" Margin="8,0,0,0">
+                <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                    <controls:AppIcon Kind="Ram" Width="12" Height="12" Fill="{ThemeResource TextSecondaryBrush}" VerticalAlignment="Center"/>
+                    <TextBlock Text="RAM" FontSize="10" Foreground="{ThemeResource TextSecondaryBrush}" VerticalAlignment="Center"/>
+                    <TextBlock Text="{x:Bind RamPercentText, Mode=OneWay}" FontSize="10" FontWeight="SemiBold" Foreground="{ThemeResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                    <controls:AppIcon Kind="Cpu" Width="12" Height="12" Fill="{ThemeResource TextSecondaryBrush}" VerticalAlignment="Center"/>
+                    <TextBlock Text="CPU" FontSize="10" Foreground="{ThemeResource TextSecondaryBrush}" VerticalAlignment="Center"/>
+                    <TextBlock Text="{x:Bind CpuPercentText, Mode=OneWay}" FontSize="10" FontWeight="SemiBold" Foreground="{ThemeResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                    <controls:AppIcon Kind="Disk" Width="12" Height="12" Fill="{ThemeResource TextSecondaryBrush}" VerticalAlignment="Center"/>
+                    <TextBlock Text="DISK" FontSize="10" Foreground="{ThemeResource TextSecondaryBrush}" VerticalAlignment="Center"/>
+                    <TextBlock Text="{x:Bind StoragePercentText, Mode=OneWay}" FontSize="10" FontWeight="SemiBold" Foreground="{ThemeResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+                </StackPanel>
             </StackPanel>
-            <!-- RAM -->
-            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center" Margin="14,0,0,0">
-                <Ellipse Width="5" Height="5" Fill="{ThemeResource AccentBrush}" Opacity="0.5" VerticalAlignment="Center"/>
-                <TextBlock Text="RAM" FontSize="9" Foreground="{ThemeResource TextSecondaryBrush}" VerticalAlignment="Center"/>
-                <TextBlock Text="{x:Bind RamPercentText, Mode=OneWay}" FontSize="10" FontWeight="SemiBold" Foreground="{ThemeResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+
+            <!-- RIGHT GROUP: weather + settings, anchored to the right edge -->
+            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center" Margin="0,0,8,0">
+                <TextBlock Text="{x:Bind WeatherTemp, Mode=OneWay}" FontSize="10"
+                           Foreground="{ThemeResource TextSecondaryBrush}" VerticalAlignment="Center"
+                           ToolTipService.ToolTip="{x:Bind WeatherCondition, Mode=OneWay}"/>
+                <Button Width="16" Height="16" Padding="0"
+                        Style="{StaticResource CardButtonStyle}"
+                        VerticalAlignment="Center"
+                        Click="SettingsGear_Click" ToolTipService.ToolTip="Location settings">
+                    <controls:AppIcon Kind="Settings" Width="14" Height="14" Fill="{ThemeResource TextSecondaryBrush}"/>
+                </Button>
             </StackPanel>
-            <!-- DISK -->
-            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center" Margin="14,0,0,0">
-                <Ellipse Width="5" Height="5" Fill="{ThemeResource AccentBrush}" Opacity="0.25" VerticalAlignment="Center"/>
-                <TextBlock Text="DISK" FontSize="9" Foreground="{ThemeResource TextSecondaryBrush}" VerticalAlignment="Center"/>
-                <TextBlock Text="{x:Bind StoragePercentText, Mode=OneWay}" FontSize="10" FontWeight="SemiBold" Foreground="{ThemeResource TextPrimaryBrush}" VerticalAlignment="Center"/>
-            </StackPanel>
-            <TextBlock Grid.Column="3" Text="{x:Bind WeatherTemp, Mode=OneWay}" VerticalAlignment="Center" HorizontalAlignment="Left" Margin="18,0,0,0"
-                       ToolTipService.ToolTip="{x:Bind WeatherCondition, Mode=OneWay}"/>
-            <Button Grid.Column="4" Width="16" Height="16" Padding="0"
-                    Style="{StaticResource CardButtonStyle}"
-                    VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,8,0"
-                    Click="SettingsGear_Click" ToolTipService.ToolTip="Location settings">
-                <controls:AppIcon Kind="Settings" Width="16" Height="16" Fill="{ThemeResource TextSecondaryBrush}"/>
-            </Button>
         </Grid>
     </Grid>
 </Grid>

@@ -70,4 +70,9 @@ public enum AppIconKind
     Headphone,
     Keyboard,
     Mouse,
+
+    // PASS 8: footer system-monitor metrics
+    Cpu,
+    Ram,
+    Disk,
 }

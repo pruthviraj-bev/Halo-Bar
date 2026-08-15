@@ -209,6 +209,24 @@ public class IslandController
         }
     }
 
+    /// <summary>
+    /// PASS 8.1: collapses the expanded dashboard back to the compact pill — the
+    /// "home" state. Mirrors the auto-collapse/focus-lost collapse path exactly
+    /// (disarm auto-collapse, clear any surface hold, notify, commit). No-op when
+    /// already collapsed.
+    /// </summary>
+    public void CollapseToPill()
+    {
+        if (!_clickExpanded) return;
+        Logger.Info("[MOTION-P8] CollapseRequested reason=homeButton");
+        MotionDiagnostics.P16BeginSegment("collapse");
+        _clickExpanded = false;
+        IsExpandedChanged.Invoke(this, false);
+        DisarmAutoCollapse();
+        _awakeHoldCount = 0;
+        Commit();
+    }
+
     /// <summary>Marks an interaction surface as open; suppresses all auto-collapse until released.</summary>
     public void BeginAwake()
     {

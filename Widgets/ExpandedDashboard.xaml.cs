@@ -1337,6 +1337,11 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
         OnPropertyChanged(nameof(VolumeIconKind));
     }
 
+    // ── Header Home (collapse back to the compact pill) ───────────────────
+
+    private void HomeButton_Click(object sender, RoutedEventArgs e)
+        => App.IslandController.CollapseToPill();
+
     // ── Footer settings gear (location) ────────────────────────────────────
 
     private void SettingsGear_Click(object sender, RoutedEventArgs e)
