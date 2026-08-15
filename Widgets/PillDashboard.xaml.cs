@@ -80,16 +80,39 @@ public sealed partial class PillDashboard : UserControl, IIslandWidget
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
+        // PASS 9: outer pill height = live taskbar height − 2 DIP (dynamic, never
+        // hardcoded). Re-applied whenever the card strip re-lays out so a
+        // taskbar-height change that reaches WindowService is picked up.
+        ApplyCardStripPillHeight();
         TotalWidthChanged?.Invoke(this, ComputeTotalWidth());
         RefreshFileList();
         _ = RebuildDragOutCacheAsync();
         _ = LoadThumbnailsAsync();
     }
 
+    private void ApplyCardStripPillHeight()
+    {
+        if (CardStripBorder == null) return;
+        double taskbarHeight = Math.Max(App.WindowService.TaskbarHeightDips, 1);
+        CardStripBorder.Height = Math.Max(taskbarHeight - 2, 1);
+
+        // PASS 9 (final): content area height = taskbar − 10 DIP
+        //  outer pill  = taskbar − 2
+        //  inner       = outer − 4  (2 DIP padding each side)
+        //  content     = inner − 4  (2 DIP inner padding each side)
+        // MusicPillCard scales its ContentGrid + album art to this, so the
+        // content fills the pill instead of measuring at its tiny desired size
+        // (the old StackPanel root cause).
+        double contentHeight = Math.Max(taskbarHeight - 10, 12);
+        if (MusicCard != null)
+            MusicCard.ContentAreaHeight = contentHeight;
+    }
+
     // ── Card visibility ───────────────────────────────────────────────────────
     private void OnCardStateChanged(object? sender, EventArgs e)
     {
         UpdateCardVisibility();
+        ApplyCardStripPillHeight();
         TotalWidthChanged?.Invoke(this, ComputeTotalWidth());
     }
 

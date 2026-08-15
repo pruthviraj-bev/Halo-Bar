@@ -34,6 +34,30 @@ public sealed partial class MusicPillCard : UserControl, IPillCard, INotifyPrope
     }
 
     public double CardWidth { get; } = 320;
+
+    /// <summary>PASS 9: content area height, set by parent (PillDashboard)
+    /// after layout so album art + controls scale to fill the pill instead of
+    /// measuring at their tiny desired size inside a StackPanel.
+    /// Album art = largest square that fits (content height − 2 DIP each side).</summary>
+    public double ContentAreaHeight
+    {
+        set
+        {
+            if (ContentGrid != null) ContentGrid.Height = value;
+            if (AlbumArt != null)
+            {
+                double sz = Math.Max(value - 2, 24);
+                AlbumArt.Width = sz;
+                AlbumArt.Height = sz;
+            }
+            if (AlbumFallback != null)
+            {
+                double fsz = Math.Max(Math.Min(value - 2, 16), 10);
+                AlbumFallback.Width = fsz;
+                AlbumFallback.Height = fsz;
+            }
+        }
+    }
     public UserControl View => this;
     public event EventHandler? StateChanged;
 
@@ -191,11 +215,12 @@ public sealed partial class MusicPillCard : UserControl, IPillCard, INotifyPrope
         }
 
         _tickCount++;
-        if (WBar0 != null) WBar0.Height = 3 + 8  * Math.Abs(Math.Sin(_tickCount * 0.40 + 0));
-        if (WBar1 != null) WBar1.Height = 3 + 10 * Math.Abs(Math.Sin(_tickCount * 0.30 + 1));
-        if (WBar2 != null) WBar2.Height = 3 + 6  * Math.Abs(Math.Sin(_tickCount * 0.50 + 2));
-        if (WBar3 != null) WBar3.Height = 3 + 11 * Math.Abs(Math.Sin(_tickCount * 0.35 + 3));
-        if (WBar4 != null) WBar4.Height = 3 + 8  * Math.Abs(Math.Sin(_tickCount * 0.45 + 4));
+        // PASS 9 (final): bar heights scaled for the larger visualizer container
+        if (WBar0 != null) WBar0.Height = 4 + 10 * Math.Abs(Math.Sin(_tickCount * 0.40 + 0));
+        if (WBar1 != null) WBar1.Height = 4 + 14 * Math.Abs(Math.Sin(_tickCount * 0.30 + 1));
+        if (WBar2 != null) WBar2.Height = 4 + 8  * Math.Abs(Math.Sin(_tickCount * 0.50 + 2));
+        if (WBar3 != null) WBar3.Height = 4 + 15 * Math.Abs(Math.Sin(_tickCount * 0.35 + 3));
+        if (WBar4 != null) WBar4.Height = 4 + 11 * Math.Abs(Math.Sin(_tickCount * 0.45 + 4));
 
         var accent = (Brush)Application.Current.Resources["AccentBrush"];
         if (WBar0 != null) WBar0.Background = accent;

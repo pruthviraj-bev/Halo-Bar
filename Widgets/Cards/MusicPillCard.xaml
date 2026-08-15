@@ -15,96 +15,118 @@
             <Setter Property="BorderBrush" Value="Transparent"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Padding" Value="0"/>
-            <Setter Property="Width" Value="24"/>
-            <Setter Property="Height" Value="24"/>
-            <Setter Property="CornerRadius" Value="12"/>
+            <Setter Property="Width" Value="30"/>
+            <Setter Property="Height" Value="30"/>
+            <Setter Property="CornerRadius" Value="15"/>
             <Setter Property="HorizontalAlignment" Value="Center"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
     </UserControl.Resources>
 
-    <Grid ColumnDefinitions="Auto,*,Auto,Auto"
-          VerticalAlignment="Center"
-          Margin="4,0,4,0">
+    <!-- PASS 9 (final): inner music surface — translucent white ~5% frosted
+         glass, fully pill-shaped (radius 999), 2 DIP internal padding all
+         sides. Sits INSIDE the outer black 5% pill (PillDashboard
+         CardStripBorder, 2 DIP padding) so a thin glass rim separates the two
+         layers: taskbar → black 5% shell → 2 DIP rim → white 5% capsule →
+         2 DIP → music content.
 
-        <!-- Col 0: Album art, 32×32 circle, MusicNote fallback -->
-        <Grid Grid.Column="0"
-              Width="32" Height="32"
-              CornerRadius="16"
-              Background="#15FFFFFF"
-              Margin="0,0,8,0"
-              VerticalAlignment="Center">
-            <Image Source="{x:Bind Thumbnail, Mode=OneWay}"
-                   Visibility="{x:Bind Thumbnail,
-                       Converter={StaticResource NullToVisibilityConverter},
-                       Mode=OneWay}"
-                   Stretch="UniformToFill"/>
-            <controls:AppIcon Kind="MusicNote"
-                              Width="12" Height="12"
-                              Fill="{ThemeResource TextSecondaryBrush}"
-                              Visibility="{x:Bind Thumbnail,
-                                  Converter={StaticResource NullToVisibilityInverseConverter},
-                                  Mode=OneWay}"/>
+         ContentGrid height + album art size are set DYNAMICALLY from
+         code-behind (ContentAreaHeight = taskbar − 10) so the content fills
+         the available pill height instead of measuring at its tiny desired
+         size — the parent CardStrip is now a Grid (not StackPanel) so the
+         capsule stretches to the pill height and the content scales with it. -->
+    <Border Background="#0DFFFFFF"
+            CornerRadius="999"
+            Padding="2">
+
+        <Grid x:Name="ContentGrid"
+              ColumnDefinitions="Auto,Auto,Auto,Auto">
+
+            <!-- Col 0: Album art — sized dynamically (taskbar − 12), rounded
+                 square, strongest visual element. MusicNote fallback. -->
+            <Grid x:Name="AlbumArt"
+                  Grid.Column="0"
+                  Width="32" Height="32"
+                  CornerRadius="6"
+                  Background="#15FFFFFF"
+                  Margin="0,0,8,0"
+                  VerticalAlignment="Center">
+                <Image Source="{x:Bind Thumbnail, Mode=OneWay}"
+                       Visibility="{x:Bind Thumbnail,
+                           Converter={StaticResource NullToVisibilityConverter},
+                           Mode=OneWay}"
+                       Stretch="UniformToFill"/>
+                <controls:AppIcon x:Name="AlbumFallback"
+                                  Kind="MusicNote"
+                                  Width="12" Height="12"
+                                  Fill="{ThemeResource TextSecondaryBrush}"
+                                  Visibility="{x:Bind Thumbnail,
+                                      Converter={StaticResource NullToVisibilityInverseConverter},
+                                      Mode=OneWay}"/>
+            </Grid>
+
+            <!-- Col 1: Title (13 DIP, semibold) + Artist (10.5 DIP, secondary) -->
+            <StackPanel Grid.Column="1"
+                        VerticalAlignment="Center"
+                        Margin="0,0,12,0">
+                <TextBlock Text="{x:Bind Title, Mode=OneWay}"
+                           FontSize="13"
+                           FontWeight="SemiBold"
+                           Foreground="{ThemeResource TextPrimaryBrush}"
+                           TextTrimming="CharacterEllipsis"
+                           MaxWidth="110"/>
+                <TextBlock Text="{x:Bind Artist, Mode=OneWay}"
+                           FontSize="10.5"
+                           Foreground="{ThemeResource TextSecondaryBrush}"
+                           Opacity="0.7"
+                           TextTrimming="CharacterEllipsis"
+                           MaxWidth="110"
+                           Margin="0,1,0,0"/>
+            </StackPanel>
+
+            <!-- Col 2: 5-bar visualizer — Azure while playing, muted when idle.
+                 Sized to the pill (~60% of capsule height), no background. -->
+            <StackPanel Grid.Column="2"
+                        Orientation="Horizontal"
+                        Spacing="3"
+                        Height="22"
+                        Margin="0,0,12,0"
+                        VerticalAlignment="Center">
+                <Border x:Name="WBar0" Width="3.5" Height="10" CornerRadius="1.75" Background="#15FFFFFF" VerticalAlignment="Center"/>
+                <Border x:Name="WBar1" Width="3.5" Height="16" CornerRadius="1.75" Background="#15FFFFFF" VerticalAlignment="Center"/>
+                <Border x:Name="WBar2" Width="3.5" Height="8"  CornerRadius="1.75" Background="#15FFFFFF" VerticalAlignment="Center"/>
+                <Border x:Name="WBar3" Width="3.5" Height="19" CornerRadius="1.75" Background="#15FFFFFF" VerticalAlignment="Center"/>
+                <Border x:Name="WBar4" Width="3.5" Height="12" CornerRadius="1.75" Background="#15FFFFFF" VerticalAlignment="Center"/>
+            </StackPanel>
+
+            <!-- Col 3: Playback controls — white Fluent icons, no backgrounds,
+                 ~20 DIP glyphs on 30 DIP hit targets, play/pause slightly larger -->
+            <StackPanel Grid.Column="3"
+                        Orientation="Horizontal"
+                        Spacing="4"
+                        VerticalAlignment="Center">
+                <Button Style="{StaticResource PillButtonStyle}"
+                        Click="OnPreviousClick"
+                        ToolTipService.ToolTip="Previous">
+                    <controls:AppIcon Kind="Previous" Width="20" Height="20"/>
+                </Button>
+                <Button Style="{StaticResource PillButtonStyle}"
+                        Click="OnPlayPauseClick"
+                        ToolTipService.ToolTip="Play/Pause">
+                    <controls:AppIcon Kind="{x:Bind IsPlaying,
+                                          Converter={StaticResource PlayPauseIconConverter},
+                                          Mode=OneWay}"
+                                      Filled="True"
+                                      Width="22" Height="22"/>
+                </Button>
+                <Button Style="{StaticResource PillButtonStyle}"
+                        Click="OnNextClick"
+                        ToolTipService.ToolTip="Next">
+                    <controls:AppIcon Kind="Next" Width="20" Height="20"/>
+                </Button>
+            </StackPanel>
+
         </Grid>
 
-        <!-- Col 1: Title + Artist stacked -->
-        <StackPanel Grid.Column="1"
-                    VerticalAlignment="Center"
-                    Margin="0,0,8,0">
-            <TextBlock Text="{x:Bind Title, Mode=OneWay}"
-                       FontSize="10.5"
-                       FontWeight="SemiBold"
-                       Foreground="{ThemeResource TextPrimaryBrush}"
-                       TextTrimming="CharacterEllipsis"
-                       MaxWidth="110"/>
-            <TextBlock Text="{x:Bind Artist, Mode=OneWay}"
-                       FontSize="8.5"
-                       Foreground="{ThemeResource TextSecondaryBrush}"
-                       Opacity="0.7"
-                       TextTrimming="CharacterEllipsis"
-                       MaxWidth="110"
-                       Margin="0,2,0,0"/>
-        </StackPanel>
-
-        <!-- Col 2: 5-bar animated waveform -->
-        <StackPanel Grid.Column="2"
-                    Orientation="Horizontal"
-                    Spacing="2.5"
-                    Height="14"
-                    Margin="0,0,8,0"
-                    VerticalAlignment="Center">
-            <Border x:Name="WBar0" Width="2.5" Height="6"  CornerRadius="1.25" Background="#15FFFFFF" VerticalAlignment="Center"/>
-            <Border x:Name="WBar1" Width="2.5" Height="10" CornerRadius="1.25" Background="#15FFFFFF" VerticalAlignment="Center"/>
-            <Border x:Name="WBar2" Width="2.5" Height="5"  CornerRadius="1.25" Background="#15FFFFFF" VerticalAlignment="Center"/>
-            <Border x:Name="WBar3" Width="2.5" Height="12" CornerRadius="1.25" Background="#15FFFFFF" VerticalAlignment="Center"/>
-            <Border x:Name="WBar4" Width="2.5" Height="8"  CornerRadius="1.25" Background="#15FFFFFF" VerticalAlignment="Center"/>
-        </StackPanel>
-
-        <!-- Col 3: Playback controls -->
-        <StackPanel Grid.Column="3"
-                    Orientation="Horizontal"
-                    Spacing="4"
-                    VerticalAlignment="Center">
-            <Button Style="{StaticResource PillButtonStyle}"
-                    Click="OnPreviousClick"
-                    ToolTipService.ToolTip="Previous">
-                <controls:AppIcon Kind="Previous" Width="14" Height="14"/>
-            </Button>
-            <Button Style="{StaticResource PillButtonStyle}"
-                    Click="OnPlayPauseClick"
-                    ToolTipService.ToolTip="Play/Pause">
-                <controls:AppIcon Kind="{x:Bind IsPlaying,
-                                      Converter={StaticResource PlayPauseIconConverter},
-                                      Mode=OneWay}"
-                                  Filled="True"
-                                  Width="16" Height="16"/>
-            </Button>
-            <Button Style="{StaticResource PillButtonStyle}"
-                    Click="OnNextClick"
-                    ToolTipService.ToolTip="Next">
-                <controls:AppIcon Kind="Next" Width="14" Height="14"/>
-            </Button>
-        </StackPanel>
-
-    </Grid>
+    </Border>
 </UserControl>
