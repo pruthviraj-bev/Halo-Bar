@@ -233,13 +233,16 @@
                     Padding="3"
                     HorizontalAlignment="Left">
                 <Grid x:Name="CardStrip"
-                      ColumnDefinitions="Auto,Auto,Auto">
+                      ColumnDefinitions="Auto,Auto,Auto,Auto">
 
                     <cards:WeatherPillCard x:Name="WeatherCard" Grid.Column="0"/>
                     <cards:MusicPillCard x:Name="MusicCard" Grid.Column="1"
                                         Visibility="Collapsed"/>
                     <cards:FileShelfPillCard x:Name="ShelfCard" Grid.Column="2"
                                             Visibility="Collapsed"/>
+                    <cards:PomodoroPillCard x:Name="PomoCard" Grid.Column="3"
+                                           Visibility="Collapsed"
+                                           Margin="8,0,0,0"/>
                 </Grid>
             </Border>
 

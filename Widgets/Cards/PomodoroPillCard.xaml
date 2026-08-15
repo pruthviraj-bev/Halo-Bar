@@ -1,0 +1,72 @@
+<UserControl
+    x:Class="DynamicIsland.Widgets.Cards.PomodoroPillCard"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- Pomodoro ring card: a rounded square tile with the SAME white glass
+         tint as the music card's inner surface (#03FFFFFF — 1% white over the
+         acrylic), square (width = height = tile size set by the host), no
+         border or outline. Inside: a circular Azure progress arc starting at
+         12 o'clock sweeping clockwise (no visible track — only the active
+         portion is drawn), and a small solid green dot STATIC at the ring's
+         center that pulses ("beep" opacity loop) while the session is
+         RUNNING and disappears while PAUSED — the ring stays either way.
+         The center is otherwise empty — no time, no label. Single click
+         dismisses the card from the pill (see code-behind); the press is
+         swallowed so it never expands the dashboard.
+
+         PASS 10 (render fixes): the arc is a Path in a sized Grid using the
+         dashboard Focus ring's exact technique (PathGeometry + ArcSegment
+         rebuilt from the fraction) — drawn by construction so it fills
+         exactly to 100% at completion (an earlier Ellipse + StrokeDashArray
+         tiled the pattern against the rendered stroke length and looked
+         complete early); the Path is explicitly sized and centered in the
+         28×28 host; the green dot is static at the ring's center (no
+         translation). -->
+    <Grid x:Name="TileRoot"
+          Width="40" Height="40"
+          HorizontalAlignment="Center"
+          VerticalAlignment="Center"
+          Background="Transparent"
+          PointerPressed="OnTilePointerPressed"
+          Tapped="OnTileTapped"
+          ToolTipService.ToolTip="Focus session — click to dismiss">
+        <Border Background="#03FFFFFF"
+                CornerRadius="10">
+            <Grid x:Name="RingHost"
+                  Width="28" Height="28"
+                  HorizontalAlignment="Center"
+                  VerticalAlignment="Center">
+                <!-- Azure partial arc: a Path whose Data is rebuilt from the
+                     progress fraction in code-behind (center 12, radius 12 —
+                     the stroke centerline of the 24 DIP ring with a 4 DIP
+                     stroke, outer edge 28 = exactly the host edge). The arc
+                     starts at 12 o'clock and sweeps clockwise. This is the
+                     SAME technique as the dashboard's Focus ring (Path +
+                     ArcSegment) — the arc is drawn directly from the fraction,
+                     so it fills exactly to 100% at completion. (The earlier
+                     Ellipse + StrokeDashArray approach tiled the dash pattern
+                     against the ellipse's rendered stroke length, which
+                     wrapped and made the ring look complete several seconds
+                     early.) No visible track — only the active arc is drawn. -->
+                <Path x:Name="RingArc"
+                      Width="24" Height="24"
+                      HorizontalAlignment="Center"
+                      VerticalAlignment="Center"
+                      Stroke="{ThemeResource AccentBrush}"
+                      StrokeThickness="4"
+                      StrokeStartLineCap="Round"
+                      StrokeEndLineCap="Round"/>
+                <!-- Small solid green dot, static at the ring's center (no
+                     translation — it no longer rides the arc tip). Its opacity
+                     is pulsed from code-behind while running, and it is
+                     collapsed while paused (visibility driven in Refresh). -->
+                <Ellipse x:Name="TipDot"
+                         Width="6" Height="6"
+                         HorizontalAlignment="Center"
+                         VerticalAlignment="Center"
+                         Fill="{ThemeResource Semantic.State.Success}"/>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

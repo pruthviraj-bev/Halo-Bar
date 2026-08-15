@@ -72,13 +72,14 @@ public sealed partial class PillDashboard : UserControl, IIslandWidget
         DropHerePopup.Margin = new Thickness(0, 0, 0, DropPopupGapDip);
         MusicCard.StateChanged += OnCardStateChanged;
         ShelfCard.StateChanged += OnCardStateChanged;
+        PomoCard.StateChanged += OnCardStateChanged;
         ShelfCard.ShelfButtonClicked += OnShelfButtonClicked;
         App.FileShelfStore.ItemsChanged += OnShelfItemsChanged;
         UpdateCardVisibility();
         Loaded += OnLoaded;
-        // PASS 9: keep the window strip hugging the pill's measured width — a
-        // fixed CardWidth leaves variable slack on the right because the
-        // title/artist widths change per track.
+        // PASS 10: keep the window strip sized to the pill's composition sum
+        // (see ComputeTotalWidth) — re-reported whenever the strip re-lays out
+        // so card visibility/weather-text changes are picked up.
         CardStripBorder.LayoutUpdated += OnCardStripLayoutUpdated;
     }
 
@@ -86,19 +87,27 @@ public sealed partial class PillDashboard : UserControl, IIslandWidget
     private double _lastReportedStripWidth = double.NegativeInfinity;
 
     /// <summary>
-    /// PASS 9: re-reports the outer pill's ACTUAL rendered width whenever it
-    /// changes (track change → different title width). The hysteresis guard
-    /// (2 DIP) prevents an animation feedback loop: resizing the strip does not
-    /// change the pill's own content width, so once the strip matches, no
-    /// further reports fire. CardStripBorder.ActualWidth already includes the
-    /// shelf card when it is visible.
+    /// PASS 10 (fix): re-reports the outer pill's width whenever the strip
+    /// re-lays out. The reported value is the FIXED COMPOSITION SUM of the
+    /// visible cards (see <see cref="ComputeTotalWidth"/>) — never a width
+    /// measured inside the window. Both ActualWidth and DesiredSize of the
+    /// strip are capped by the window they are measured in, which made the
+    /// window chase itself: the pomo card rendered at x=326 inside a 322-wide
+    /// window (ActualWidth never reported the clipped column) and the pill
+    /// collapsed to the weather width when DesiredSize was measured at a
+    /// narrow window. The composition sum depends only on card visibility +
+    /// per-card content, so it converges in one step and the window grows to
+    /// fit any card combination. The hysteresis guard (2 DIP) prevents an
+    /// animation feedback loop: once the window matches the composition, the
+    /// computed value stops changing and no further reports fire.
     /// </summary>
     private void OnCardStripLayoutUpdated(object? sender, object e)
     {
-        if (CardStripBorder == null || CardStripBorder.ActualWidth <= 1) return;
-        if (Math.Abs(CardStripBorder.ActualWidth - _lastReportedStripWidth) < 2.0) return;
-        _lastReportedStripWidth = CardStripBorder.ActualWidth;
-        TotalWidthChanged?.Invoke(this, CardStripBorder.ActualWidth);
+        if (CardStripBorder == null) return;
+        double width = ComputeTotalWidth();
+        if (Math.Abs(width - _lastReportedStripWidth) < 2.0) return;
+        _lastReportedStripWidth = width;
+        TotalWidthChanged?.Invoke(this, width);
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
@@ -129,6 +138,14 @@ public sealed partial class PillDashboard : UserControl, IIslandWidget
         double contentHeight = Math.Max(taskbarHeight - 10, 12);
         if (MusicCard != null)
             MusicCard.ContentAreaHeight = contentHeight;
+
+        // PASS 10 (pomodoro ring card): square tile matching the MUSIC card's
+        // full capsule height — the inner capsule is taskbar − 8 (outer − 2×3
+        // padding), which is what the music card visually fills, so the ring
+        // card reads the same size as the music card.
+        double tileSize = Math.Max(taskbarHeight - 8, 24);
+        if (PomoCard != null)
+            PomoCard.TileSize = tileSize;
     }
 
     // ── Card visibility ───────────────────────────────────────────────────────
@@ -162,6 +179,7 @@ public sealed partial class PillDashboard : UserControl, IIslandWidget
     {
         bool musicVisible = MusicCard.ShouldShow;
         bool shelfVisible = ShelfCard.ShouldShow;
+        bool pomoVisible = PomoCard.ShouldShow;
 
         MusicCard.Visibility = musicVisible
             ? Visibility.Visible
@@ -174,22 +192,54 @@ public sealed partial class PillDashboard : UserControl, IIslandWidget
         ShelfCard.Visibility = shelfVisible
             ? Visibility.Visible
             : Visibility.Collapsed;
+
+        PomoCard.Visibility = pomoVisible
+            ? Visibility.Visible
+            : Visibility.Collapsed;
     }
 
+    /// <summary>
+    /// PASS 10 (fix): the outer pill's width as the FIXED COMPOSITION SUM of
+    /// the visible cards. This is the authoritative signal the window strip is
+    /// sized to — never a window-constrained measurement (see
+    /// OnCardStripLayoutUpdated). Per card:
+    ///  - Music: fixed budget (CardWidth 320). The card's true width is
+    ///    content-driven (title up to 110), but any in-window measurement is
+    ///    capped by the window during growth, so the constant is the only
+    ///    reliable source — the pill grows to the full music composition
+    ///    instead of chasing a squeezed measure.
+    ///  - Weather: measured (ActualWidth/DesiredSize) — it is the only/first
+    ///    card and always fits the window, so the measure is real. Falls back
+    ///    to CardWidth (170) only before the first layout.
+    ///  - Shelf: fixed 48 (its root Grid is a fixed width).
+    ///  - Pomo: fixed 40 tile + its 8 DIP left margin (the only card with a
+    ///    margin in the strip).
+    /// Plus the outer shell's 3+3 DIP padding.
+    /// </summary>
     private double ComputeTotalWidth()
     {
-        // PASS 9: once laid out, report the ACTUAL outer-pill width so the
-        // window strip hugs the pill instead of leaving acrylic slack on the
-        // right. Falls back to the fixed card widths before the first layout.
-        if (CardStripBorder != null && CardStripBorder.ActualWidth > 1)
-            return CardStripBorder.ActualWidth;
+        double total = 0;
 
-        double total = MusicCard.ShouldShow
-            ? MusicCard.CardWidth
-            : WeatherCard.CardWidth;
+        if (MusicCard.Visibility == Visibility.Visible)
+        {
+            total += MusicCard.CardWidth;
+        }
+        else if (WeatherCard.Visibility == Visibility.Visible)
+        {
+            double measured = Math.Max(WeatherCard.ActualWidth, WeatherCard.DesiredSize.Width);
+            total += measured > 1 ? measured : WeatherCard.CardWidth;
+        }
 
-        if (ShelfCard.ShouldShow)
-            total += CardGap + ShelfCard.CardWidth;
+        // Shelf card has no margin in the strip (sits flush after music).
+        if (ShelfCard.Visibility == Visibility.Visible)
+            total += ShelfCard.CardWidth;
+
+        // Pomo card carries its own 8 DIP left margin (strip XAML).
+        if (PomoCard.Visibility == Visibility.Visible)
+            total += CardGap + PomoCard.CardWidth;
+
+        // Outer shell padding (3 + 3).
+        total += 6;
 
         return total;
     }

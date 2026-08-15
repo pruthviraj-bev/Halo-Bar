@@ -63,7 +63,15 @@ namespace DynamicIsland.Services;
 public sealed class CompactLayoutController
 {
     // ── Design tokens ───────────────────────────────────────────────────────
-    public const int CompactIdealWidth = 350; // ideal band is 340–360; 350 is the midpoint
+    // PASS 10: raised 350 → 440. The pill reports its width as a fixed
+    // composition sum (PillDashboard.ComputeTotalWidth — visible cards' known
+    // widths + gaps + shell padding), so this cap is an upper bound on
+    // free-space usage, not a target width. It must clear the widest current
+    // pill composition — music (320) + shelf (48) + pomodoro ring (40+8) +
+    // shell padding (6) = 422 — otherwise the window clips the last card.
+    // Measured free space on the docked taskbar is ~518, so 440 never touches
+    // the app-button strip.
+    public const int CompactIdealWidth = 440;
 
     // Gap between the pill's right edge and the system tray.
     public const int SafetyMargin = 12;

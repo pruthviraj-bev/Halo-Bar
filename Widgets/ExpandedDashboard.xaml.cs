@@ -265,6 +265,13 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
     public List<FocusSession> FocusSessions => _focusSessions;
     private bool _focusIsRunning = false;
 
+    // PASS 10: a session is "active" (shown as the pill ring card) from the
+    // moment it starts counting until it completes or is reset — including
+    // while PAUSED (running=false but a session is in progress). Set true on
+    // start/resume, false on completion (remaining hits 0) and on reset. The
+    // pill card must NOT vanish on pause.
+    private bool _focusSessionActive = false;
+
     /// <summary>
     /// Session length (seconds) for the currently selected focus session.
     /// </summary>
@@ -299,6 +306,14 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
     /// The ring fills up clockwise as the session runs down.
     /// </summary>
     public double FocusProgressFraction => 1.0 - ((double)_focusSecondsRemaining / FocusTotalSeconds);
+
+    /// <summary>
+    /// Publishes the current focus state to <see cref="Services.FocusSessionBridge"/>
+    /// so collapsed-pill consumers (the Pomodoro ring card) stay in sync with the
+    /// dashboard's timer. Called from the 1 s tick and every state-change handler.
+    /// </summary>
+    private void PublishFocusState()
+        => FocusSessionBridge.Publish(_focusIsRunning, _focusSessionActive || _focusIsRunning, FocusProgressFraction);
 
     // ── Focus Session ring geometry + drag state ───────────────────────────
 
@@ -551,6 +566,7 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
                 if (_focusSecondsRemaining == 0)
                 {
                     _focusIsRunning = false;          // stop counting; remain at 00:00
+                    _focusSessionActive = false;      // session completed — pill ring hides
                 }
             }
             OnPropertyChanged(nameof(FocusTimerText));
@@ -558,6 +574,7 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
             OnPropertyChanged(nameof(FocusPlayPauseIconKind)); // icon returns to Play
             FocusPillRotate.Angle = FocusProgressFraction * 360;
         }
+        PublishFocusState();
 
         // Hidden while collapsed (MainWindow collapses the DashboardBorder
         // ANCESTOR — a collapsed subtree reports ActualWidth=0): skip all
@@ -1369,26 +1386,31 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
         else if (_focusSecondsRemaining > 0)
         {
             _focusIsRunning = true;                        // Resume / Start
+            _focusSessionActive = true;                    // pill ring stays/returns
         }
         else
         {
             _focusSecondsRemaining = FocusTotalSeconds;    // Completed -> fresh session
             FocusPillRotate.Angle = 0;
             _focusIsRunning = true;
+            _focusSessionActive = true;
         }
         OnPropertyChanged(nameof(FocusTimerText));
         OnPropertyChanged(nameof(FocusProgressFraction));
         OnPropertyChanged(nameof(FocusPlayPauseIconKind));
+        PublishFocusState();
     }
 
     private void FocusReset_Click(object sender, RoutedEventArgs e)
     {
         _focusIsRunning = false;
+        _focusSessionActive = false; // reset cancels the session — pill ring hides
         _focusSecondsRemaining = FocusTotalSeconds; // Reset to the selected session's duration
         FocusPillRotate.Angle = 0;
         OnPropertyChanged(nameof(FocusTimerText));
         OnPropertyChanged(nameof(FocusPlayPauseIconKind));
         OnPropertyChanged(nameof(FocusProgressFraction));
+        PublishFocusState();
     }
 
     // ── Focus Session ring drag handlers ───────────────────────────────────
@@ -1412,6 +1434,7 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
         OnPropertyChanged(nameof(FocusTimerText));
         OnPropertyChanged(nameof(FocusDurationText));
         OnPropertyChanged(nameof(FocusProgressFraction));
+        PublishFocusState();
     }
 
     /// <summary>
