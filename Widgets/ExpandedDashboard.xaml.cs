@@ -96,6 +96,10 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
         set { _bluetoothListVisibility = value; OnPropertyChanged(); }
     }
 
+    // PASS 7: CONNECTED/AVAILABLE radio filter. Defaults to connected-only, matching
+    // the reference's Azure-active CONNECTED pill; AVAILABLE shows the rest.
+    private bool _bluetoothShowConnectedOnly = true;
+
     private string _ramUsedText = "9.6 GB";
     public string RamUsedText
     {
@@ -210,6 +214,15 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
         }
     }
 
+    /// <summary>
+    /// PASS 5.1: volume icon reflects the real mute state (mute icon only while
+    /// muted; normal speaker icon otherwise). Windows endpoint mute is
+    /// independent of the volume level, so unmuting always restores the
+    /// previous volume automatically.
+    /// </summary>
+    public AppIconKind VolumeIconKind =>
+        App.VolumeService.CurrentState.IsMuted ? AppIconKind.SpeakerMute : AppIconKind.Speaker1;
+
     public double VolumePercentValue
     {
         get => App.VolumeService.CurrentState.VolumePercent;
@@ -260,6 +273,25 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
     public string CurrentSessionName => _focusSessions[_selectedFocusSessionIndex].Name;
 
     public string FocusTimerText => $"{_focusSecondsRemaining / 60:D2}:{_focusSecondsRemaining % 60:D2}";
+
+    /// <summary>
+    /// Secondary readout under the timer: the selected session's total duration
+    /// ("60 min", "1h 25m", "25:30" when sub-minute seconds are set).
+    /// </summary>
+    public string FocusDurationText
+    {
+        get
+        {
+            int total = _focusSessions[_selectedFocusSessionIndex].DurationSeconds;
+            int h = total / 3600;
+            int m = (total % 3600) / 60;
+            int s = total % 60;
+            if (h > 0) return s > 0 ? $"{h}h {m:D2}m {s:D2}s" : $"{h}h {m:D2}m";
+            if (s > 0) return $"{m}:{s:D2}";
+            return $"{m} min";
+        }
+    }
+
     public AppIconKind FocusPlayPauseIconKind => _focusIsRunning ? AppIconKind.Pause : AppIconKind.Play;
 
     /// <summary>
@@ -268,9 +300,16 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
     /// </summary>
     public double FocusProgressFraction => 1.0 - ((double)_focusSecondsRemaining / FocusTotalSeconds);
 
-    // ── Focus Session ring drag state ──────────────────────────────────────
+    // ── Focus Session ring geometry + drag state ───────────────────────────
+
+    // PASS 4: 160 DIP ring, 14 DIP stroke → stroke-centerline radius 73. These
+    // stay in sync with FocusProgressToArcConverter (Center/Radius) so the arc,
+    // pointer, and drag/proximity math all share one geometry.
+    private const double FocusRingCenter = 80;
+    private const double FocusRingRadius = 73;
 
     private bool _isFocusRingDragging;
+    private bool _isFocusPillHovered;
     private double _dragAccumulatedFraction;
     private double _dragLastAngle;
 
@@ -392,15 +431,15 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
 
         // Wire up the Bluetooth devices list
         App.BluetoothService.BluetoothUpdated += OnBluetoothUpdated;
+        UpdateBluetoothFilterVisual();
         if (!MotionDiagnostics.P16NoData)
             RefreshBluetoothList();
 
         // Clipboard retention + search: reflect the persisted retention period and
         // enable typing in the search box (WS_EX_NOACTIVATE requires the temporary
         // flag-lift, same pattern as the Focus session text fields).
-        SelectRetentionOption(App.ClipboardService.RetentionDays);
+        SyncRetentionLabel();
         AttachTextInputFocus(ClipboardSearchBox);
-        AttachTextInputFocus(RetentionCombo);
 
         // Timer for system stats and play time updates (1s). Keeps ticking even
         // while the dashboard is collapsed (it stays in the tree after the first
@@ -488,6 +527,7 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
     // ── Stats updates ──────────────────────────────────────────────────────
 
     private int _lastVol = -1;
+    private bool _lastMuted;
     private double _lastPlaybackProgress = double.NegativeInfinity;
 
     // The constructor's initial UpdateStats must always run (the element is not
@@ -593,13 +633,19 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
             LiveClipboardTitle = "—";
         }
 
-        // 7. Sync external volume changes (cached state — the 150 ms poll keeps
+        // 7. Sync external volume/mute changes (cached state — the 150 ms poll keeps
         // it fresh; avoid extra COM calls into the audio endpoint here).
         int currentVol = App.VolumeService.CurrentState.VolumePercent;
         if (currentVol != _lastVol)
         {
             _lastVol = currentVol;
             OnPropertyChanged(nameof(VolumePercentValue));
+        }
+        bool currentMuted = App.VolumeService.CurrentState.IsMuted;
+        if (currentMuted != _lastMuted)
+        {
+            _lastMuted = currentMuted;
+            OnPropertyChanged(nameof(VolumeIconKind));
         }
     }
 
@@ -677,6 +723,14 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
             CurrentPlaybackTimeText = FormatTime(pos);
         }
         _seekNeedsSeek = true;
+
+        // PASS 5: the visible Azure fill mirrors the slider (Value is always 0-100).
+        // Fires for both programmatic position updates and user drags, so the bar
+        // always matches the slider exactly.
+        if (PlaybackFillScale != null)
+        {
+            PlaybackFillScale.ScaleX = Math.Clamp(e.NewValue / 100.0, 0, 1);
+        }
     }
 
     private void UpdateRepeatVisual()
@@ -715,7 +769,6 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
     // ── Clipboard history UI ───────────────────────────────────────────────
 
     private bool _showPinnedOnly;
-    private bool _syncingRetentionCombo;
     private string _searchText = "";
     private (ClipboardItem Item, TranslateTransform Transform, Button Strip)? _revealedItem;
 
@@ -978,42 +1031,57 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
         ClipboardSearchBox.Focus(FocusState.Programmatic);
     }
 
-    // ── Clipboard retention ────────────────────────────────────────────────
+    // ── Clipboard scrollbar thumb (PASS 6.1) ───────────────────────────────
+
+    private SolidColorBrush? _clipScrollThumbRestBrush;
+    private SolidColorBrush? _clipScrollThumbActiveBrush;
 
     /// <summary>
-    /// Preselects the persisted retention period without firing the change handler
-    /// (the fallback index is visual only — the service value is never touched).
+    /// PASS 6.1: Azure accent on the Halo scrollbar thumb while hovered/dragged.
+    /// The thumb's Border binds its Background to Thumb.Background via
+    /// TemplateBinding, so swapping the property re-tints the visual instantly.
     /// </summary>
-    private void SelectRetentionOption(int days)
+    private void SetClipScrollThumbActive(object sender, bool active)
     {
-        _syncingRetentionCombo = true;
-        try
+        if (sender is not Thumb thumb) return;
+        if (active)
         {
-            for (int i = 0; i < RetentionCombo.Items.Count; i++)
-            {
-                if (RetentionCombo.Items[i] is ComboBoxItem { Tag: string tag }
-                    && int.TryParse(tag, out int optionDays)
-                    && optionDays == days)
-                {
-                    RetentionCombo.SelectedIndex = i;
-                    return;
-                }
-            }
-            RetentionCombo.SelectedIndex = 0;
+            _clipScrollThumbActiveBrush ??= Application.Current.Resources["AccentBrush"] as SolidColorBrush;
+            if (_clipScrollThumbActiveBrush != null) thumb.Background = _clipScrollThumbActiveBrush;
         }
-        finally
+        else
         {
-            _syncingRetentionCombo = false;
+            _clipScrollThumbRestBrush ??= Application.Current.Resources["Semantic.State.Muted"] as SolidColorBrush;
+            if (_clipScrollThumbRestBrush != null) thumb.Background = _clipScrollThumbRestBrush;
         }
     }
 
-    private void RetentionCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    private void ClipboardScrollThumb_PointerEntered(object sender, PointerRoutedEventArgs e) => SetClipScrollThumbActive(sender, true);
+    private void ClipboardScrollThumb_PointerExited(object sender, PointerRoutedEventArgs e) => SetClipScrollThumbActive(sender, false);
+    private void ClipboardScrollThumb_PointerPressed(object sender, PointerRoutedEventArgs e) => SetClipScrollThumbActive(sender, true);
+    private void ClipboardScrollThumb_PointerReleased(object sender, PointerRoutedEventArgs e) => SetClipScrollThumbActive(sender, false);
+    private void ClipboardScrollThumb_PointerCaptureLost(object sender, PointerRoutedEventArgs e) => SetClipScrollThumbActive(sender, false);
+
+    // ── Clipboard retention ────────────────────────────────────────────────
+
+    /// <summary>
+    /// PASS 6: reflects the persisted retention period on the Halo dropdown button
+    /// (replaces the native ComboBox preselection). 0 = "Keep forever".
+    /// </summary>
+    private void SyncRetentionLabel()
     {
-        if (_syncingRetentionCombo) return;
-        if (RetentionCombo.SelectedItem is ComboBoxItem { Tag: string tag }
+        if (RetentionLabel == null) return;
+        int days = App.ClipboardService.RetentionDays;
+        RetentionLabel.Text = days <= 0 ? "Keep forever" : $"{days} days";
+    }
+
+    private void RetentionMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as MenuFlyoutItem)?.Tag is string tag
             && int.TryParse(tag, out int days))
         {
             App.ClipboardService.SetRetentionDays(days);
+            SyncRetentionLabel();
         }
     }
 
@@ -1192,9 +1260,10 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
         => _dispatcherQueue.TryEnqueue(RefreshBluetoothList);
 
     /// <summary>
-    /// Mirrors the service's device snapshot and derives the honest empty-state
-    /// message from the adapter status (no adapter / off / scanning / no paired
-    /// devices) instead of rendering a blank list.
+    /// Mirrors the service's device snapshot through the active CONNECTED/AVAILABLE
+    /// filter and derives the honest empty-state message from the adapter status
+    /// (no adapter / off / scanning / nothing matching the filter) instead of
+    /// rendering a blank list.
     /// </summary>
     private void RefreshBluetoothList()
     {
@@ -1203,6 +1272,8 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
         BluetoothItems.Clear();
         foreach (var device in service.Devices)
         {
+            if (_bluetoothShowConnectedOnly && !device.IsConnected) continue;
+            if (!_bluetoothShowConnectedOnly && device.IsConnected) continue;
             BluetoothItems.Add(device);
         }
 
@@ -1215,16 +1286,55 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
             BluetoothAdapterStatus.NoAdapter => "No Bluetooth adapter",
             BluetoothAdapterStatus.Disabled => "Bluetooth is off",
             BluetoothAdapterStatus.Initializing => "Scanning…",
-            _ => "No paired devices",
+            // Adapter is Ready — an empty result here means nothing matched the filter.
+            _ => _bluetoothShowConnectedOnly ? "No connected devices" : "No available devices",
         };
     }
 
+    // ── Bluetooth CONNECTED/AVAILABLE filter (PASS 7) ───────────────────────
+
+    private void BluetoothConnectedFilter_Click(object sender, RoutedEventArgs e)
+    {
+        if (_bluetoothShowConnectedOnly) return;
+        _bluetoothShowConnectedOnly = true;
+        UpdateBluetoothFilterVisual();
+        RefreshBluetoothList();
+    }
+
+    private void BluetoothAvailableFilter_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_bluetoothShowConnectedOnly) return;
+        _bluetoothShowConnectedOnly = false;
+        UpdateBluetoothFilterVisual();
+        RefreshBluetoothList();
+    }
+
+    /// <summary>PASS 7: Azure + bold for the active filter pill (clipboard All/Pinned pattern).</summary>
+    private void UpdateBluetoothFilterVisual()
+    {
+        BluetoothConnectedFilterButton.Foreground = GetThemeBrush(_bluetoothShowConnectedOnly ? "AccentBrush" : "TextSecondaryBrush");
+        BluetoothAvailableFilterButton.Foreground = GetThemeBrush(_bluetoothShowConnectedOnly ? "TextSecondaryBrush" : "AccentBrush");
+        BluetoothConnectedFilterButton.FontWeight = _bluetoothShowConnectedOnly ? Microsoft.UI.Text.FontWeights.Bold : Microsoft.UI.Text.FontWeights.Normal;
+        BluetoothAvailableFilterButton.FontWeight = _bluetoothShowConnectedOnly ? Microsoft.UI.Text.FontWeights.Normal : Microsoft.UI.Text.FontWeights.Bold;
+    }
+
     // ── Mute toggle click ──────────────────────────────────────────────────
+
+    private void VolumeSlider_ValueChanged(object sender, RangeBaseValueChangedEventArgs e)
+    {
+        // PASS 5: the visible volume fill mirrors the volume slider (0-100), which
+        // stays fully independent of playback progress.
+        if (VolumeFillScale != null)
+        {
+            VolumeFillScale.ScaleX = Math.Clamp(e.NewValue / 100.0, 0, 1);
+        }
+    }
 
     private void MuteButton_Click(object sender, RoutedEventArgs e)
     {
         var current = App.VolumeService.ReadCurrentState();
         App.VolumeService.SetMute(!current.IsMuted);
+        OnPropertyChanged(nameof(VolumeIconKind));
     }
 
     // ── Footer settings gear (location) ────────────────────────────────────
@@ -1295,6 +1405,7 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
         session.DurationSeconds = seconds;
         _focusSecondsRemaining = seconds;
         OnPropertyChanged(nameof(FocusTimerText));
+        OnPropertyChanged(nameof(FocusDurationText));
         OnPropertyChanged(nameof(FocusProgressFraction));
     }
 
@@ -1310,10 +1421,31 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
     /// </summary>
     private static double AngleFromFocusRingPoint(Windows.Foundation.Point p)
     {
-        double dx = p.X - 50;
-        double dy = p.Y - 50;
+        double dx = p.X - FocusRingCenter;
+        double dy = p.Y - FocusRingCenter;
         double angle = Math.Atan2(dx, -dy);
         return angle < 0 ? angle + 2 * Math.PI : angle;
+    }
+
+    /// <summary>
+    /// Hover/drag emphasis for the pointer knob: it grows slightly when the cursor
+    /// is near the arc tip (or while dragging) so it reads as attached to the arc
+    /// end. Proximity is measured against the tip of the currently rendered arc.
+    /// </summary>
+    private void UpdateFocusPillEmphasis(Windows.Foundation.Point position)
+    {
+        double angle = FocusPillRotate.Angle * Math.PI / 180.0;
+        double tipX = FocusRingCenter + FocusRingRadius * Math.Sin(angle);
+        double tipY = FocusRingCenter - FocusRingRadius * Math.Cos(angle);
+        double dx = position.X - tipX;
+        double dy = position.Y - tipY;
+        bool nearTip = (dx * dx + dy * dy) <= 24 * 24;
+        if (nearTip == _isFocusPillHovered) return;
+
+        _isFocusPillHovered = nearTip;
+        double scale = nearTip || _isFocusRingDragging ? 1.15 : 1.0;
+        FocusPillScale.ScaleX = scale;
+        FocusPillScale.ScaleY = scale;
     }
 
     private void FocusRing_PointerPressed(object sender, PointerRoutedEventArgs e)
@@ -1325,15 +1457,22 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
         _dragLastAngle = AngleFromFocusRingPoint(e.GetCurrentPoint(FocusRingGrid).Position);
         FocusPillRotate.Angle = _dragAccumulatedFraction * 360;
         _isFocusRingDragging = true;
+        FocusPillScale.ScaleX = FocusPillScale.ScaleY = 1.15;
         FocusRingDragSurface.CapturePointer(e.Pointer);
         e.Handled = true;
     }
 
     private void FocusRing_PointerMoved(object sender, PointerRoutedEventArgs e)
     {
-        if (!_isFocusRingDragging) return;
+        var position = e.GetCurrentPoint(FocusRingGrid).Position;
+        if (!_isFocusRingDragging)
+        {
+            // Not dragging: only the knob's hover emphasis changes.
+            UpdateFocusPillEmphasis(position);
+            return;
+        }
 
-        double theta = AngleFromFocusRingPoint(e.GetCurrentPoint(FocusRingGrid).Position);
+        double theta = AngleFromFocusRingPoint(position);
 
         // Shortest-path delta across the 0/2π seam: crossing the top yields a small
         // delta, never a ±2π jump that would teleport the handle to the far end.
@@ -1350,6 +1489,14 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
         ApplyDurationSeconds(_focusSessions[_selectedFocusSessionIndex], FractionToDurationSeconds(_dragAccumulatedFraction));
 
         FocusPillRotate.Angle = _dragAccumulatedFraction * 360;
+    }
+
+    private void FocusRing_PointerExited(object sender, PointerRoutedEventArgs e)
+    {
+        // Reset knob emphasis when the cursor leaves the ring while not dragging.
+        if (_isFocusRingDragging) return;
+        _isFocusPillHovered = false;
+        FocusPillScale.ScaleX = FocusPillScale.ScaleY = 1.0;
     }
 
     private void FocusRing_PointerReleased(object sender, PointerRoutedEventArgs e)
@@ -1373,6 +1520,11 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
         _isFocusRingDragging = false;
         FocusRingDragSurface.ReleasePointerCaptures();
 
+        // Knob returns to idle size; the next PointerMoved re-arms hover if the
+        // cursor is still near the tip.
+        _isFocusPillHovered = false;
+        FocusPillScale.ScaleX = FocusPillScale.ScaleY = 1.0;
+
         // Persist the chosen duration once; the pill stays at the angle the drag left
         // it, representing the just-chosen duration, until the running tick moves it.
         FocusSessionStore.SaveAll(_focusSessions);
@@ -1380,8 +1532,6 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
     }
 
     // ── Focus Session dot switcher ─────────────────────────────────────────
-
-    private static readonly SolidColorBrush UnselectedDotBrush = new(Microsoft.UI.Colors.LightGray);
 
     private void FocusSessionDot_Click(object sender, RoutedEventArgs e)
     {
@@ -1398,6 +1548,7 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
         UpdateFocusDotsVisual();
         OnPropertyChanged(nameof(CurrentSessionName));
         OnPropertyChanged(nameof(FocusTimerText));
+        OnPropertyChanged(nameof(FocusDurationText));
         OnPropertyChanged(nameof(FocusProgressFraction));
     }
 
@@ -1415,7 +1566,7 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
             {
                 ellipse.Fill = i == _selectedFocusSessionIndex
                     ? GetThemeBrush("AccentBrush")
-                    : UnselectedDotBrush;
+                    : GetThemeBrush("TextSecondaryBrush");
             }
         }
     }
@@ -1463,14 +1614,34 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
         OpenFocusSettings();
     }
 
-    private void FocusSettingsNumberBox_ValueChanged(object sender, NumberBoxValueChangedEventArgs e)
+    private void FocusSettingsValue_TextChanged(object sender, TextChangedEventArgs e)
     {
         // Draft-only: update the local seconds and readout, never the live timer state.
-        int h = double.IsNaN(FocusSettingsHoursBox.Value) ? 0 : (int)Math.Round(FocusSettingsHoursBox.Value);
-        int m = double.IsNaN(FocusSettingsMinutesBox.Value) ? 0 : (int)Math.Round(FocusSettingsMinutesBox.Value);
-        int s = double.IsNaN(FocusSettingsSecondsBox.Value) ? 0 : (int)Math.Round(FocusSettingsSecondsBox.Value);
+        // The H/M/S fields are plain digit TextBoxes (no native spinners) — parse and
+        // clamp to the same bounds the old NumberBoxes enforced (H 0-23, M/S 0-59).
+        int h = ParseHmsValue(FocusSettingsHoursBox.Text, 23);
+        int m = ParseHmsValue(FocusSettingsMinutesBox.Text, 59);
+        int s = ParseHmsValue(FocusSettingsSecondsBox.Text, 59);
         _focusSettingsDraftSeconds = h * 3600 + m * 60 + s;
         UpdateSettingsReadout();
+    }
+
+    private static int ParseHmsValue(string text, int max)
+    {
+        if (!int.TryParse(text, out int value)) return 0;
+        return Math.Clamp(value, 0, max);
+    }
+
+    private void FocusSettingsHmsBox_KeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        // Digits only (plus navigation/editing keys) — no letters or symbols ever reach the field.
+        if (e.Key >= Windows.System.VirtualKey.Number0 && e.Key <= Windows.System.VirtualKey.Number9) return;
+        if (e.Key >= Windows.System.VirtualKey.NumberPad0 && e.Key <= Windows.System.VirtualKey.NumberPad9) return;
+        if (e.Key is Windows.System.VirtualKey.Back or Windows.System.VirtualKey.Tab
+            or Windows.System.VirtualKey.Delete or Windows.System.VirtualKey.Left
+            or Windows.System.VirtualKey.Right or Windows.System.VirtualKey.Home
+            or Windows.System.VirtualKey.End) return;
+        e.Handled = true;
     }
 
     private void UpdateSettingsReadout()
@@ -1497,9 +1668,9 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
     private void OpenFocusSettings()
     {
         FocusSettingsNameBox.Text = _focusSettingsDraftName;
-        FocusSettingsHoursBox.Value = _focusSettingsDraftSeconds / 3600;
-        FocusSettingsMinutesBox.Value = (_focusSettingsDraftSeconds % 3600) / 60;
-        FocusSettingsSecondsBox.Value = _focusSettingsDraftSeconds % 60;
+        FocusSettingsHoursBox.Text = (_focusSettingsDraftSeconds / 3600).ToString();
+        FocusSettingsMinutesBox.Text = ((_focusSettingsDraftSeconds % 3600) / 60).ToString();
+        FocusSettingsSecondsBox.Text = (_focusSettingsDraftSeconds % 60).ToString();
         UpdateSettingsReadout();
         FocusMainHeader.Visibility = Visibility.Collapsed;
         FocusMainBody.Visibility = Visibility.Collapsed;
@@ -1537,6 +1708,7 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
             var newSession = new FocusSession { Name = _focusSettingsDraftName, DurationSeconds = _focusSettingsDraftSeconds };
             _focusSessions.Add(newSession);
             _selectedFocusSessionIndex = _focusSessions.Count - 1;
+            OnPropertyChanged(nameof(FocusDurationText));
 
             // x:Bind ItemsSource is OneTime — reassigning the FocusSessions property does
             // nothing (it's get-only). Force the ItemsControl to re-pull the list directly:

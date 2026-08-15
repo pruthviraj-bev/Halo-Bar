@@ -7,16 +7,18 @@ namespace DynamicIsland.Helpers;
 
 /// <summary>
 /// Converts a 0.0-1.0 progress fraction into the arc geometry for the
-/// Focus Session progress ring (a 100x100 ring, radius 42, starting at the top
+/// Focus Session progress ring (a 160x160 ring, stroke-centerline radius 73 —
+/// PASS 4, matching the 14 DIP stroke on the 160 DIP ring, starting at the top
 /// and sweeping clockwise). Handles the 0 (empty) and full-circle (1.0) edge
-/// cases explicitly.
+/// cases explicitly. Center/Radius stay in sync with the drag/proximity math in
+/// ExpandedDashboard (FocusRingCenter / FocusRingRadius).
 /// </summary>
 public class FocusProgressToArcConverter : IValueConverter
 {
-    private const double Center = 50;
-    private const double Radius = 42;
-    private const double TopY = 8;   // Center - Radius
-    private const double BottomY = 92; // Center + Radius
+    private const double Center = 80;
+    private const double Radius = 73;
+    private const double TopY = 7;   // Center - Radius
+    private const double BottomY = 153; // Center + Radius
 
     public object Convert(object value, Type targetType, object parameter, string language)
     {

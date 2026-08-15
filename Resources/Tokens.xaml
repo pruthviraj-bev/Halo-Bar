@@ -45,7 +45,7 @@
     <SolidColorBrush x:Key="Semantic.Surface.Default" Color="Transparent" />
     <SolidColorBrush x:Key="Semantic.Text.Primary" Color="#FFFFFFFF" />
     <SolidColorBrush x:Key="Semantic.Text.Secondary" Color="#B3FFFFFF" />
-    <SolidColorBrush x:Key="Semantic.Accent.Primary" Color="#FF8B5CF6" />
+    <SolidColorBrush x:Key="Semantic.Accent.Primary" Color="#FF5B9CFF" />
 
     <!-- NEW — no existing ThemeResources brush for this role.
          #15FFFFFF matches the tile/surface fill already used across MediaWidget,
@@ -55,15 +55,32 @@
     <!-- NEW — lighter glass tint for insets/scroll surfaces over the acrylic. -->
     <SolidColorBrush x:Key="Semantic.Surface.Glass" Color="#08FFFFFF" />
 
+    <!-- PASS 3 (V1 REDESIGN): the unified card surface — black @ ~20% (α 0x33),
+         painted over the single Halo backdrop (DesignRules §3.4 Surface.CardTint,
+         PROPOSED → landed). Cards read darker/more opaque than the parent
+         dashboard (~15% tint) but stay translucent — never opaque black. -->
+    <SolidColorBrush x:Key="Semantic.Surface.CardTint" Color="#33000000" />
+
+    <!-- PASS 6 (V1 REDESIGN): clipboard item cards + filter pills — white @ ~5%
+         (α 0x0D) over the CardTint surface, so rows read as content sitting
+         inside the glass (subtle raise, never separate windows). -->
+    <SolidColorBrush x:Key="Semantic.Surface.ClipItem" Color="#0DFFFFFF" />
+
+    <!-- PASS 6 (V1 REDESIGN): clipboard search field — black @ ~5% (α 0x0D),
+         a recessed glass input on the CardTint surface (inputs recede, items
+         raise). -->
+    <SolidColorBrush x:Key="Semantic.Surface.SearchInput" Color="#0D000000" />
+
     <!-- NEW — default card border, visible against the transparent taskbar. -->
     <SolidColorBrush x:Key="Semantic.Border.Default" Color="#26FFFFFF" />
 
     <!-- NEW — subtler divider/hairline border. -->
     <SolidColorBrush x:Key="Semantic.Border.Subtle" Color="#14FFFFFF" />
 
-    <!-- NEW — accent family (derived from AccentColor #FF8B5CF6, lightened/darkened). -->
-    <SolidColorBrush x:Key="Semantic.Accent.Hover" Color="#FFA78BFA" />
-    <SolidColorBrush x:Key="Semantic.Accent.Pressed" Color="#FF6D28D9" />
+    <!-- PASS 4 (V1 REDESIGN): accent family — Halo Azure per DesignRules §3.4.1
+         (purple #FF8B5CF6 REPLACED; Hover #70AAFF / Pressed #4A8FEF CONFIRMED). -->
+    <SolidColorBrush x:Key="Semantic.Accent.Hover" Color="#FF70AAFF" />
+    <SolidColorBrush x:Key="Semantic.Accent.Pressed" Color="#FF4A8FEF" />
 
     <!-- NEW — status/state roles, Fluent-consistent hues on dark. -->
     <SolidColorBrush x:Key="Semantic.State.Success" Color="#FF4ADE80" />

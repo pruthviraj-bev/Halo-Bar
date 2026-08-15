@@ -22,8 +22,11 @@
         </ResourceDictionary>
     </ResourceDictionary.ThemeDictionaries>
 
-    <!-- App Accent Colors (shared across themes) -->
-    <Color x:Key="AccentColor">#FF8B5CF6</Color>
+    <!-- App Accent Colors (shared across themes)
+         PASS 4 (V1 REDESIGN): purple #FF8B5CF6 is REPLACED by Halo Azure
+         #5B9CFF per DesignRules §3.4.1 (CONFIRMED 2026-08-14). This is the
+         documented purple→Azure migration landing. -->
+    <Color x:Key="AccentColor">#FF5B9CFF</Color>
     <SolidColorBrush x:Key="AccentBrush" Color="{StaticResource AccentColor}" />
 
 </ResourceDictionary>

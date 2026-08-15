@@ -27,6 +27,13 @@
     <Content Include="Assets\StoreLogo.png" />
     <Content Include="Assets\AppIcon.ico" />
     <Content Include="Assets\Wide310x150Logo.scale-200.png" />
+    <!-- PASS 7: Bluetooth device imagery (device-row PNG assets) -->
+    <Content Include="Assets\BluetoothItemIcons\buds.png" />
+    <Content Include="Assets\BluetoothItemIcons\keyboard.png" />
+    <Content Include="Assets\BluetoothItemIcons\microphone.png" />
+    <Content Include="Assets\BluetoothItemIcons\mobile.png" />
+    <Content Include="Assets\BluetoothItemIcons\mouse.png" />
+    <Content Include="Assets\BluetoothItemIcons\speaker.png" />
   </ItemGroup>
 
   <ItemGroup>

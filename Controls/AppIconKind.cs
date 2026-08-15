@@ -22,6 +22,8 @@ public enum AppIconKind
     Save,
     MusicNote,
     Music,
+    ChevronDown,
+    ChevronLeft,
     ChevronRight,
     Previous,
     Next,

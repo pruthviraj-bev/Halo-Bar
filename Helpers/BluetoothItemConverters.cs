@@ -2,6 +2,7 @@ using System;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Data;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Imaging;
 using DynamicIsland.Controls;
 using DynamicIsland.Models;
 
@@ -69,7 +70,10 @@ public class BluetoothDeviceStatusTextConverter : IValueConverter
         => throw new NotImplementedException();
 }
 
-/// <summary>Device → accent brush when connected, secondary brush otherwise.</summary>
+/// <summary>
+/// PASS 7.2: Device → green (Semantic.State.Success) when connected,
+/// secondary brush otherwise. Available/out-of-range stay neutral.
+/// </summary>
 public class BluetoothDeviceStatusBrushConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, string language)
@@ -77,13 +81,96 @@ public class BluetoothDeviceStatusBrushConverter : IValueConverter
         bool connected = value is BluetoothDeviceInfo device
             && device.ConnectionState == BluetoothConnectionState.Connected;
 
-        string key = connected ? "AccentBrush" : "TextSecondaryBrush";
+        string key = connected ? "Semantic.State.Success" : "TextSecondaryBrush";
         if (Application.Current.Resources.TryGetValue(key, out var res) && res is Brush brush)
         {
             return brush;
         }
         return new SolidColorBrush(Microsoft.UI.Colors.Gray);
     }
+
+    public object ConvertBack(object value, Type targetType, object parameter, string language)
+        => throw new NotImplementedException();
+}
+
+/// <summary>
+/// PASS 7: BluetoothDeviceType → device PNG asset (Assets/BluetoothItemIcons).
+/// Returns null for types without a matching asset (Gamepad/Watch/Unknown) —
+/// the device-row template keeps the Fluent glyph rendered underneath the Image, so the
+/// glyph shows through whenever the asset is absent or fails to load.
+///
+/// Images are decoded once per type and cached: the converter instance is shared from
+/// XAML resources and every device row rebinds the same snapshot on each refresh.
+/// </summary>
+public class BluetoothDeviceImageConverter : IValueConverter
+{
+    private static readonly Uri BudsUri = new("ms-appx:///Assets/BluetoothItemIcons/buds.png");
+    private static readonly Uri SpeakerUri = new("ms-appx:///Assets/BluetoothItemIcons/speaker.png");
+    private static readonly Uri MobileUri = new("ms-appx:///Assets/BluetoothItemIcons/mobile.png");
+    private static readonly Uri MicrophoneUri = new("ms-appx:///Assets/BluetoothItemIcons/microphone.png");
+    private static readonly Uri KeyboardUri = new("ms-appx:///Assets/BluetoothItemIcons/keyboard.png");
+    private static readonly Uri MouseUri = new("ms-appx:///Assets/BluetoothItemIcons/mouse.png");
+
+    private static readonly Dictionary<BluetoothDeviceType, BitmapImage> Cache = new();
+
+    private static BitmapImage? AssetFor(BluetoothDeviceType type)
+    {
+        Uri? uri = type switch
+        {
+            BluetoothDeviceType.Earbuds => BudsUri,
+            BluetoothDeviceType.Headphones => SpeakerUri,
+            BluetoothDeviceType.Phone => MobileUri,
+            BluetoothDeviceType.Keyboard => KeyboardUri,
+            BluetoothDeviceType.Mouse => MouseUri,
+            BluetoothDeviceType.Other => MicrophoneUri,
+            _ => null
+        };
+        if (uri == null) return null;
+
+        if (!Cache.TryGetValue(type, out var image))
+        {
+            image = new BitmapImage(uri);
+            Cache[type] = image;
+        }
+        return image;
+    }
+
+    public object Convert(object value, Type targetType, object parameter, string language)
+    {
+        var type = value is BluetoothDeviceType t ? t : BluetoothDeviceType.Unknown;
+        return (object?)AssetFor(type) ?? "";
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, string language)
+        => throw new NotImplementedException();
+}
+
+/// <summary>
+/// PASS 7: battery level (int?) → Fluent battery icon kind. Same thresholds as the
+/// system-monitor battery readout. Null (no battery exposed by Windows) → Battery0;
+/// the row itself is collapsed by NullToVisibilityConverter on Battery.DeviceLevel.
+/// </summary>
+public class BluetoothBatteryIconConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, string language)
+        => value switch
+        {
+            int level when level > 90 => AppIconKind.Battery10,
+            int level when level > 70 => AppIconKind.Battery9,
+            int level when level > 50 => AppIconKind.Battery8,
+            int level when level > 30 => AppIconKind.Battery7,
+            _ => AppIconKind.Battery6
+        };
+
+    public object ConvertBack(object value, Type targetType, object parameter, string language)
+        => throw new NotImplementedException();
+}
+
+/// <summary>PASS 7: battery level (int?) → "45%" text. Null → "" (row is collapsed anyway).</summary>
+public class BluetoothBatteryTextConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, string language)
+        => value is int level ? $"{level}%" : "";
 
     public object ConvertBack(object value, Type targetType, object parameter, string language)
         => throw new NotImplementedException();

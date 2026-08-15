@@ -10,6 +10,7 @@
     xmlns:models="using:DynamicIsland.Models"
     xmlns:services="using:DynamicIsland.Services"
     xmlns:controls="using:DynamicIsland.Controls"
+    xmlns:primitives="using:Microsoft.UI.Xaml.Controls.Primitives"
     mc:Ignorable="d"
     Width="620"
     Height="640">
@@ -19,6 +20,10 @@
         <helpers:NullToVisibilityConverter x:Key="NullToVisibilityConverter" />
         <helpers:NullToVisibilityInverseConverter x:Key="NullToVisibilityInverseConverter" />
         <helpers:FocusProgressToArcConverter x:Key="FocusProgressToArcConverter" />
+        <helpers:ClipboardTypeLabelConverter x:Key="ClipboardTypeLabelConverter" />
+        <helpers:ClipboardPreviewConverter x:Key="ClipboardPreviewConverter" />
+        <helpers:ClipboardTimestampConverter x:Key="ClipboardTimestampConverter" />
+        <helpers:ClipboardItemVisibilityConverter x:Key="ClipboardItemVisibilityConverter" />
 
         <!-- Button styles inside cards -->
         <Style x:Key="CardButtonStyle" TargetType="Button">
@@ -49,6 +54,31 @@
             <Setter Property="Padding" Value="0" />
         </Style>
 
+        <!-- PASS 4.1: Halo glass text input for the Focus edit state — replaces the native
+             TextBox/NumberBox chrome. Glass surface + subtle hairline edge + rounded corners,
+             so the field reads as part of the card, not a Windows Forms control. The default
+             template's focus border (now Azure-tinted app-wide) is the only focus indication. -->
+        <Style x:Key="FocusGlassInputStyle" TargetType="TextBox">
+            <Setter Property="Background" Value="{StaticResource Semantic.Surface.Glass}" />
+            <Setter Property="BorderBrush" Value="{StaticResource Semantic.Border.Subtle}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="{StaticResource Radius.Medium}" />
+            <Setter Property="Padding" Value="12,8" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Foreground" Value="{ThemeResource TextPrimaryBrush}" />
+            <Setter Property="UseSystemFocusVisuals" Value="False" />
+        </Style>
+
+        <!-- PASS 4.1: H/M/S value fields — same glass surface, centered clean value display,
+             no native spinner arrows. Digits-only input enforced in code-behind. -->
+        <Style x:Key="FocusHmsInputStyle" TargetType="TextBox"
+               BasedOn="{StaticResource FocusGlassInputStyle}">
+            <Setter Property="TextAlignment" Value="Center" />
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Padding" Value="8,10" />
+        </Style>
+
         <!-- Clipboard list converters -->
         <helpers:ClipboardImagePathConverter x:Key="ClipboardImagePathConverter" />
         <helpers:ClipboardTypeIconConverter x:Key="ClipboardTypeIconConverter" />
@@ -56,21 +86,161 @@
         <helpers:IsPinnedToBrushConverter x:Key="IsPinnedToBrushConverter" />
 
         <!-- Bluetooth list converters -->
-        <helpers:BluetoothTypeIconConverter x:Key="BluetoothTypeIconConverter" />
-        <helpers:BluetoothDeviceDetailConverter x:Key="BluetoothDeviceDetailConverter" />
         <helpers:BluetoothDeviceStatusTextConverter x:Key="BluetoothDeviceStatusTextConverter" />
         <helpers:BluetoothDeviceStatusBrushConverter x:Key="BluetoothDeviceStatusBrushConverter" />
+        <helpers:BluetoothDeviceImageConverter x:Key="BluetoothDeviceImageConverter" />
+        <helpers:BluetoothBatteryIconConverter x:Key="BluetoothBatteryIconConverter" />
+        <helpers:BluetoothBatteryTextConverter x:Key="BluetoothBatteryTextConverter" />
 
-        <!-- All/Pinned filter toggle buttons -->
-        <Style x:Key="FilterToggleButtonStyle" TargetType="Button">
-            <Setter Property="Background" Value="Transparent" />
-            <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="Padding" Value="6,2" />
-            <Setter Property="FontSize" Value="11" />
-            <Setter Property="FontWeight" Value="Normal" />
+        <!-- PASS 6: clipboard filter pills — 5% white glass, rounded, no native
+             button chrome (custom minimal template suppresses the default
+             hover/pressed/focus fills). Active state = Azure text, driven from
+             code-behind (UpdateFilterVisuals sets Foreground). -->
+        <Style x:Key="ClipFilterToggleStyle" TargetType="Button">
+            <Setter Property="Background" Value="{StaticResource Semantic.Surface.ClipItem}" />
             <Setter Property="Foreground" Value="{ThemeResource TextSecondaryBrush}" />
-            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Padding" Value="12,5" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="UseSystemFocusVisuals" Value="False" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Grid>
+                            <VisualStateManager.VisualStateGroups>
+                                <VisualStateGroup x:Name="CommonStates">
+                                    <VisualState x:Name="Normal" />
+                                    <VisualState x:Name="PointerOver">
+                                        <Storyboard>
+                                            <ObjectAnimationUsingKeyFrames Storyboard.TargetName="Surface" Storyboard.TargetProperty="Background">
+                                                <DiscreteObjectKeyFrame KeyTime="0" Value="{StaticResource Semantic.Surface.Raised}" />
+                                            </ObjectAnimationUsingKeyFrames>
+                                        </Storyboard>
+                                    </VisualState>
+                                    <VisualState x:Name="Pressed">
+                                        <Storyboard>
+                                            <ObjectAnimationUsingKeyFrames Storyboard.TargetName="Surface" Storyboard.TargetProperty="Background">
+                                                <DiscreteObjectKeyFrame KeyTime="0" Value="{StaticResource Semantic.Border.Default}" />
+                                            </ObjectAnimationUsingKeyFrames>
+                                        </Storyboard>
+                                    </VisualState>
+                                    <VisualState x:Name="Disabled">
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="Surface" Storyboard.TargetProperty="Opacity" To="0.5" Duration="0" />
+                                        </Storyboard>
+                                    </VisualState>
+                                </VisualStateGroup>
+                            </VisualStateManager.VisualStateGroups>
+                            <Border x:Name="Surface" Background="{TemplateBinding Background}" CornerRadius="6" />
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="{TemplateBinding Padding}" />
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
+
+        <!-- PASS 6: clipboard search field — recessed black ~5% glass input on the
+             card surface (inputs recede, items raise). Default template focus
+             border is the only focus indication; no system focus rect. -->
+        <Style x:Key="SearchGlassInputStyle" TargetType="TextBox">
+            <Setter Property="Background" Value="{StaticResource Semantic.Surface.SearchInput}" />
+            <Setter Property="BorderBrush" Value="{StaticResource Semantic.Border.Subtle}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="{StaticResource Radius.Medium}" />
+            <Setter Property="Padding" Value="12,6" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Foreground" Value="{ThemeResource TextPrimaryBrush}" />
+            <Setter Property="UseSystemFocusVisuals" Value="False" />
+        </Style>
+        <!-- PASS 6.1: transparent template for the scrollbar's invisible page/line
+             buttons — keeps click-to-page interaction without any visible chrome. -->
+        <ControlTemplate x:Key="ScrollBarTransparentButtonTemplate" TargetType="primitives:RepeatButton">
+            <Grid Background="Transparent" />
+        </ControlTemplate>
+
+        <!-- PASS 6.1: Halo scrollbar — thin rounded thumb on a transparent track, no
+             native Windows scrollbar chrome. Mirrors the WinUI 3 ScrollBar template
+             contract exactly (VerticalRoot / VerticalTrackRect / VerticalThumb +
+             page &amp; line RepeatButtons) so ScrollBar's own drag/paging logic works,
+             but drops the default state storyboards (auto-hide/expand).                             10 DIP hit area with a 4 DIP centered rounded visual; faintly visible
+             at rest (Semantic.State.Muted ≈35% white), Azure while hovered/dragged
+             (driven from code-behind via TemplateBinding on Thumb.Background). -->
+        <Style x:Key="HaloScrollBarStyle" TargetType="primitives:ScrollBar">
+            <Setter Property="Width" Value="10" />
+            <Setter Property="MinWidth" Value="10" />
+            <Setter Property="IsTabStop" Value="False" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="primitives:ScrollBar">
+                        <Grid x:Name="VerticalRoot" Background="Transparent">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <!-- Invisible track rect — present for ScrollBar's drag math
+                                 (ActualSize), never rendered. -->
+                            <Rectangle x:Name="VerticalTrackRect" Grid.RowSpan="5" Fill="Transparent" Opacity="0" />
+                            <primitives:RepeatButton x:Name="VerticalSmallDecrease" Grid.Row="0" Opacity="0" IsTabStop="False"
+                                                     Template="{StaticResource ScrollBarTransparentButtonTemplate}" />
+                            <primitives:RepeatButton x:Name="VerticalLargeDecrease" Grid.Row="1" Opacity="0" IsTabStop="False"
+                                                     Template="{StaticResource ScrollBarTransparentButtonTemplate}" />
+                            <primitives:Thumb x:Name="VerticalThumb" Grid.Row="2" Width="10"
+                                              Background="{StaticResource Semantic.State.Muted}"
+                                              AutomationProperties.AccessibilityView="Raw"
+                                              PointerEntered="ClipboardScrollThumb_PointerEntered"
+                                              PointerExited="ClipboardScrollThumb_PointerExited"
+                                              PointerPressed="ClipboardScrollThumb_PointerPressed"
+                                              PointerReleased="ClipboardScrollThumb_PointerReleased"
+                                              PointerCaptureLost="ClipboardScrollThumb_PointerCaptureLost">
+                                <primitives:Thumb.Template>
+                                    <ControlTemplate TargetType="primitives:Thumb">
+                                        <Border x:Name="ThumbVisual" CornerRadius="2" Margin="3,0,3,0"
+                                                Background="{TemplateBinding Background}" />
+                                    </ControlTemplate>
+                                </primitives:Thumb.Template>
+                            </primitives:Thumb>
+                            <primitives:RepeatButton x:Name="VerticalLargeIncrease" Grid.Row="3" Opacity="0" IsTabStop="False"
+                                                     Template="{StaticResource ScrollBarTransparentButtonTemplate}" />
+                            <primitives:RepeatButton x:Name="VerticalSmallIncrease" Grid.Row="4" Opacity="0" IsTabStop="False"
+                                                     Template="{StaticResource ScrollBarTransparentButtonTemplate}" />
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- PASS 6.1: minimal ScrollViewer template hosting the Halo scrollbar.
+             Mirrors the WinUI 3 default template's structural contract: presenter
+             named ScrollContentPresenter (Content + CanContentScroll are wired
+             internally by ScrollViewer — not bindable in the template), the
+             vertical ScrollBar inside a Grid driven by ComputedVerticalScrollBarVisibility.
+             Wheel/drag/scroll plumbing untouched. -->
+        <ControlTemplate x:Key="HaloScrollViewerTemplate" TargetType="ScrollViewer">
+            <Grid Background="{TemplateBinding Background}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <ScrollContentPresenter x:Name="ScrollContentPresenter"
+                                        Grid.ColumnSpan="2"
+                                        Margin="{TemplateBinding Padding}"
+                                        ContentTemplate="{TemplateBinding ContentTemplate}" />
+                <Grid Grid.Column="1"
+                      Visibility="{TemplateBinding ComputedVerticalScrollBarVisibility}">
+                    <primitives:ScrollBar x:Name="VerticalScrollBar"
+                                          Style="{StaticResource HaloScrollBarStyle}"
+                                          IsTabStop="False"
+                                          Maximum="{TemplateBinding ScrollableHeight}"
+                                          Orientation="Vertical"
+                                          Value="{TemplateBinding VerticalOffset}"
+                                          ViewportSize="{TemplateBinding ViewportHeight}"
+                                          HorizontalAlignment="Right" />
+                </Grid>
+            </Grid>
+        </ControlTemplate>
     </UserControl.Resources>
 
     <Grid x:Name="RootLayoutGrid">
@@ -94,45 +264,86 @@
         <Grid Grid.Row="0" ColumnDefinitions="2*,3*" ColumnSpacing="{StaticResource Spacing.M}">
             <!-- LEFT column – Bluetooth (compact, top) + Focus Session (fills remaining height) -->
             <Grid Grid.Column="0" RowDefinitions="Auto,*" RowSpacing="{StaticResource Spacing.M}">
-                <!-- Bluetooth devices card – data-bound to App.BluetoothService (event-driven AEP watcher).
-                     Empty/loading states render from the adapter status; compact sizing keeps the
-                     Focus card below it from being squeezed. -->
+                <!-- PASS 7 + 7.1: expanded Bluetooth card – data-bound to App.BluetoothService
+                     (event-driven AEP watcher). Header (Azure Bluetooth glyph + BLUETOOTH,
+                     12 DIP card-heading treatment), Connected/Available glass filter pills
+                     (sentence case; radio pair, active = Azure, clipboard All/Pinned pattern),
+                     and a FIXED-HEIGHT scrollable device viewport (Halo scrollbar) so the card
+                     never grows with device count. Device rows: 40 DIP PNG asset image (the ONLY
+                     artwork — the old Fluent glyph layer was removed; the transparent PNGs let
+                     it bleed through underneath), name + battery stack, connection state
+                     right-aligned. Device-card surface = Pass 6 item glass (5% white). -->
                 <controls:WidgetCard Grid.Row="0" IsTabStop="False">
                     <controls:WidgetCard.HeaderContent>
                         <StackPanel Orientation="Horizontal" Spacing="6">
-                            <controls:AppIcon Kind="Bluetooth" Width="12" Height="12" Fill="{ThemeResource AccentBrush}"/>
-                            <TextBlock Text="BLUETOOTH DEVICES" FontSize="10" FontWeight="Bold" Foreground="{ThemeResource TextSecondaryBrush}" CharacterSpacing="50"/>
+                            <controls:AppIcon Kind="Bluetooth" Width="16" Height="16" Fill="{ThemeResource AccentBrush}"/>
+                            <TextBlock Text="BLUETOOTH" FontSize="12" FontWeight="Bold" Foreground="{ThemeResource TextSecondaryBrush}" CharacterSpacing="50"/>
                         </StackPanel>
                     </controls:WidgetCard.HeaderContent>
                     <controls:WidgetCard.BodyContent>
-                        <Grid MinHeight="96">
-                            <TextBlock x:Name="BluetoothEmptyText" Text="Scanning…" FontSize="10"
-                                       Foreground="{ThemeResource TextSecondaryBrush}"
-                                       HorizontalAlignment="Center" VerticalAlignment="Center"
-                                       Visibility="{x:Bind BluetoothEmptyVisibility, Mode=OneWay}"/>
-                            <ItemsControl ItemsSource="{x:Bind BluetoothItems}" Visibility="{x:Bind BluetoothListVisibility, Mode=OneWay}">
-                                <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate>
-                                        <StackPanel Spacing="4" />
-                                    </ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate x:DataType="models:BluetoothDeviceInfo">
-                                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
-                                            <Grid Grid.Column="0" Width="26" Height="26" CornerRadius="13" Background="#12FFFFFF" VerticalAlignment="Center">
-                                                <controls:AppIcon Kind="{x:Bind Type, Converter={StaticResource BluetoothTypeIconConverter}}" Width="13" Height="13" Fill="{ThemeResource AccentBrush}"/>
-                                            </Grid>
-                                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="0">
-                                                <TextBlock Text="{x:Bind Name}" FontSize="10.5" FontWeight="SemiBold" Foreground="{ThemeResource TextPrimaryBrush}" TextTrimming="CharacterEllipsis"/>
-                                                <TextBlock Text="{x:Bind Converter={StaticResource BluetoothDeviceDetailConverter}}" FontSize="8.5" Foreground="{ThemeResource TextSecondaryBrush}" TextTrimming="CharacterEllipsis"/>
-                                            </StackPanel>
-                                            <TextBlock Grid.Column="2" Text="{x:Bind Converter={StaticResource BluetoothDeviceStatusTextConverter}}"
-                                                       Foreground="{x:Bind Converter={StaticResource BluetoothDeviceStatusBrushConverter}}"
-                                                       FontSize="8.5" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                                        </Grid>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
+                        <Grid RowDefinitions="Auto,*" RowSpacing="8">
+                            <!-- Filter pills — same glass language as the clipboard All/Pinned row.
+                                 PASS 7.1: sentence-case text (Connected/Available). -->
+                            <Grid Grid.Row="0" ColumnDefinitions="Auto,Auto" ColumnSpacing="8">
+                                <Button x:Name="BluetoothConnectedFilterButton" Style="{StaticResource ClipFilterToggleStyle}" Content="Connected" Click="BluetoothConnectedFilter_Click" />
+                                <Button x:Name="BluetoothAvailableFilterButton" Grid.Column="1" Style="{StaticResource ClipFilterToggleStyle}" Content="Available" Click="BluetoothAvailableFilter_Click" />
+                            </Grid>
+                            <!-- PASS 7.1: FIXED 120 DIP device viewport. The card height is constant
+                                 (1 or 20 devices look the same); extra devices scroll inside this
+                                 viewport via the shared Halo scrollbar (HaloScrollViewerTemplate /
+                                 HaloScrollBarStyle, same Azure-on-hover behavior as the clipboard
+                                 list). Header + filter pills stay stationary; the viewport clips
+                                 rows at its boundary. -->
+                            <Grid Grid.Row="1">
+                                <TextBlock x:Name="BluetoothEmptyText" Text="Scanning…" FontSize="10"
+                                           Foreground="{ThemeResource TextSecondaryBrush}"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                                           Visibility="{x:Bind BluetoothEmptyVisibility, Mode=OneWay}"/>
+                                <ScrollViewer Height="120" VerticalScrollBarVisibility="Auto" Padding="0,0,12,0"
+                                              Template="{StaticResource HaloScrollViewerTemplate}"
+                                              Visibility="{x:Bind BluetoothListVisibility, Mode=OneWay}">
+                                    <ItemsControl ItemsSource="{x:Bind BluetoothItems}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <StackPanel />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="models:BluetoothDeviceInfo">
+                                                <!-- Device card: [image] name + battery · status -->
+                                                <Border Padding="8" Margin="0,0,0,8"
+                                                        Background="{StaticResource Semantic.Surface.ClipItem}"
+                                                        CornerRadius="10">
+                                                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                                                        <!-- 40 DIP asset tile — the ONLY device artwork. PASS 7.1:
+                                                             the old Fluent glyph layer was removed (the transparent
+                                                             PNGs let it show through underneath, causing overlap). -->
+                                                        <Grid Grid.Column="0" Width="40" Height="40" CornerRadius="8" Background="#12FFFFFF" VerticalAlignment="Center">
+                                                            <Image Source="{x:Bind Type, Converter={StaticResource BluetoothDeviceImageConverter}, Mode=OneWay}" Stretch="UniformToFill"/>
+                                                        </Grid>
+                                                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="3">
+                                                            <TextBlock Text="{x:Bind Name}" FontSize="12" FontWeight="SemiBold"
+                                                                       Foreground="{ThemeResource TextPrimaryBrush}" TextTrimming="CharacterEllipsis"/>
+                                                            <!-- Battery row: Fluent battery icon + level, only when
+                                                                 Windows exposes a level (never a fabricated 0%). -->
+                                                            <StackPanel Orientation="Horizontal" Spacing="4"
+                                                                        Visibility="{x:Bind Battery.DeviceLevel, Converter={StaticResource NullToVisibilityConverter}, Mode=OneWay}">
+                                                                <controls:AppIcon Kind="{x:Bind Battery.DeviceLevel, Converter={StaticResource BluetoothBatteryIconConverter}, Mode=OneWay}"
+                                                                                  Width="12" Height="12" Fill="{ThemeResource TextSecondaryBrush}"/>
+                                                                <TextBlock Text="{x:Bind Battery.DeviceLevel, Converter={StaticResource BluetoothBatteryTextConverter}, Mode=OneWay}"
+                                                                           FontSize="9" Foreground="{ThemeResource TextSecondaryBrush}"/>
+                                                            </StackPanel>
+                                                        </StackPanel>
+                                                        <TextBlock Grid.Column="2" Text="{x:Bind Converter={StaticResource BluetoothDeviceStatusTextConverter}}"
+                                                                   Foreground="{x:Bind Converter={StaticResource BluetoothDeviceStatusBrushConverter}}"
+                                                                   FontSize="9" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                                    </Grid>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </ScrollViewer>
+                            </Grid>
                         </Grid>
                     </controls:WidgetCard.BodyContent>
                 </controls:WidgetCard>
@@ -140,14 +351,23 @@
                 <!-- Focus Session card – shared WidgetCard shell; stretches to fill remaining left-column height. -->
                 <controls:WidgetCard Grid.Row="1" IsTabStop="False">
                     <controls:WidgetCard.HeaderContent>
-                        <!-- Main/settings header pair: in-place Visibility swap (deliberate design; not the overlay slot). -->
-                        <Grid>
-                            <StackPanel x:Name="FocusMainHeader" Orientation="Horizontal" Spacing="6">
-                                <controls:AppIcon Kind="Target" Width="12" Height="12" Fill="{ThemeResource AccentBrush}"/>
-                                <TextBlock Text="FOCUS SESSION" FontSize="10" FontWeight="Bold" Foreground="{ThemeResource TextSecondaryBrush}" CharacterSpacing="50"/>
+                        <!-- Main/settings header pair: in-place Visibility swap (deliberate design; not the overlay slot).
+                             PASS 4.1: the wrapper fills the shell's 40 DIP header band so the heading anchors to the
+                             top of the band (it was vertically centered → floated low with dead space above).
+                             PASS 4.2: the session name tucks directly beneath the heading (Spacing 2) so the
+                             heading→name relationship is tight, and the heading is larger/stronger than the name
+                             (12 Bold > 11 Medium). The timer (Type.Display 30) remains the dominant value. -->
+                        <Grid Height="40">
+                            <StackPanel x:Name="FocusMainHeader" VerticalAlignment="Top" Spacing="2">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <controls:AppIcon Kind="Target" Width="12" Height="12" Fill="{ThemeResource AccentBrush}"/>
+                                    <TextBlock Text="FOCUS SESSION" FontSize="12" FontWeight="Bold" Foreground="{ThemeResource TextSecondaryBrush}" CharacterSpacing="50"/>
+                                </StackPanel>
+                                <TextBlock Text="{x:Bind CurrentSessionName, Mode=OneWay}" Style="{StaticResource Type.Caption}"
+                                           Foreground="{ThemeResource TextSecondaryBrush}" Margin="18,0,0,0"/>
                             </StackPanel>
                             <Grid x:Name="FocusSettingsHeader" Visibility="Collapsed" ColumnDefinitions="*,Auto" Margin="0,0,0,8">
-                                <TextBlock Grid.Column="0" Text="{x:Bind FocusSettingsHeaderText, Mode=OneWay}" FontSize="10" FontWeight="Bold"
+                                <TextBlock Grid.Column="0" Text="{x:Bind FocusSettingsHeaderText, Mode=OneWay}" FontSize="12" FontWeight="Bold"
                                            Foreground="{ThemeResource TextSecondaryBrush}" CharacterSpacing="50" VerticalAlignment="Center"/>
                                 <Button Grid.Column="1" Style="{StaticResource CardButtonStyle}"
                                         Click="FocusSettingsClose_Click" ToolTipService.ToolTip="Close" HorizontalAlignment="Right">
@@ -158,73 +378,102 @@
                     </controls:WidgetCard.HeaderContent>
                     <controls:WidgetCard.BodyContent>
                         <Grid>
-                            <StackPanel x:Name="FocusMainBody" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="6">
-                                <TextBlock Text="{x:Bind CurrentSessionName, Mode=OneWay}" FontSize="10" FontWeight="Bold"
-                                           Foreground="{ThemeResource TextSecondaryBrush}" HorizontalAlignment="Center"/>
-                                <Grid x:Name="FocusRingGrid" Width="100" Height="100">
-                                    <Ellipse Stroke="Gray" StrokeThickness="4" />
-                                    <Path Data="{x:Bind FocusProgressFraction, Converter={StaticResource FocusProgressToArcConverter}, Mode=OneWay}" Stroke="{ThemeResource AccentBrush}" StrokeThickness="4" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
-                                    <!-- Pill handle wrapper: rotates about the ring center; pill sits at 12 o'clock (Angle 0). -->
-                                    <Grid Width="100" Height="100" RenderTransformOrigin="0.5,0.5" IsHitTestVisible="False">
+                            <!-- PASS 4.2: the session name lives in the header band under the
+                                 heading, so the body stack is only ring + dots — vertically
+                                 centered so all five layers fit the frozen card height with
+                                 slack (the dots row is never pushed out). -->
+                            <StackPanel x:Name="FocusMainBody" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="8">
+                                <!-- PASS 4: the ring is the Focus card's hero. 160×160 DIP,
+                                     14 DIP stroke (centerline radius 73), progress from 12
+                                     o'clock clockwise; the drag surface keeps the full-ring
+                                     hit target. Geometry (Center 80 / Radius 73) is shared with
+                                     FocusProgressToArcConverter and the drag/proximity math. -->
+                                <Grid x:Name="FocusRingGrid" Width="160" Height="160">
+                                    <!-- Quiet neutral track — subordinate to the Azure arc. -->
+                                    <Ellipse Stroke="{ThemeResource TextSecondaryBrush}" StrokeThickness="14" Opacity="0.18" />
+                                    <Path Data="{x:Bind FocusProgressFraction, Converter={StaticResource FocusProgressToArcConverter}, Mode=OneWay}" Stroke="{ThemeResource AccentBrush}" StrokeThickness="14" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                                    <!-- Pointer: rides the arc tip via rotation about the ring
+                                         center (12 o'clock at Angle 0); scale emphasises
+                                         hover/drag (driven from code-behind). -->
+                                    <Grid Width="160" Height="160" RenderTransformOrigin="0.5,0.5" IsHitTestVisible="False">
                                         <Grid.RenderTransform>
                                             <RotateTransform x:Name="FocusPillRotate" Angle="0" />
                                         </Grid.RenderTransform>
-                                        <Ellipse Width="14" Height="14" Fill="{ThemeResource AccentBrush}" Stroke="White" StrokeThickness="1" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,-3,0,0" />
+                                        <Grid Width="18" Height="18" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,-2,0,0" RenderTransformOrigin="0.5,0.5">
+                                            <Grid.RenderTransform>
+                                                <ScaleTransform x:Name="FocusPillScale" ScaleX="1" ScaleY="1" />
+                                            </Grid.RenderTransform>
+                                            <Ellipse Fill="{ThemeResource AccentBrush}" Stroke="White" StrokeThickness="1.5" />
+                                        </Grid>
                                     </Grid>
-                                    <TextBlock Text="{x:Bind FocusTimerText, Mode=OneWay}" Style="{StaticResource Type.LargeNumber}" Foreground="{ThemeResource TextPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    <!-- Central remaining-time (primary) + session duration
+                                         (secondary), optically centered inside the ring. -->
+                                    <StackPanel IsHitTestVisible="False" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="2">
+                                        <TextBlock Text="{x:Bind FocusTimerText, Mode=OneWay}" Style="{StaticResource Type.Display}" Foreground="{ThemeResource TextPrimaryBrush}" HorizontalAlignment="Center"/>
+                                        <TextBlock Text="{x:Bind FocusDurationText, Mode=OneWay}" Style="{StaticResource Type.Caption}" Foreground="{ThemeResource TextSecondaryBrush}" HorizontalAlignment="Center"/>
+                                    </StackPanel>
                                     <!-- Transparent drag surface: full-ring hit target, topmost. -->
                                     <Ellipse Fill="Transparent" x:Name="FocusRingDragSurface"
                                              PointerPressed="FocusRing_PointerPressed"
                                              PointerMoved="FocusRing_PointerMoved"
                                              PointerReleased="FocusRing_PointerReleased"
                                              PointerCanceled="FocusRing_PointerCanceled"
-                                             PointerCaptureLost="FocusRing_PointerCaptureLost" />
+                                             PointerCaptureLost="FocusRing_PointerCaptureLost"
+                                             PointerExited="FocusRing_PointerExited" />
                                 </Grid>
-                                <ItemsControl x:Name="FocusDotsControl"
-                                              ItemsSource="{x:Bind FocusSessions}"
-                                              HorizontalAlignment="Center"
-                                              Loaded="FocusDotsControl_Loaded">
-                                    <ItemsControl.ItemsPanel>
-                                        <ItemsPanelTemplate>
-                                            <StackPanel Orientation="Horizontal" Spacing="{StaticResource Spacing.XS}" />
-                                        </ItemsPanelTemplate>
-                                    </ItemsControl.ItemsPanel>
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate x:DataType="models:FocusSession">
-                                            <Button Background="Transparent" BorderThickness="0" Padding="2"
-                                                    Click="FocusSessionDot_Click"
-                                                    ToolTipService.ToolTip="{x:Bind Name}">
-                                                <Ellipse x:Name="DotEllipse" Width="6" Height="6" Fill="LightGray" />
-                                            </Button>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                                <Button Style="{StaticResource CardButtonStyle}" Width="16" Height="16"
-                                        Click="FocusSessionAdd_Click" ToolTipService.ToolTip="New session">
-                                    <controls:AppIcon Kind="Add" Width="12" Height="12"/>
-                                </Button>
+                                <!-- Session switcher: dots are real functionality (select/add
+                                     sessions) — kept small and quiet so they never compete
+                                     with the ring. -->
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="8">
+                                    <ItemsControl x:Name="FocusDotsControl"
+                                                  ItemsSource="{x:Bind FocusSessions}"
+                                                  HorizontalAlignment="Center"
+                                                  Loaded="FocusDotsControl_Loaded">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <StackPanel Orientation="Horizontal" Spacing="{StaticResource Spacing.XS}" />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="models:FocusSession">
+                                                <Button Background="Transparent" BorderThickness="0" Padding="2"
+                                                        Click="FocusSessionDot_Click"
+                                                        ToolTipService.ToolTip="{x:Bind Name}">
+                                                    <Ellipse x:Name="DotEllipse" Width="6" Height="6" Fill="{ThemeResource TextSecondaryBrush}" />
+                                                </Button>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <Button Style="{StaticResource CardButtonStyle}" Width="16" Height="16"
+                                            Click="FocusSessionAdd_Click" ToolTipService.ToolTip="New session">
+                                        <controls:AppIcon Kind="Add" Width="12" Height="12"/>
+                                    </Button>
+                                </StackPanel>
                             </StackPanel>
                             <StackPanel x:Name="FocusSettingsBody" Visibility="Collapsed" VerticalAlignment="Center" HorizontalAlignment="Stretch" Spacing="10">
-                                <TextBox x:Name="FocusSettingsNameBox" PlaceholderText="Session name" FontSize="12" MaxLength="40"/>
+                                <TextBox x:Name="FocusSettingsNameBox" Style="{StaticResource FocusGlassInputStyle}"
+                                         PlaceholderText="Session name" MaxLength="40"/>
                                 <StackPanel Spacing="2" HorizontalAlignment="Center">
                                     <TextBlock x:Name="FocusSettingsReadout" Text="25:00" Style="{StaticResource Type.LargeNumber}"
                                                Foreground="{ThemeResource TextPrimaryBrush}" HorizontalAlignment="Center"/>
                                     <TextBlock Text="Duration (minutes)" FontSize="10" Foreground="{ThemeResource TextSecondaryBrush}" HorizontalAlignment="Center"/>
                                 </StackPanel>
+                                <!-- H/M/S: glass value fields, no native spinners — digits-only,
+                                     clamped on change (code-behind), labels kept clean below. -->
                                 <Grid ColumnDefinitions="*,*,*" ColumnSpacing="8">
                                     <StackPanel Grid.Column="0" Spacing="2">
-                                        <NumberBox x:Name="FocusSettingsHoursBox" Minimum="0" Maximum="23" SpinButtonPlacementMode="Compact"
-                                                   ValueChanged="FocusSettingsNumberBox_ValueChanged"/>
+                                        <TextBox x:Name="FocusSettingsHoursBox" Style="{StaticResource FocusHmsInputStyle}"
+                                                 TextChanged="FocusSettingsValue_TextChanged" KeyDown="FocusSettingsHmsBox_KeyDown"/>
                                         <TextBlock Text="H" FontSize="10" Foreground="{ThemeResource TextSecondaryBrush}" HorizontalAlignment="Center"/>
                                     </StackPanel>
                                     <StackPanel Grid.Column="1" Spacing="2">
-                                        <NumberBox x:Name="FocusSettingsMinutesBox" Minimum="0" Maximum="59" SpinButtonPlacementMode="Compact"
-                                                   ValueChanged="FocusSettingsNumberBox_ValueChanged"/>
+                                        <TextBox x:Name="FocusSettingsMinutesBox" Style="{StaticResource FocusHmsInputStyle}"
+                                                 TextChanged="FocusSettingsValue_TextChanged" KeyDown="FocusSettingsHmsBox_KeyDown"/>
                                         <TextBlock Text="M" FontSize="10" Foreground="{ThemeResource TextSecondaryBrush}" HorizontalAlignment="Center"/>
                                     </StackPanel>
                                     <StackPanel Grid.Column="2" Spacing="2">
-                                        <NumberBox x:Name="FocusSettingsSecondsBox" Minimum="0" Maximum="59" SpinButtonPlacementMode="Compact"
-                                                   ValueChanged="FocusSettingsNumberBox_ValueChanged"/>
+                                        <TextBox x:Name="FocusSettingsSecondsBox" Style="{StaticResource FocusHmsInputStyle}"
+                                                 TextChanged="FocusSettingsValue_TextChanged" KeyDown="FocusSettingsHmsBox_KeyDown"/>
                                         <TextBlock Text="S" FontSize="10" Foreground="{ThemeResource TextSecondaryBrush}" HorizontalAlignment="Center"/>
                                     </StackPanel>
                                 </Grid>
@@ -263,32 +512,45 @@
             <Grid Grid.Column="1" RowDefinitions="*,Auto" RowSpacing="{StaticResource Spacing.M}">
                 <controls:WidgetCard Grid.Row="0" IsTabStop="False">
                 <controls:WidgetCard.HeaderContent>
-                    <!-- Header row: title + All/Pinned filter toggle + retention selector -->
-                    <Grid ColumnDefinitions="Auto,Auto,Auto" HorizontalAlignment="Left" VerticalAlignment="Center">
-                        <TextBlock Grid.Column="0" Text="Clipboard" FontSize="14" FontWeight="Bold"/>
-                        <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="12,0,0,0" Spacing="{StaticResource Spacing.XS}">
-                            <Button x:Name="AllFilterButton" Style="{StaticResource FilterToggleButtonStyle}" Content="All" Click="AllFilter_Click" />
-                            <Button x:Name="PinnedFilterButton" Style="{StaticResource FilterToggleButtonStyle}" Content="Pinned" Click="PinnedFilter_Click" />
-                        </StackPanel>
-                        <ComboBox x:Name="RetentionCombo" Grid.Column="2" Margin="12,0,0,0"
-                                  FontSize="11" MaxDropDownHeight="240"
-                                  SelectionChanged="RetentionCombo_SelectionChanged"
-                                  ToolTipService.ToolTip="Auto-delete items older than the selected period">
-                            <ComboBoxItem Tag="0">Keep forever</ComboBoxItem>
-                            <ComboBoxItem Tag="7">7 days</ComboBoxItem>
-                            <ComboBoxItem Tag="15">15 days</ComboBoxItem>
-                            <ComboBoxItem Tag="30">30 days</ComboBoxItem>
-                            <ComboBoxItem Tag="90">90 days</ComboBoxItem>
-                        </ComboBox>
-                    </Grid>
+                    <!-- PASS 6.2: icon + CLIPBOARD as one header group — 16 DIP Azure
+                         clipboard glyph (scaled from 24 to match the Focus/Music header
+                         icon scale). No Height=40 wrapper; the StackPanel is Auto-sized
+                         and vertically centered by WidgetCard.HeaderPresenter in the 40 DIP
+                         header row, giving ~12 DIP breathing room instead of ~24 DIP. -->
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <controls:AppIcon Kind="Clipboard" Width="16" Height="16" Fill="{ThemeResource AccentBrush}"/>
+                        <TextBlock Text="CLIPBOARD" FontSize="12" FontWeight="Bold" Foreground="{ThemeResource TextSecondaryBrush}" CharacterSpacing="50"/>
+                    </StackPanel>
                 </controls:WidgetCard.HeaderContent>
                 <controls:WidgetCard.BodyContent>
-                    <Grid RowDefinitions="Auto,Auto,*" RowSpacing="6">
-                        <!-- Search row: text filter over the list + clear button -->
-                        <Grid Grid.Row="0" ColumnDefinitions="*,Auto" ColumnSpacing="4">
-                            <TextBox x:Name="ClipboardSearchBox" Grid.Column="0"
+                    <Grid RowDefinitions="Auto,Auto,*" RowSpacing="8">
+                        <!-- PASS 6: filter row — All/Pinned glass pills + auto-delete
+                             dropdown (Halo button + MenuFlyout, far right). -->
+                        <Grid Grid.Row="0" ColumnDefinitions="Auto,Auto,*">
+                            <Button x:Name="AllFilterButton" Style="{StaticResource ClipFilterToggleStyle}" Content="All" Click="AllFilter_Click" />
+                            <Button x:Name="PinnedFilterButton" Grid.Column="1" Margin="8,0,0,0" Style="{StaticResource ClipFilterToggleStyle}" Content="Pinned" Click="PinnedFilter_Click" />
+                            <Button Grid.Column="2" x:Name="RetentionButton" HorizontalAlignment="Right" Style="{StaticResource ClipFilterToggleStyle}"
+                                    ToolTipService.ToolTip="Auto-delete items older than the selected period">
+                                <Button.Flyout>
+                                    <MenuFlyout Placement="Bottom">
+                                        <MenuFlyoutItem Tag="0" Text="Keep forever" Click="RetentionMenuItem_Click" />
+                                        <MenuFlyoutItem Tag="7" Text="7 days" Click="RetentionMenuItem_Click" />
+                                        <MenuFlyoutItem Tag="15" Text="15 days" Click="RetentionMenuItem_Click" />
+                                        <MenuFlyoutItem Tag="30" Text="30 days" Click="RetentionMenuItem_Click" />
+                                        <MenuFlyoutItem Tag="90" Text="90 days" Click="RetentionMenuItem_Click" />
+                                    </MenuFlyout>
+                                </Button.Flyout>
+                                <StackPanel Orientation="Horizontal" Spacing="4">
+                                    <TextBlock x:Name="RetentionLabel" Text="7 days" FontSize="11"/>
+                                    <controls:AppIcon Kind="ChevronDown" Width="10" Height="10" Fill="{ThemeResource TextSecondaryBrush}"/>
+                                </StackPanel>
+                            </Button>
+                        </Grid>
+
+                        <!-- PASS 6: search row — recessed glass input + clear button -->
+                        <Grid Grid.Row="1" ColumnDefinitions="*,Auto" ColumnSpacing="4">
+                            <TextBox x:Name="ClipboardSearchBox" Grid.Column="0" Style="{StaticResource SearchGlassInputStyle}"
                                      PlaceholderText="Search clipboard…"
-                                     FontSize="11" Height="28"
                                      TextChanged="ClipboardSearch_TextChanged" />
                             <Button x:Name="ClipboardSearchClearButton" Grid.Column="1"
                                     Style="{StaticResource CardButtonStyle}" Width="28" Height="28"
@@ -299,102 +561,138 @@
                             </Button>
                         </Grid>
 
-                        <!-- Empty state -->
-                        <TextBlock Grid.Row="1" x:Name="ClipboardEmptyText" Text="Nothing copied yet" FontSize="11" Foreground="{ThemeResource TextSecondaryBrush}" Visibility="{x:Bind ClipboardEmptyVisibility, Mode=OneWay}" />
+                        <!-- PASS 6: items + empty state (empty text centered over the list) -->
+                        <Grid Grid.Row="2">
+                            <!-- ItemsRepeater + StackLayout = viewport-driven virtualization: only
+                                 the ~visible rows are realized as UI containers, so a 470-item
+                                 history no longer materializes 470 templates on first layout
+                                 (the old ItemsControl realized everything — the ~4.9s first-frame
+                                 stall). Spacing comes from the row template's own bottom margins. -->
+                            <!-- PASS 6.1: custom Halo scrollbar template replaces the native
+                                 ScrollViewer chrome (thin rounded thumb, transparent track,
+                                 Azure hover). Wheel/drag/scroll plumbing untouched. -->
+                            <ScrollViewer VerticalAlignment="Stretch" VerticalScrollBarVisibility="Auto" Padding="0,0,12,0"
+                                          Template="{StaticResource HaloScrollViewerTemplate}">
+                            <ItemsRepeater x:Name="ClipboardRepeater" ItemsSource="{x:Bind ClipboardItems}">
+                                <ItemsRepeater.Layout>
+                                    <StackLayout Spacing="0" />
+                                </ItemsRepeater.Layout>
+                                <ItemsRepeater.ItemTemplate>
+                                    <DataTemplate x:DataType="services:ClipboardItem">
+                                        <Grid>
+                                            <!-- Background delete strip, revealed by sliding the front card left -->
+                                            <Button Background="#E81123" Foreground="White" BorderThickness="0"
+                                                    CornerRadius="6" Width="56" Height="Auto" Padding="0"
+                                                    Opacity="0"
+                                                    HorizontalAlignment="Right" VerticalAlignment="Stretch"
+                                                    Margin="0,0,0,6"
+                                                    Click="ClipboardRevealedDelete_Click" Tapped="ClipboardAction_Tapped"
+                                                    ToolTipService.ToolTip="Delete">
+                                                <controls:AppIcon Kind="Delete" Width="20" Height="20" Fill="White"/>
+                                            </Button>
 
-                        <ScrollViewer Grid.Row="2" VerticalAlignment="Stretch" VerticalScrollBarVisibility="Auto" Padding="0,0,12,0">
-                    <!-- ItemsRepeater + StackLayout = viewport-driven virtualization: only
-                         the ~visible rows are realized as UI containers, so a 470-item
-                         history no longer materializes 470 templates on first layout
-                         (the old ItemsControl realized everything — the ~4.9s first-frame
-                         stall). Spacing comes from the row template's own bottom margins. -->
-                    <ItemsRepeater x:Name="ClipboardRepeater" ItemsSource="{x:Bind ClipboardItems}">
-                        <ItemsRepeater.Layout>
-                            <StackLayout Spacing="0" />
-                        </ItemsRepeater.Layout>
-                        <ItemsRepeater.ItemTemplate>
-                            <DataTemplate x:DataType="services:ClipboardItem">
-                                <Grid>
-                                    <!-- Background delete strip, revealed by sliding the front card left -->
-                                    <Button Background="#E81123" Foreground="White" BorderThickness="0"
-                                            CornerRadius="6" Width="56" Height="Auto" Padding="0"
-                                            Opacity="0"
-                                            HorizontalAlignment="Right" VerticalAlignment="Stretch"
-                                            Margin="0,0,0,4"
-                                            Click="ClipboardRevealedDelete_Click" Tapped="ClipboardAction_Tapped"
-                                            ToolTipService.ToolTip="Delete">
-                                        <controls:AppIcon Kind="Delete" Width="20" Height="20" Fill="White"/>
-                                    </Button>
+                                            <!-- PASS 6: glass row card (white ~5%) — the Border is
+                                                 structural and keeps the reveal contract: Tag,
+                                                 TranslateTransform render transform, tap-to-copy. -->
+                                            <Border Padding="8" Margin="0,0,0,6"
+                                                    Background="{StaticResource Semantic.Surface.ClipItem}"
+                                                    CornerRadius="10"
+                                                    Tag="ClipboardFrontCard"
+                                                    Tapped="ClipboardItemCard_Tapped">
+                                                <Border.RenderTransform>
+                                                    <TranslateTransform x:Name="FrontCardTranslate" X="0" Y="0" />
+                                                </Border.RenderTransform>
+                                                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                                                    <!-- Thumbnail / type glyph — hidden for text rows (the type
+                                                         label is the text row's anchor) -->
+                                                    <Grid Grid.Column="0" Width="64" Height="64" CornerRadius="8" Background="#12FFFFFF" VerticalAlignment="Center"
+                                                          Visibility="{x:Bind Type, Converter={StaticResource ClipboardItemVisibilityConverter}, ConverterParameter=Tile, Mode=OneWay}">
+                                                        <Image Source="{x:Bind ImageFilePath, Converter={StaticResource ClipboardImagePathConverter}, Mode=OneWay}"
+                                                               Visibility="{x:Bind ImageFilePath, Converter={StaticResource NullToVisibilityConverter}, Mode=OneWay}"
+                                                               Stretch="UniformToFill" />
+                                                        <controls:AppIcon Kind="{x:Bind Type, Converter={StaticResource ClipboardTypeIconConverter}, Mode=OneWay}"
+                                                                          Width="16" Height="16"
+                                                                          Fill="{ThemeResource AccentBrush}"
+                                                                          Visibility="{x:Bind ImageFilePath, Converter={StaticResource NullToVisibilityInverseConverter}, Mode=OneWay}" />
+                                                    </Grid>
 
-                                    <!-- Front card -->
-                                    <Border BorderBrush="Gray" BorderThickness="1" Padding="8" Margin="0,0,0,4"
-                                            Background="Transparent"
-                                            Tag="ClipboardFrontCard"
-                                            Tapped="ClipboardItemCard_Tapped">
-                                        <Border.RenderTransform>
-                                            <TranslateTransform x:Name="FrontCardTranslate" X="0" Y="0" />
-                                        </Border.RenderTransform>
-                                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
-                                            <!-- Thumbnail / type glyph (64x64) -->
-                                            <Grid Grid.Column="0" Width="64" Height="64" CornerRadius="6" Background="#12FFFFFF" VerticalAlignment="Center">
-                                                <Image Source="{x:Bind ImageFilePath, Converter={StaticResource ClipboardImagePathConverter}, Mode=OneWay}"
-                                                       Visibility="{x:Bind ImageFilePath, Converter={StaticResource NullToVisibilityConverter}, Mode=OneWay}"
-                                                       Stretch="UniformToFill" />
-                                                <controls:AppIcon Kind="{x:Bind Type, Converter={StaticResource ClipboardTypeIconConverter}, Mode=OneWay}"
-                                                                  Width="16" Height="16"
-                                                                  Fill="{ThemeResource AccentBrush}"
-                                                                  Visibility="{x:Bind ImageFilePath, Converter={StaticResource NullToVisibilityInverseConverter}, Mode=OneWay}" />
-                                            </Grid>
+                                                    <!-- PASS 6.1: hierarchy stack with deliberate breathing room —
+                                                         type label → content preview → timestamp, each separated
+                                                         by Spacing.XS (4) instead of the compressed 2 DIP. Uniform
+                                                         for text rows; image rows keep label + timestamp with the
+                                                         same rhythm (preview line is collapsed for images). -->
+                                                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="{StaticResource Spacing.XS}">
+                                                        <TextBlock Text="{x:Bind Converter={StaticResource ClipboardTypeLabelConverter}, Mode=OneWay}"
+                                                                   FontSize="11" FontWeight="SemiBold" Foreground="{ThemeResource TextPrimaryBrush}" MaxLines="1"/>
+                                                        <TextBlock Text="{x:Bind Converter={StaticResource ClipboardPreviewConverter}, Mode=OneWay}"
+                                                                   FontSize="10" Foreground="{ThemeResource TextSecondaryBrush}"
+                                                                   TextTrimming="CharacterEllipsis" MaxLines="1"
+                                                                   Visibility="{x:Bind Type, Converter={StaticResource ClipboardItemVisibilityConverter}, Mode=OneWay}"/>
+                                                        <TextBlock Text="{x:Bind Timestamp, Converter={StaticResource ClipboardTimestampConverter}, Mode=OneWay}"
+                                                                   FontSize="9" Foreground="{ThemeResource TextSecondaryBrush}"/>
+                                                    </StackPanel>
 
-                                            <!-- Title / content text -->
-                                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
-                                                <TextBlock Text="{x:Bind Title, Mode=OneWay}" FontSize="11" FontWeight="SemiBold" Foreground="{ThemeResource TextPrimaryBrush}" TextTrimming="CharacterEllipsis" MaxLines="1"/>
-                                                <TextBlock Text="{x:Bind Detail, Mode=OneWay}" FontSize="9.5" Foreground="{ThemeResource TextSecondaryBrush}" TextTrimming="CharacterEllipsis" MaxLines="1"/>
-                                            </StackPanel>
-
-                                            <!-- Pin + More stacked vertically in the trailing slot -->
-                                            <StackPanel Grid.Column="2" VerticalAlignment="Center" Spacing="4">
-                                                <Button Style="{StaticResource CardButtonStyle}"
-                                                        Click="ClipboardMore_Click" Tapped="ClipboardAction_Tapped"
-                                                        ToolTipService.ToolTip="More">
-                                                    <controls:AppIcon Kind="More" Width="16" Height="16"/>
-                                                </Button>
-                                                <Button Style="{StaticResource CardButtonStyle}"
-                                                        Click="ClipboardPin_Click" Tapped="ClipboardAction_Tapped"
-                                                        ToolTipService.ToolTip="Pin/Unpin">
-                                                    <controls:AppIcon Kind="{x:Bind IsPinned, Converter={StaticResource IsPinnedToIconConverter}, Mode=OneWay}"
-                                                                      Filled="{x:Bind IsPinned, Mode=OneWay}"
-                                                                      Fill="{x:Bind IsPinned, Converter={StaticResource IsPinnedToBrushConverter}, Mode=OneWay}"
-                                                                      Width="16" Height="16"/>
-                                                </Button>
-                                            </StackPanel>
+                                                    <!-- Pin + More — compact, integrated into the glass card -->
+                                                    <StackPanel Grid.Column="2" VerticalAlignment="Center" Spacing="4">
+                                                        <Button Style="{StaticResource CardButtonStyle}" Width="24" Height="24"
+                                                                Click="ClipboardMore_Click" Tapped="ClipboardAction_Tapped"
+                                                                ToolTipService.ToolTip="More">
+                                                            <controls:AppIcon Kind="More" Width="14" Height="14"/>
+                                                        </Button>
+                                                        <Button Style="{StaticResource CardButtonStyle}" Width="24" Height="24"
+                                                                Click="ClipboardPin_Click" Tapped="ClipboardAction_Tapped"
+                                                                ToolTipService.ToolTip="Pin/Unpin">
+                                                            <controls:AppIcon Kind="{x:Bind IsPinned, Converter={StaticResource IsPinnedToIconConverter}, Mode=OneWay}"
+                                                                              Filled="{x:Bind IsPinned, Mode=OneWay}"
+                                                                              Fill="{x:Bind IsPinned, Converter={StaticResource IsPinnedToBrushConverter}, Mode=OneWay}"
+                                                                              Width="14" Height="14"/>
+                                                        </Button>
+                                                    </StackPanel>
+                                                </Grid>
+                                            </Border>
                                         </Grid>
-                                    </Border>
-                                </Grid>
-                            </DataTemplate>
-                        </ItemsRepeater.ItemTemplate>
-                    </ItemsRepeater>
-                        </ScrollViewer>
+                                    </DataTemplate>
+                                </ItemsRepeater.ItemTemplate>
+                            </ItemsRepeater>
+                            </ScrollViewer>
+                            <TextBlock x:Name="ClipboardEmptyText" Text="Nothing copied yet" FontSize="11" Foreground="{ThemeResource TextSecondaryBrush}"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                                       Visibility="{x:Bind ClipboardEmptyVisibility, Mode=OneWay}" />
+                        </Grid>
                     </Grid>
                 </controls:WidgetCard.BodyContent>
                 </controls:WidgetCard>
 
-                <!-- Music card (PASS 2): the existing Now Playing section, moved
-                     unchanged from its full-width row into the lower-right card
-                     slot. Card surface redesign is deferred to the material pass. -->
-                <Border Grid.Row="1" BorderBrush="Gray" BorderThickness="1" Padding="0">
+                <!-- Music card (PASS 3): the existing Now Playing section in the
+                     lower-right slot. Legacy gray rectangular outline removed; the
+                     container (structural) now wears the unified CardTint surface
+                     + Radius.Large like the other cards. Padding = Spacing.M (12)
+                     materialized — Thickness cannot consume the x:Double token.
+                     Content untouched. -->
+                <Border Grid.Row="1"
+                        Background="{StaticResource Semantic.Surface.CardTint}"
+                        CornerRadius="{StaticResource Radius.Large}"
+                        Padding="12">
             <Grid RowDefinitions="Auto,*,Auto">
                 <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,6">
-                    <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6">
-                        <controls:AppIcon Kind="MusicNote" Width="12" Height="12" Fill="{ThemeResource AccentBrush}"/>
-                        <TextBlock Text="NOW PLAYING" FontSize="10" FontWeight="Bold" Foreground="{ThemeResource TextSecondaryBrush}" CharacterSpacing="50"/>
+                    <!-- PASS 5.4: VerticalAlignment=Top (same as the Focus header group) — the
+                         group must hug the top of the row instead of Stretching into the 32 DIP
+                         header band (driven by the source-nav buttons), which centered the icon
+                         against the band while the text pinned to its top, dropping the icon
+                         ~7 DIP. Icon + text now share one compact 16 DIP group, centered on the
+                         same relationship as the Focus header. Icon color = Azure accent. -->
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Top">
+                        <controls:AppIcon Kind="MusicNote" Width="16" Height="16" Fill="{ThemeResource AccentBrush}"/>
+                        <TextBlock Text="MUSIC" FontSize="12" FontWeight="Bold" Foreground="{ThemeResource TextSecondaryBrush}" CharacterSpacing="50"/>
                     </StackPanel>
+                    <!-- PASS 5: source navigation — chevron icons directly on the card surface
+                         (no circular container/chrome; CardButtonStyle is transparent). -->
                     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
                         <Button Style="{StaticResource CardButtonStyle}" Command="{x:Bind MediaViewModel.PreviousSourceCommand}" IsEnabled="{x:Bind MediaViewModel.HasMultipleSources, Mode=OneWay}" ToolTipService.ToolTip="Previous source">
-                            <controls:AppIcon Kind="Previous" Width="16" Height="16"/>
+                            <controls:AppIcon Kind="ChevronLeft" Width="16" Height="16"/>
                         </Button>
                         <Button Style="{StaticResource CardButtonStyle}" Command="{x:Bind MediaViewModel.NextSourceCommand}" IsEnabled="{x:Bind MediaViewModel.HasMultipleSources, Mode=OneWay}" ToolTipService.ToolTip="Next source">
-                            <controls:AppIcon Kind="Next" Width="16" Height="16"/>
+                            <controls:AppIcon Kind="ChevronRight" Width="16" Height="16"/>
                         </Button>
                     </StackPanel>
                 </Grid>
@@ -405,21 +703,33 @@
                                           Fill="{ThemeResource TextSecondaryBrush}"
                                           Visibility="{x:Bind MediaViewModel.Thumbnail, Converter={StaticResource NullToVisibilityInverseConverter}, Mode=OneWay}" />
                     </Grid>
-                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,-4,0,0">
+                    <!-- PASS 5.1: removed the -4 optical hack — it pushed the title/artist block
+                         above the album art's top edge. Title now aligns flush with the art top. -->
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
                         <TextBlock Text="{x:Bind MediaViewModel.Title, Mode=OneWay}" FontSize="15" FontWeight="Bold" Foreground="{ThemeResource TextPrimaryBrush}" TextTrimming="CharacterEllipsis"/>
                         <TextBlock Text="{x:Bind MediaViewModel.Artist, Mode=OneWay}" FontSize="11" Foreground="{ThemeResource TextSecondaryBrush}" Margin="0,2,0,8" TextTrimming="CharacterEllipsis"/>
                         <Grid ColumnDefinitions="Auto,*,Auto" VerticalAlignment="Center">
-                            <TextBlock Grid.Column="0" Text="{x:Bind CurrentPlaybackTimeText, Mode=OneWay}" FontSize="9" Foreground="{ThemeResource TextSecondaryBrush}"/>
-                            <Slider x:Name="PlaybackSlider" Grid.Column="1" Minimum="0" Maximum="100" Value="{x:Bind PlaybackProgressValue, Mode=OneWay}" Background="#15FFFFFF" Foreground="{ThemeResource AccentBrush}" Margin="8,0,8,0" HorizontalAlignment="Stretch" VerticalAlignment="Center" IsThumbToolTipEnabled="False" ValueChanged="PlaybackSlider_ValueChanged">
-                                <Slider.Resources>
-                                    <x:Double x:Key="SliderTrackThemeHeight">2.5</x:Double>
-                                    <x:Double x:Key="SliderHorizontalThumbWidth">16</x:Double>
-                                    <x:Double x:Key="SliderHorizontalThumbHeight">16</x:Double>
-                                    <x:Double x:Key="SliderInnerThumbWidth">8</x:Double>
-                                    <x:Double x:Key="SliderInnerThumbHeight">8</x:Double>
-                                </Slider.Resources>
-                            </Slider>
-                            <TextBlock Grid.Column="2" Text="{x:Bind TotalPlaybackTimeText, Mode=OneWay}" FontSize="9" Foreground="{ThemeResource TextSecondaryBrush}"/>
+                            <!-- PASS 5.1: VerticalAlignment=Center keeps the labels on the track's
+                                 centerline (default Stretch pinned them to the top of the row). -->
+                            <TextBlock Grid.Column="0" Text="{x:Bind CurrentPlaybackTimeText, Mode=OneWay}" FontSize="9" Foreground="{ThemeResource TextSecondaryBrush}" VerticalAlignment="Center"/>
+                            <!-- PASS 5: thick rounded progress bar — Azure active portion over a
+                                 neutral track, no thumb. The existing Slider is invisible on top
+                                 (Opacity=0 keeps hit-testing), preserving 100% of the seek/drag
+                                 architecture; its Value drives the visible fill. -->
+                            <Grid Grid.Column="1" Margin="4,0,4,0" VerticalAlignment="Center">
+                                <Border Height="6" CornerRadius="3" Background="{StaticResource Semantic.Surface.Raised}" VerticalAlignment="Center"/>
+                                <Border Height="6" CornerRadius="3" Background="{ThemeResource AccentBrush}" VerticalAlignment="Center" HorizontalAlignment="Stretch">
+                                    <Border.RenderTransform>
+                                        <ScaleTransform x:Name="PlaybackFillScale" ScaleX="0" ScaleY="1" />
+                                    </Border.RenderTransform>
+                                </Border>
+                                <Slider x:Name="PlaybackSlider" Minimum="0" Maximum="100"
+                                        Value="{x:Bind PlaybackProgressValue, Mode=OneWay}"
+                                        Opacity="0" IsThumbToolTipEnabled="False"
+                                        ValueChanged="PlaybackSlider_ValueChanged"
+                                        VerticalAlignment="Stretch"/>
+                            </Grid>
+                            <TextBlock Grid.Column="2" Text="{x:Bind TotalPlaybackTimeText, Mode=OneWay}" FontSize="9" Foreground="{ThemeResource TextSecondaryBrush}" VerticalAlignment="Center"/>
                         </Grid>
                     </StackPanel>
                 </Grid>
@@ -439,9 +749,23 @@
                     </Button>
                     <Grid Grid.Column="5" ColumnDefinitions="Auto,*" Width="120" VerticalAlignment="Center">
                         <Button Grid.Column="0" Style="{StaticResource CardButtonStyle}" Width="28" Height="28" Click="MuteButton_Click" ToolTipService.ToolTip="Mute/Unmute">
-                            <controls:AppIcon Kind="Speaker1" Width="14" Height="14"/>
+                            <controls:AppIcon Kind="{x:Bind VolumeIconKind, Mode=OneWay}" Width="14" Height="14"/>
                         </Button>
-                        <Slider Grid.Column="1" Minimum="0" Maximum="100" Value="{x:Bind VolumePercentValue, Mode=TwoWay}" Margin="4,0,0,0" Height="20" Foreground="{ThemeResource AccentBrush}" VerticalAlignment="Center" />
+                        <!-- PASS 5: volume bar matches the playback bar (6 DIP, rounded, Azure fill
+                             over neutral track) while staying independently functional — the
+                             invisible Slider keeps TwoWay volume binding. -->
+                        <Grid Grid.Column="1" Margin="4,0,0,0" VerticalAlignment="Center">
+                            <Border Height="6" CornerRadius="3" Background="{StaticResource Semantic.Surface.Raised}" VerticalAlignment="Center"/>
+                            <Border Height="6" CornerRadius="3" Background="{ThemeResource AccentBrush}" VerticalAlignment="Center" HorizontalAlignment="Stretch">
+                                <Border.RenderTransform>
+                                    <ScaleTransform x:Name="VolumeFillScale" ScaleX="0" ScaleY="1" />
+                                </Border.RenderTransform>
+                            </Border>
+                            <Slider x:Name="VolumeSlider" Minimum="0" Maximum="100"
+                                    Value="{x:Bind VolumePercentValue, Mode=TwoWay}"
+                                    Opacity="0" VerticalAlignment="Stretch"
+                                    ValueChanged="VolumeSlider_ValueChanged" />
+                        </Grid>
                     </Grid>
                 </Grid>
             </Grid>

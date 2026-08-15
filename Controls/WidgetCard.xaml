@@ -54,9 +54,13 @@
                 Opacity="0"
                 IsHitTestVisible="False" />
 
+        <!-- PASS 3: the resting card surface is the unified CardTint (black
+             @ ~20%) so every card reads as a dark surface embedded in the Halo
+             glass, darker than the ~15% dashboard tint. Hover/press/focus keep
+             the layered elevation system below/above it. -->
         <Border x:Name="CardSurface"
                 Style="{StaticResource Elevation.Flat}"
-                Background="{StaticResource Semantic.Surface.Default}"
+                Background="{StaticResource Semantic.Surface.CardTint}"
                 BorderBrush="{StaticResource Semantic.Border.Default}"
                 CornerRadius="{StaticResource Radius.Large}">
             <Grid>
