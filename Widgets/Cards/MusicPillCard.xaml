@@ -23,33 +23,38 @@
         </Style>
     </UserControl.Resources>
 
-    <!-- PASS 9 (final): inner music surface — translucent white ~5% frosted
-         glass, fully pill-shaped (radius 999), 2 DIP internal padding all
-         sides. Sits INSIDE the outer black 5% pill (PillDashboard
-         CardStripBorder, 2 DIP padding) so a thin glass rim separates the two
-         layers: taskbar → black 5% shell → 2 DIP rim → white 5% capsule →
-         2 DIP → music content.
+    <!-- PASS 9 (final geometry): inner music surface — fully translucent
+         white ~2% tint (#05FFFFFF), a MODERATE rounded rectangle
+         (CornerRadius 14 — NOT a capsule; no 999 / half-height radius).
+         2 DIP internal padding all sides. Sits INSIDE the outer black 5%
+         rounded-rectangle shell (PillDashboard CardStripBorder, CornerRadius
+         14 — matched, 3 DIP padding) so a thin dark glass rim separates the
+         two layers: taskbar → black 5% rounded shell → 3 DIP rim → white
+         2% rounded panel → 2 DIP → content.
 
          ContentGrid height + album art size are set DYNAMICALLY from
          code-behind (ContentAreaHeight = taskbar − 10) so the content fills
          the available pill height instead of measuring at its tiny desired
          size — the parent CardStrip is now a Grid (not StackPanel) so the
          capsule stretches to the pill height and the content scales with it. -->
-    <Border Background="#0DFFFFFF"
-            CornerRadius="999"
+    <Border x:Name="RootCapsule"
+            Background="#05FFFFFF"
+            CornerRadius="14"
             Padding="2">
 
         <Grid x:Name="ContentGrid"
               ColumnDefinitions="Auto,Auto,Auto,Auto">
 
-            <!-- Col 0: Album art — sized dynamically (taskbar − 12), rounded
-                 square, strongest visual element. MusicNote fallback. -->
+            <!-- Col 0: Album art — sized dynamically (taskbar − 12 → 36 DIP),
+                 rounded square (radius 6), strongest visual element. Left inset
+                 (4) keeps it off the capsule edge per the reference. MusicNote
+                 fallback. -->
             <Grid x:Name="AlbumArt"
                   Grid.Column="0"
                   Width="32" Height="32"
                   CornerRadius="6"
                   Background="#15FFFFFF"
-                  Margin="0,0,8,0"
+                  Margin="4,0,8,0"
                   VerticalAlignment="Center">
                 <Image Source="{x:Bind Thumbnail, Mode=OneWay}"
                        Visibility="{x:Bind Thumbnail,
@@ -68,8 +73,9 @@
             <!-- Col 1: Title (13 DIP, semibold) + Artist (10.5 DIP, secondary) -->
             <StackPanel Grid.Column="1"
                         VerticalAlignment="Center"
-                        Margin="0,0,12,0">
-                <TextBlock Text="{x:Bind Title, Mode=OneWay}"
+                        Margin="0,0,10,0">
+                <TextBlock x:Name="TitleText"
+                           Text="{x:Bind Title, Mode=OneWay}"
                            FontSize="13"
                            FontWeight="SemiBold"
                            Foreground="{ThemeResource TextPrimaryBrush}"
@@ -84,26 +90,26 @@
                            Margin="0,1,0,0"/>
             </StackPanel>
 
-            <!-- Col 2: 5-bar visualizer — Azure while playing, muted when idle.
-                 Sized to the pill (~60% of capsule height), no background. -->
-            <StackPanel Grid.Column="2"
+            <!-- Col 2: 4-bar visualizer (matches the reference) — Azure while
+                 playing, visible neutral white when idle. No background. -->
+            <StackPanel x:Name="VisualizerPanel"
+                        Grid.Column="2"
                         Orientation="Horizontal"
                         Spacing="3"
-                        Height="22"
-                        Margin="0,0,12,0"
+                        Height="24"
+                        Margin="0,0,10,0"
                         VerticalAlignment="Center">
-                <Border x:Name="WBar0" Width="3.5" Height="10" CornerRadius="1.75" Background="#15FFFFFF" VerticalAlignment="Center"/>
-                <Border x:Name="WBar1" Width="3.5" Height="16" CornerRadius="1.75" Background="#15FFFFFF" VerticalAlignment="Center"/>
-                <Border x:Name="WBar2" Width="3.5" Height="8"  CornerRadius="1.75" Background="#15FFFFFF" VerticalAlignment="Center"/>
-                <Border x:Name="WBar3" Width="3.5" Height="19" CornerRadius="1.75" Background="#15FFFFFF" VerticalAlignment="Center"/>
-                <Border x:Name="WBar4" Width="3.5" Height="12" CornerRadius="1.75" Background="#15FFFFFF" VerticalAlignment="Center"/>
+                <Border x:Name="WBar0" Width="4" Height="12" CornerRadius="2" Background="#40FFFFFF" VerticalAlignment="Center"/>
+                <Border x:Name="WBar1" Width="4" Height="18" CornerRadius="2" Background="#40FFFFFF" VerticalAlignment="Center"/>
+                <Border x:Name="WBar2" Width="4" Height="10" CornerRadius="2" Background="#40FFFFFF" VerticalAlignment="Center"/>
+                <Border x:Name="WBar3" Width="4" Height="20" CornerRadius="2" Background="#40FFFFFF" VerticalAlignment="Center"/>
             </StackPanel>
 
             <!-- Col 3: Playback controls — white Fluent icons, no backgrounds,
                  ~20 DIP glyphs on 30 DIP hit targets, play/pause slightly larger -->
             <StackPanel Grid.Column="3"
                         Orientation="Horizontal"
-                        Spacing="4"
+                        Spacing="8"
                         VerticalAlignment="Center">
                 <Button Style="{StaticResource PillButtonStyle}"
                         Click="OnPreviousClick"

@@ -68,8 +68,12 @@
                 Visibility="{x:Bind ViewModel.PillVisibility, Mode=OneWay}"
                 AutomationProperties.Name="Dynamic Island Pill">
 
-            <!-- Inside the collapsed capsule, center the active content vertically -->
-            <Grid Padding="10,0,10,0">
+            <!-- Inside the collapsed capsule, center the active content vertically.
+                 PASS 9: removed the 10 DIP horizontal padding — it left more
+                 acrylic space left/right of the music pill than top/bottom and
+                 squeezed the pill into 300 DIP. The pill's own 2 DIP paddings
+                 remain untouched. -->
+            <Grid>
                 <ContentControl
                     x:Name="WidgetHost"
                     Content="{x:Bind ViewModel.ActiveWidget, Mode=OneWay}"

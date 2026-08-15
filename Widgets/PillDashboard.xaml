@@ -213,11 +213,14 @@
                 </StackPanel>
             </Border>
 
-            <!-- PASS 9 (final): outer pill — translucent black ~5% glass shell,
-                 fully rounded (capsule), 2 DIP from the taskbar's left edge.
-                 Height = TaskbarHeightDips − 2 (set in code-behind — never
-                 hardcoded). 2 DIP padding all sides; the inner white 5% capsule
-                 (MusicPillCard) sits inside with a visible glass rim.
+            <!-- PASS 9 (final geometry): outer widget — fully translucent
+                 black ~2% tint (#05000000), a MODERATE rounded rectangle
+                 (CornerRadius 14 — NOT a capsule; no 999 / half-height
+                 radius), 2 DIP from the taskbar's left edge. Height =
+                 TaskbarHeightDips − 2 (set in code-behind — never hardcoded).
+                 3 DIP padding all sides; the inner white 2% rounded panel
+                 (MusicPillCard, CornerRadius 14 — matched) sits inside with a
+                 faint dark glass rim.
 
                  KEY FIX: CardStrip is a Grid (not StackPanel) so children
                  STRETCH to fill the pill height instead of measuring at their
@@ -225,10 +228,9 @@
                  content that previous passes could not fix. Weather/Shelf
                  cards keep their own explicit sizes (28/32 DIP, centered). -->
             <Border x:Name="CardStripBorder"
-                    Background="#0D000000"
-                    CornerRadius="999"
-                    Padding="2"
-                    Margin="2,0,0,0"
+                    Background="#05000000"
+                    CornerRadius="14"
+                    Padding="3"
                     HorizontalAlignment="Left">
                 <Grid x:Name="CardStrip"
                       ColumnDefinitions="Auto,Auto,Auto">

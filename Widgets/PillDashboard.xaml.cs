@@ -76,6 +76,29 @@ public sealed partial class PillDashboard : UserControl, IIslandWidget
         App.FileShelfStore.ItemsChanged += OnShelfItemsChanged;
         UpdateCardVisibility();
         Loaded += OnLoaded;
+        // PASS 9: keep the window strip hugging the pill's measured width — a
+        // fixed CardWidth leaves variable slack on the right because the
+        // title/artist widths change per track.
+        CardStripBorder.LayoutUpdated += OnCardStripLayoutUpdated;
+    }
+
+    // Last width published to the window strip (see OnCardStripLayoutUpdated).
+    private double _lastReportedStripWidth = double.NegativeInfinity;
+
+    /// <summary>
+    /// PASS 9: re-reports the outer pill's ACTUAL rendered width whenever it
+    /// changes (track change → different title width). The hysteresis guard
+    /// (2 DIP) prevents an animation feedback loop: resizing the strip does not
+    /// change the pill's own content width, so once the strip matches, no
+    /// further reports fire. CardStripBorder.ActualWidth already includes the
+    /// shelf card when it is visible.
+    /// </summary>
+    private void OnCardStripLayoutUpdated(object? sender, object e)
+    {
+        if (CardStripBorder == null || CardStripBorder.ActualWidth <= 1) return;
+        if (Math.Abs(CardStripBorder.ActualWidth - _lastReportedStripWidth) < 2.0) return;
+        _lastReportedStripWidth = CardStripBorder.ActualWidth;
+        TotalWidthChanged?.Invoke(this, CardStripBorder.ActualWidth);
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
@@ -155,6 +178,12 @@ public sealed partial class PillDashboard : UserControl, IIslandWidget
 
     private double ComputeTotalWidth()
     {
+        // PASS 9: once laid out, report the ACTUAL outer-pill width so the
+        // window strip hugs the pill instead of leaving acrylic slack on the
+        // right. Falls back to the fixed card widths before the first layout.
+        if (CardStripBorder != null && CardStripBorder.ActualWidth > 1)
+            return CardStripBorder.ActualWidth;
+
         double total = MusicCard.ShouldShow
             ? MusicCard.CardWidth
             : WeatherCard.CardWidth;

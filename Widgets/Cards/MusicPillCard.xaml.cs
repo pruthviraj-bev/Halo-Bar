@@ -108,8 +108,10 @@ public sealed partial class MusicPillCard : UserControl, IPillCard, INotifyPrope
 
     // ── Visualizer ───────────────────────────────────────────────────────────
 
-    // Static idle brush — never re-allocated per tick.
-    private static readonly SolidColorBrush MutedBarBrush = new(Windows.UI.Color.FromArgb(30, 255, 255, 255));
+    // Static idle brush — never re-allocated per tick. ~25% white: clearly
+    // visible against the capsule (the old 12% read as faint dashes), still
+    // quiet compared to the Azure active state.
+    private static readonly SolidColorBrush MutedBarBrush = new(Windows.UI.Color.FromArgb(64, 255, 255, 255));
 
     // Thumbnail decode throttle: SMTC raises TimelinePropertiesChanged ~1 Hz
     // during playback and every event carries the SAME album art; decoding it
@@ -127,6 +129,38 @@ public sealed partial class MusicPillCard : UserControl, IPillCard, INotifyPrope
         _dispatcherQueue = DispatcherQueue.GetForCurrentThread();
         ApplyState(App.MediaService.CurrentState);
         App.MediaService.MediaStateChanged += OnMediaStateChanged;
+        Loaded += OnLoadedOnce;
+    }
+
+    // PASS 9 (final): TEMPORARY runtime-bounds diagnostic — dumps the actual
+    // rendered sizes once, ~500 ms after load (after layout settles), so the
+    // pill geometry can be verified against the reference instead of guessed.
+    // Output: %LOCALAPPDATA%\DynamicIsland\logs\app.log  (remove after verification)
+    private bool _boundsLogged;
+    private void OnLoadedOnce(object sender, RoutedEventArgs e)
+    {
+        if (_boundsLogged) return;
+        _boundsLogged = true;
+        var t = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
+        t.Tick += (_, _) =>
+        {
+            t.Stop();
+            try
+            {
+                Logger.Info(
+                    $"[PASS9-DEBUG] taskbar={App.WindowService.TaskbarHeightDips} " +
+                    $"capsule={RootCapsule.ActualWidth:F0}x{RootCapsule.ActualHeight:F0} " +
+                    $"content={ContentGrid.ActualWidth:F0}x{ContentGrid.ActualHeight:F0} " +
+                    $"album={AlbumArt.ActualWidth:F0}x{AlbumArt.ActualHeight:F0} " +
+                    $"title={TitleText.ActualWidth:F0}x{TitleText.ActualHeight:F0} " +
+                    $"viz={VisualizerPanel.ActualWidth:F0}x{VisualizerPanel.ActualHeight:F0}");
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("[PASS9-DEBUG] bounds dump failed", ex);
+            }
+        };
+        t.Start();
     }
 
     private void OnMediaStateChanged(object? sender, MediaState state)
@@ -203,7 +237,6 @@ public sealed partial class MusicPillCard : UserControl, IPillCard, INotifyPrope
         if (WBar1 != null) WBar1.Background = MutedBarBrush;
         if (WBar2 != null) WBar2.Background = MutedBarBrush;
         if (WBar3 != null) WBar3.Background = MutedBarBrush;
-        if (WBar4 != null) WBar4.Background = MutedBarBrush;
     }
 
     private void OnVisualizerTick(object? sender, object e)
@@ -215,19 +248,18 @@ public sealed partial class MusicPillCard : UserControl, IPillCard, INotifyPrope
         }
 
         _tickCount++;
-        // PASS 9 (final): bar heights scaled for the larger visualizer container
-        if (WBar0 != null) WBar0.Height = 4 + 10 * Math.Abs(Math.Sin(_tickCount * 0.40 + 0));
-        if (WBar1 != null) WBar1.Height = 4 + 14 * Math.Abs(Math.Sin(_tickCount * 0.30 + 1));
-        if (WBar2 != null) WBar2.Height = 4 + 8  * Math.Abs(Math.Sin(_tickCount * 0.50 + 2));
-        if (WBar3 != null) WBar3.Height = 4 + 15 * Math.Abs(Math.Sin(_tickCount * 0.35 + 3));
-        if (WBar4 != null) WBar4.Height = 4 + 11 * Math.Abs(Math.Sin(_tickCount * 0.45 + 4));
+        // PASS 9 (shape): 4 bars (matches the reference), heights scaled for the
+        // 24-DIP container so the bars are clearly visible, not faint dashes.
+        if (WBar0 != null) WBar0.Height = 4 + 12 * Math.Abs(Math.Sin(_tickCount * 0.40 + 0));
+        if (WBar1 != null) WBar1.Height = 4 + 16 * Math.Abs(Math.Sin(_tickCount * 0.30 + 1));
+        if (WBar2 != null) WBar2.Height = 4 + 10 * Math.Abs(Math.Sin(_tickCount * 0.50 + 2));
+        if (WBar3 != null) WBar3.Height = 4 + 18 * Math.Abs(Math.Sin(_tickCount * 0.35 + 3));
 
         var accent = (Brush)Application.Current.Resources["AccentBrush"];
         if (WBar0 != null) WBar0.Background = accent;
         if (WBar1 != null) WBar1.Background = accent;
         if (WBar2 != null) WBar2.Background = accent;
         if (WBar3 != null) WBar3.Background = accent;
-        if (WBar4 != null) WBar4.Background = accent;
     }
 
     // ── Playback controls ────────────────────────────────────────────────────
