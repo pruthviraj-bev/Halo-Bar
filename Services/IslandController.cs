@@ -102,8 +102,6 @@ public class IslandController
     {
         _dispatcherQueue = dispatcherQueue;
         App.ClipboardService.ClipboardChanged += OnClipboardChanged;
-        App.BatteryService.NotificationRequired += OnBatteryNotification;
-        App.VolumeService.NotificationRequired += OnVolumeNotification;
 
         // Push default pill dashboard (weather card always, music card when a track
         // is playing) to serve as ambient taskbar display.

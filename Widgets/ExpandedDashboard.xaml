@@ -176,8 +176,8 @@
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
-                                <RowDefinition Height="*" />
                                 <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
                                 <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
                             <!-- Invisible track rect — present for ScrollBar's drag math
@@ -232,6 +232,82 @@
                       Visibility="{TemplateBinding ComputedVerticalScrollBarVisibility}">
                     <primitives:ScrollBar x:Name="VerticalScrollBar"
                                           Style="{StaticResource HaloScrollBarStyle}"
+                                          IsTabStop="False"
+                                          Maximum="{TemplateBinding ScrollableHeight}"
+                                          Orientation="Vertical"
+                                          Value="{TemplateBinding VerticalOffset}"
+                                          ViewportSize="{TemplateBinding ViewportHeight}"
+                                          HorizontalAlignment="Right" />
+                </Grid>
+            </Grid>
+        </ControlTemplate>
+
+        <!-- PASS 6.2: clipboard-only scrollbar. Identical to HaloScrollBarStyle
+             except the thumb enforces a MINIMUM height (24 DIP) so it never
+             collapses into a tiny dot. With the virtualized history (hundreds
+             of items) the thumb height is derived from the
+             viewport/scrollable-height ratio and fell to a few pixels — a
+             floating rounded square at the top of the track. Bluetooth keeps
+             the shared HaloScrollBarStyle untouched. -->
+        <Style x:Key="ClipboardScrollBarStyle" TargetType="primitives:ScrollBar">
+            <Setter Property="Width" Value="10" />
+            <Setter Property="MinWidth" Value="10" />
+            <Setter Property="IsTabStop" Value="False" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="primitives:ScrollBar">
+                        <Grid x:Name="VerticalRoot" Background="Transparent">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <Rectangle x:Name="VerticalTrackRect" Grid.RowSpan="5" Fill="Transparent" Opacity="0" />
+                            <primitives:RepeatButton x:Name="VerticalSmallDecrease" Grid.Row="0" Opacity="0" IsTabStop="False"
+                                                     Template="{StaticResource ScrollBarTransparentButtonTemplate}" />
+                            <primitives:RepeatButton x:Name="VerticalLargeDecrease" Grid.Row="1" Opacity="0" IsTabStop="False"
+                                                     Template="{StaticResource ScrollBarTransparentButtonTemplate}" />
+                            <primitives:Thumb x:Name="VerticalThumb" Grid.Row="2" Width="10" MinHeight="24"
+                                              Background="{StaticResource Semantic.State.Muted}"
+                                              AutomationProperties.AccessibilityView="Raw"
+                                              PointerEntered="ClipboardScrollThumb_PointerEntered"
+                                              PointerExited="ClipboardScrollThumb_PointerExited"
+                                              PointerPressed="ClipboardScrollThumb_PointerPressed"
+                                              PointerReleased="ClipboardScrollThumb_PointerReleased"
+                                              PointerCaptureLost="ClipboardScrollThumb_PointerCaptureLost">
+                                <primitives:Thumb.Template>
+                                    <ControlTemplate TargetType="primitives:Thumb">
+                                        <Border x:Name="ThumbVisual" CornerRadius="2" Margin="3,0,3,0"
+                                                Background="{TemplateBinding Background}" />
+                                    </ControlTemplate>
+                                </primitives:Thumb.Template>
+                            </primitives:Thumb>
+                            <primitives:RepeatButton x:Name="VerticalLargeIncrease" Grid.Row="3" Opacity="0" IsTabStop="False"
+                                                     Template="{StaticResource ScrollBarTransparentButtonTemplate}" />
+                            <primitives:RepeatButton x:Name="VerticalSmallIncrease" Grid.Row="4" Opacity="0" IsTabStop="False"
+                                                     Template="{StaticResource ScrollBarTransparentButtonTemplate}" />
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <ControlTemplate x:Key="ClipboardScrollViewerTemplate" TargetType="ScrollViewer">
+            <Grid Background="{TemplateBinding Background}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <ScrollContentPresenter x:Name="ScrollContentPresenter"
+                                        Grid.ColumnSpan="2"
+                                        Margin="{TemplateBinding Padding}"
+                                        ContentTemplate="{TemplateBinding ContentTemplate}" />
+                <Grid Grid.Column="1"
+                      Visibility="{TemplateBinding ComputedVerticalScrollBarVisibility}">
+                    <primitives:ScrollBar x:Name="VerticalScrollBar"
+                                          Style="{StaticResource ClipboardScrollBarStyle}"
                                           IsTabStop="False"
                                           Maximum="{TemplateBinding ScrollableHeight}"
                                           Orientation="Vertical"
@@ -601,7 +677,7 @@
                                  ScrollViewer chrome (thin rounded thumb, transparent track,
                                  Azure hover). Wheel/drag/scroll plumbing untouched. -->
                             <ScrollViewer VerticalAlignment="Stretch" VerticalScrollBarVisibility="Auto" Padding="0,0,12,0"
-                                          Template="{StaticResource HaloScrollViewerTemplate}">
+                                          Template="{StaticResource ClipboardScrollViewerTemplate}">
                             <ItemsRepeater x:Name="ClipboardRepeater" ItemsSource="{x:Bind ClipboardItems}">
                                 <ItemsRepeater.Layout>
                                     <StackLayout Spacing="0" />
