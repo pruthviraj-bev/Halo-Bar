@@ -176,6 +176,7 @@
                             <ScrollViewer Template="{StaticResource HaloScrollViewerTemplate}"
                                           VerticalScrollBarVisibility="Auto"
                                           VerticalScrollMode="Enabled"
+                                          Padding="0,0,12,0"
                                           Height="176">
                                 <ItemsControl x:Name="FileList">
                                     <ItemsControl.ItemsPanel>
