@@ -4,12 +4,89 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:cards="using:DynamicIsland.Widgets.Cards"
     xmlns:helpers="using:DynamicIsland.Helpers"
-    xmlns:controls="using:DynamicIsland.Controls">
+    xmlns:controls="using:DynamicIsland.Controls"
+    xmlns:primitives="using:Microsoft.UI.Xaml.Controls.Primitives">
 
     <UserControl.Resources>
         <helpers:FolderFileIconConverter x:Key="FolderFileIconConverter"/>
         <helpers:NullToVisibilityConverter x:Key="NullToVisibilityConverter"/>
         <helpers:NullToVisibilityInverseConverter x:Key="NullToVisibilityInverseConverter"/>
+
+        <!-- PASS 16: Halo scrollbar for the Drag Out item list — same template
+             family as the Clipboard/Bluetooth cards (thin rounded thumb on a
+             transparent track, no native Windows chrome; Azure on hover/drag). -->
+        <ControlTemplate x:Key="ScrollBarTransparentButtonTemplate" TargetType="primitives:RepeatButton">
+            <Grid Background="Transparent"/>
+        </ControlTemplate>
+
+        <Style x:Key="HaloScrollBarStyle" TargetType="primitives:ScrollBar">
+            <Setter Property="Width" Value="10"/>
+            <Setter Property="MinWidth" Value="10"/>
+            <Setter Property="IsTabStop" Value="False"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="primitives:ScrollBar">
+                        <Grid x:Name="VerticalRoot" Background="Transparent">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <Rectangle x:Name="VerticalTrackRect" Grid.RowSpan="5" Fill="Transparent" Opacity="0"/>
+                            <primitives:RepeatButton x:Name="VerticalSmallDecrease" Grid.Row="0" Opacity="0" IsTabStop="False"
+                                                     Template="{StaticResource ScrollBarTransparentButtonTemplate}"/>
+                            <primitives:RepeatButton x:Name="VerticalLargeDecrease" Grid.Row="1" Opacity="0" IsTabStop="False"
+                                                     Template="{StaticResource ScrollBarTransparentButtonTemplate}"/>
+                            <primitives:Thumb x:Name="VerticalThumb" Grid.Row="2" Width="10"
+                                              Background="{StaticResource Semantic.State.Muted}"
+                                              AutomationProperties.AccessibilityView="Raw"
+                                              PointerEntered="ShelfScrollThumb_PointerEntered"
+                                              PointerExited="ShelfScrollThumb_PointerExited"
+                                              PointerPressed="ShelfScrollThumb_PointerPressed"
+                                              PointerReleased="ShelfScrollThumb_PointerReleased"
+                                              PointerCaptureLost="ShelfScrollThumb_PointerCaptureLost">
+                                <primitives:Thumb.Template>
+                                    <ControlTemplate TargetType="primitives:Thumb">
+                                        <Border x:Name="ThumbVisual" CornerRadius="2" Margin="3,0,3,0"
+                                                Background="{TemplateBinding Background}"/>
+                                    </ControlTemplate>
+                                </primitives:Thumb.Template>
+                            </primitives:Thumb>
+                            <primitives:RepeatButton x:Name="VerticalLargeIncrease" Grid.Row="3" Opacity="0" IsTabStop="False"
+                                                     Template="{StaticResource ScrollBarTransparentButtonTemplate}"/>
+                            <primitives:RepeatButton x:Name="VerticalSmallIncrease" Grid.Row="4" Opacity="0" IsTabStop="False"
+                                                     Template="{StaticResource ScrollBarTransparentButtonTemplate}"/>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <ControlTemplate x:Key="HaloScrollViewerTemplate" TargetType="ScrollViewer">
+            <Grid Background="{TemplateBinding Background}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <ScrollContentPresenter x:Name="ScrollContentPresenter"
+                                        Grid.ColumnSpan="2"
+                                        Margin="{TemplateBinding Padding}"
+                                        ContentTemplate="{TemplateBinding ContentTemplate}"/>
+                <Grid Grid.Column="1"
+                      Visibility="{TemplateBinding ComputedVerticalScrollBarVisibility}">
+                    <primitives:ScrollBar x:Name="VerticalScrollBar"
+                                          Style="{StaticResource HaloScrollBarStyle}"
+                                          IsTabStop="False"
+                                          Maximum="{TemplateBinding ScrollableHeight}"
+                                          Orientation="Vertical"
+                                          Value="{TemplateBinding VerticalOffset}"
+                                          ViewportSize="{TemplateBinding ViewportHeight}"
+                                          HorizontalAlignment="Right"/>
+                </Grid>
+            </Grid>
+        </ControlTemplate>
     </UserControl.Resources>
 
     <Grid x:Name="RootGrid"
@@ -37,180 +114,213 @@
 
         <StackPanel Orientation="Vertical">
 
-            <!-- Shelf panel — visible when shelf icon clicked -->
+            <!-- Shelf panel — visible when shelf icon clicked.
+                 PASS 16: Drag Out redesign — dark translucent glass outer surface
+                 (same language as the pill shell), [icon] DRAG OUT header, a
+                 fixed-height scrollable item list recessed in a darker inner
+                 container (custom Halo scrollbar), glass item cards (white tint;
+                 Azure ~70% when selected), and a centered trash footer. -->
             <Grid x:Name="ShelfPanel"
                   Visibility="Collapsed"
                   Height="280"
-                  Padding="12,10"
                   PointerPressed="OnShelfPanelPointerPressed"
                   Tapped="OnShelfPanelTapped">
 
-                <StackPanel Spacing="10">
+                <Border Background="#0D000000"
+                        CornerRadius="12"
+                        Padding="3">
+                    <StackPanel Spacing="8">
 
-                    <!-- Drag-out handle: drag here to move staged files to Explorer/desktop.
-                         CanDrag + DragStarting (not StartDragAsync) so the drag ghost can
-                         show the real file icon via DragUI.SetContentFromBitmapImage. -->
-                    <Border x:Name="DragOutHandle"
-                            Background="#15FFFFFF"
-                            CornerRadius="8"
-                            Height="32"
-                            AllowDrop="True"
-                            CanDrag="True"
-                            DragStarting="OnDragStarting"
-                            DropCompleted="OnDropCompleted"
-                            DragOver="OnDragOver"
-                            Drop="OnDrop">
-                        <StackPanel Orientation="Horizontal"
-                                    HorizontalAlignment="Center"
-                                    VerticalAlignment="Center"
-                                    Spacing="6">
-                            <TextBlock Text="⠿"
-                                       FontSize="14"
-                                       Foreground="{ThemeResource TextSecondaryBrush}"
-                                       VerticalAlignment="Center"/>
-                            <TextBlock Text="drag out · drop files here"
-                                       FontSize="10"
-                                       Foreground="{ThemeResource TextSecondaryBrush}"
-                                       VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </Border>
+                        <!-- PASS 16 header: [Drag Out icon] DRAG OUT. The header row
+                             is also the drag-out surface — CanDrag + DragStarting
+                             (not StartDragAsync) so the ghost can show the real file
+                             icon via DragUI.SetContentFromBitmapImage.
+                             PASS 16 r1: the header container is inset to the same
+                             width as an item card (Margin 2 = the list container's
+                             2 DIP padding, so both start/end at the same x), uses
+                             the same white translucent glass tint as the item
+                             cards, and the icon + title are centered within it. -->
+                        <Border x:Name="DragOutHandle"
+                                Height="30"
+                                CornerRadius="8"
+                                Background="#12FFFFFF"
+                                Margin="2,0"
+                                AllowDrop="True"
+                                CanDrag="True"
+                                DragStarting="OnDragStarting"
+                                DropCompleted="OnDropCompleted"
+                                DragOver="OnDragOver"
+                                Drop="OnDrop">
+                            <StackPanel Orientation="Horizontal"
+                                        HorizontalAlignment="Center"
+                                        VerticalAlignment="Center"
+                                        Spacing="6">
+                                <controls:AppIcon Kind="DragOut"
+                                                  Width="14" Height="14"
+                                                  Fill="{ThemeResource AccentBrush}"
+                                                  VerticalAlignment="Center"/>
+                                <TextBlock Text="DRAG OUT"
+                                           FontSize="12"
+                                           FontWeight="SemiBold"
+                                           Foreground="{ThemeResource TextPrimaryBrush}"
+                                           VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Border>
 
-                    <!-- File list — vertical rows: thumbnail left, name right -->
-                    <ScrollViewer VerticalScrollBarVisibility="Auto"
-                                  VerticalScrollMode="Enabled"
-                                  MaxHeight="160">
-                        <ItemsControl x:Name="FileList">
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <StackPanel Orientation="Vertical" Spacing="2"/>
-                                </ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate x:DataType="helpers:StashedFile">
-                                    <!-- Single tap selects; double-tap opens; ✕ removes. -->
-                                    <Grid ColumnDefinitions="48,*,Auto"
-                                          Height="52"
-                                          Background="Transparent"
-                                          Tapped="OnFileRowTapped"
-                                          DoubleTapped="OnFileRowDoubleTapped"
-                                          PointerEntered="OnFileRowPointerEntered"
-                                          PointerExited="OnFileRowPointerExited">
-                                        <!-- 48×48 cell: glyph fallback underneath,
-                                             shell thumbnail layered on top -->
-                                        <Grid Grid.Column="0"
-                                              Width="48" Height="48"
-                                              HorizontalAlignment="Center">
-                                            <controls:AppIcon
-                                                Kind="{x:Bind IsFolder,
-                                                    Converter={StaticResource FolderFileIconConverter}}"
-                                                Visibility="{x:Bind Thumbnail,
-                                                    Converter={StaticResource NullToVisibilityInverseConverter}}"
-                                                Width="32" Height="32"
-                                                HorizontalAlignment="Center"
-                                                VerticalAlignment="Center"/>
-                                            <Image Source="{x:Bind Thumbnail}"
-                                                   Visibility="{x:Bind Thumbnail,
-                                                       Converter={StaticResource NullToVisibilityConverter}}"
-                                                   Stretch="Uniform"
-                                                   Width="48" Height="48"
-                                                   HorizontalAlignment="Center"
-                                                   VerticalAlignment="Center"/>
-                                        </Grid>
-                                        <!-- Name + open affordance -->
-                                        <Grid Grid.Column="1"
-                                              ColumnDefinitions="*,Auto"
-                                              VerticalAlignment="Center"
-                                              Margin="8,0,0,0">
-                                            <TextBlock Grid.Column="0"
-                                                       Text="{x:Bind Name}"
-                                                       FontSize="11"
-                                                       Foreground="{ThemeResource TextPrimaryBrush}"
-                                                       TextTrimming="CharacterEllipsis"
-                                                       VerticalAlignment="Center"/>
-                                            <controls:AppIcon Grid.Column="1"
-                                                              Kind="OpenInNew"
-                                                              Width="10" Height="10"
-                                                              Fill="{ThemeResource TextSecondaryBrush}"
-                                                              Opacity="0.6"
-                                                              VerticalAlignment="Center"
-                                                              Margin="4,0,4,0"
-                                                              ToolTipService.ToolTip="Open"/>
-                                        </Grid>
-                                        <Button Grid.Column="2"
-                                                Click="OnFileRowRemoveClick"
-                                                Background="Transparent"
-                                                BorderBrush="Transparent"
-                                                BorderThickness="0"
-                                                Padding="6"
-                                                Width="28" Height="28"
-                                                CornerRadius="6"
-                                                VerticalAlignment="Center"
-                                                ToolTipService.ToolTip="Remove from shelf">
-                                            <controls:AppIcon Kind="Dismiss"
-                                                              Width="12" Height="12"
-                                                              Fill="{ThemeResource TextSecondaryBrush}"/>
-                                        </Button>
-                                    </Grid>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </ScrollViewer>
+                        <!-- PASS 16: fixed-height item-list container — darker
+                             translucent recessed surface, custom Halo scrollbar.
+                             Fixed height: the panel never grows with item count. -->
+                        <Border Background="#14000000"
+                                CornerRadius="8"
+                                Padding="2">
+                            <ScrollViewer Template="{StaticResource HaloScrollViewerTemplate}"
+                                          VerticalScrollBarVisibility="Auto"
+                                          VerticalScrollMode="Enabled"
+                                          Height="176">
+                                <ItemsControl x:Name="FileList">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <StackPanel Orientation="Vertical" Spacing="4"/>
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="helpers:StashedFile">
+                                            <!-- PASS 16 item card: white translucent
+                                                 glass surface. Single tap selects
+                                                 (Azure ~70% from code-behind),
+                                                 double-tap opens, ✕ removes. -->
+                                            <Border CornerRadius="8"
+                                                    Padding="6,4"
+                                                    Background="#12FFFFFF"
+                                                    Tapped="OnFileRowTapped"
+                                                    DoubleTapped="OnFileRowDoubleTapped"
+                                                    PointerEntered="OnFileRowPointerEntered"
+                                                    PointerExited="OnFileRowPointerExited">
+                                                <Grid ColumnDefinitions="48,*,Auto"
+                                                      Height="48">
+                                                    <!-- 48×48 cell: glyph fallback underneath,
+                                                         shell thumbnail layered on top -->
+                                                    <Grid Grid.Column="0"
+                                                          Width="48" Height="48"
+                                                          HorizontalAlignment="Center">
+                                                        <controls:AppIcon
+                                                            Kind="{x:Bind IsFolder,
+                                                                Converter={StaticResource FolderFileIconConverter}}"
+                                                            Visibility="{x:Bind Thumbnail,
+                                                                Converter={StaticResource NullToVisibilityInverseConverter}}"
+                                                            Width="32" Height="32"
+                                                            HorizontalAlignment="Center"
+                                                            VerticalAlignment="Center"/>
+                                                        <Image Source="{x:Bind Thumbnail}"
+                                                               Visibility="{x:Bind Thumbnail,
+                                                                   Converter={StaticResource NullToVisibilityConverter}}"
+                                                               Stretch="Uniform"
+                                                               Width="48" Height="48"
+                                                               HorizontalAlignment="Center"
+                                                               VerticalAlignment="Center"/>
+                                                    </Grid>
+                                                    <!-- Name + open affordance -->
+                                                    <Grid Grid.Column="1"
+                                                          ColumnDefinitions="*,Auto"
+                                                          VerticalAlignment="Center"
+                                                          Margin="8,0,0,0">
+                                                        <TextBlock Grid.Column="0"
+                                                                   Text="{x:Bind Name}"
+                                                                   FontSize="11"
+                                                                   Foreground="{ThemeResource TextPrimaryBrush}"
+                                                                   TextTrimming="CharacterEllipsis"
+                                                                   VerticalAlignment="Center"/>
+                                                        <controls:AppIcon Grid.Column="1"
+                                                                          Kind="OpenInNew"
+                                                                          Width="10" Height="10"
+                                                                          Fill="{ThemeResource TextSecondaryBrush}"
+                                                                          Opacity="0.6"
+                                                                          VerticalAlignment="Center"
+                                                                          Margin="4,0,4,0"
+                                                                          ToolTipService.ToolTip="Open"/>
+                                                    </Grid>
+                                                    <Button Grid.Column="2"
+                                                            Click="OnFileRowRemoveClick"
+                                                            Background="Transparent"
+                                                            BorderBrush="Transparent"
+                                                            BorderThickness="0"
+                                                            Padding="6"
+                                                            Width="28" Height="28"
+                                                            CornerRadius="6"
+                                                            VerticalAlignment="Center"
+                                                            ToolTipService.ToolTip="Remove from shelf">
+                                                        <controls:AppIcon Kind="Dismiss"
+                                                                          Width="12" Height="12"
+                                                                          Fill="{ThemeResource TextSecondaryBrush}"/>
+                                                    </Button>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                        </Border>
 
-                    <!-- Divider + Clear -->
-                    <Border Height="1" Background="#22FFFFFF"/>
-                    <Button Content="Clear all"
-                            Click="OnClearClick"
-                            HorizontalAlignment="Center"
-                            Background="Transparent"
-                            BorderBrush="Transparent"
-                            Foreground="{ThemeResource TextSecondaryBrush}"
-                            FontSize="11"
-                            PointerPressed="OnShelfPanelPointerPressed"/>
+                        <!-- PASS 16 footer: divider + centered trash -->
+                        <Border Height="1" Background="#22FFFFFF"/>
+                        <Button Click="OnClearClick"
+                                HorizontalAlignment="Center"
+                                Background="Transparent"
+                                BorderBrush="Transparent"
+                                BorderThickness="0"
+                                Padding="8"
+                                CornerRadius="16"
+                                PointerPressed="OnShelfPanelPointerPressed"
+                                ToolTipService.ToolTip="Clear shelf">
+                            <controls:AppIcon Kind="Delete"
+                                              Width="16" Height="16"
+                                              Fill="{ThemeResource TextSecondaryBrush}"/>
+                        </Button>
 
-                </StackPanel>
+                    </StackPanel>
+                </Border>
             </Grid>
 
             <!-- PASS 56: transient "Drop here" popup — appears ABOVE the compact
-                 pill while an external file drag hovers over it. It is an
-                 in-flow StackPanel row (chip + small gap) that occupies the band
-                 the popup region grows into above the pill, horizontally
-                 centered on the pill, so the compact card strip below never
-                 moves and the pill content stays visible underneath. The native
-                 PillDropOverlay HWND owns the actual drag interaction, so this
-                 layer is hit-test transparent and purely visual. -->
+                 pill while an external file drag hovers over it. It occupies the
+                 band the popup region grows into above the pill, flush on the
+                 pill's top edge (no gap), pill-width, ~3× the pill height.
+                 PASS 15 redesign: two translucent glass layers in the Halo Bar
+                 language — a black-tinted outer surface (fully translucent,
+                 ~5%) with 5 DIP padding, and a white-tinted inner drop zone
+                 (~10%) inset by that padding so it reads as a recessed surface,
+                 not a floating window. Centered all-caps bold "DROP HERE"
+                 label, no icon, no secondary labels, no explicit border stroke
+                 (the outer/inner tint contrast implies the boundary). The
+                 native PillDropOverlay HWND owns the actual drag interaction,
+                 so this layer is hit-test transparent and purely visual. -->
             <Border x:Name="DropHerePopup"
                     Visibility="Collapsed"
                     Opacity="0"
                     IsHitTestVisible="False"
-                    HorizontalAlignment="Center"
-                    CornerRadius="24"
-                    BorderThickness="1"
-                    BorderBrush="#33FFFFFF"
-                    Padding="22,0">
-                <Border.Background>
-                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                        <GradientStop Color="#F41C1E26" Offset="0"/>
-                        <GradientStop Color="#F210131A" Offset="1"/>
-                    </LinearGradientBrush>
-                </Border.Background>
+                    CornerRadius="22"
+                    Background="#0D000000"
+                    Padding="5">
                 <Border.RenderTransform>
                     <CompositeTransform x:Name="DropHerePopupTransform"
                                         CenterX="0.5"
                                         CenterY="0.5"/>
                 </Border.RenderTransform>
-                <StackPanel Orientation="Horizontal"
-                            Spacing="8"
-                            HorizontalAlignment="Center"
-                            VerticalAlignment="Center">
-                    <controls:AppIcon Kind="Folder"
-                                      Width="14" Height="14"
-                                      Fill="{ThemeResource TextPrimaryBrush}"/>
-                    <TextBlock Text="Drop here"
-                               FontSize="13"
-                               FontWeight="SemiBold"
-                               Foreground="{ThemeResource TextPrimaryBrush}"
+                <!-- Inner drop zone: white translucent tint, slightly tighter
+                     radius than the outer surface; the 5 DIP padding shows the
+                     darker outer layer as an implied rim. -->
+                <Border CornerRadius="19"
+                        Background="#1AFFFFFF"
+                        VerticalAlignment="Stretch"
+                        HorizontalAlignment="Stretch">
+                    <TextBlock Text="DROP HERE"
+                               FontSize="16"
+                               FontWeight="Bold"
+                               CharacterSpacing="120"
+                               Foreground="#F5FFFFFF"
+                               HorizontalAlignment="Center"
                                VerticalAlignment="Center"/>
-                </StackPanel>
+                </Border>
             </Border>
 
             <!-- PASS 9 (final geometry): outer widget — fully translucent
@@ -233,16 +343,18 @@
                     Padding="3"
                     HorizontalAlignment="Left">
                 <Grid x:Name="CardStrip"
-                      ColumnDefinitions="Auto,Auto,Auto,Auto">
+                      ColumnDefinitions="Auto,Auto,Auto,Auto"
+                      HorizontalAlignment="Center">
 
                     <cards:WeatherPillCard x:Name="WeatherCard" Grid.Column="0"/>
                     <cards:MusicPillCard x:Name="MusicCard" Grid.Column="1"
                                         Visibility="Collapsed"/>
                     <cards:FileShelfPillCard x:Name="ShelfCard" Grid.Column="2"
-                                            Visibility="Collapsed"/>
+                                            Visibility="Collapsed"
+                                            Margin="5,0,0,0"/>
                     <cards:PomodoroPillCard x:Name="PomoCard" Grid.Column="3"
                                            Visibility="Collapsed"
-                                           Margin="8,0,0,0"/>
+                                           Margin="5,0,0,0"/>
                 </Grid>
             </Border>
 

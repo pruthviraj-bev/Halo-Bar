@@ -62,6 +62,15 @@ internal sealed class OleDropTarget
     private IntPtr _mainHaloHwnd = IntPtr.Zero;
     private bool _inside;
     private bool _sessionAccepted;
+    // Reroute tolerance: OLE can fire DragLeave on the overlay then DragEnter
+    // on the bridge (or vice versa) when the cursor crosses between the two
+    // registered HWNDs mid-drag (e.g. moving from the pill strip into the
+    // "Drop here" popup band). The leave signal is debounced so a genuine
+    // exit still closes the popup while a reroute (followed by DragEnter)
+    // keeps it open instead of flickering it closed.
+    private DispatcherQueueTimer? _dragLeaveTimer;
+    private int _dragLeaveToken;    // bumped on every enter/leave — generation
+    private int _pendingLeaveToken; // generation captured when the timer armed
 
     /// <summary>Raised (UI thread) when a shell-file drag enters the Halo drop target.</summary>
     public event EventHandler? FileDragEntered;
@@ -175,7 +184,9 @@ internal sealed class OleDropTarget
         Logger.Info($"[DRAG-OLE] DragEnter hwnd=0x{hwnd.ToInt64():X} pt=({pt.x},{pt.y}) effectIn=0x{pdwEffect:X8}");
         LogDragHit(hwnd, pt);
         LogDragMatch(hwnd, pt);
-
+        // A DragEnter after a DragLeave is a reroute (overlay↔bridge), not a
+        // genuine exit — cancel any pending debounced leave signal.
+        _dragLeaveToken++;
         bool payload = HasShellFilePayload(pDataObj);
         bool insideRegion = IsInsideRegion(pt);
         bool insidePill = IsInsidePill(pt);
@@ -183,7 +194,11 @@ internal sealed class OleDropTarget
         // region that grew from it during a drag). Accepting at any region point
         // would open the File Shelf for drags over the expanded dashboard
         // (acceptance gate; the overlay is the native hit-test fix).
-        bool accept = payload && insidePill;
+        // PASS 15: while the "Drop here" popup is up, the band ABOVE the pill
+        // is a drop target too — the popup band is part of the live region and
+        // accepting there keeps the popup open (instead of OLE rerouting to the
+        // bridge, re-deriving insidePill=false, and closing it).
+        bool accept = payload && IsInsideDropTarget(pt);
         _sessionAccepted = accept;
         pdwEffect = accept ? DROPEFFECT_COPY : DROPEFFECT_NONE;
 
@@ -237,9 +252,36 @@ internal sealed class OleDropTarget
         if (_inside)
         {
             _inside = false;
-            _dispatcherQueue.TryEnqueue(() => FileDragLeft?.Invoke(this, EventArgs.Empty));
+            // Debounced so a cross-HWND reroute (DragLeave here, then DragEnter
+            // on the other registered window) does not close the popup. A
+            // genuine exit still signals ~100 ms later.
+            ArmDragLeaveDebounce();
         }
         return 0;
+    }
+
+    /// <summary>Signals FileDragLeft after a short grace period, unless a
+    /// DragEnter (reroute) arrives first and bumps the generation.</summary>
+    private void ArmDragLeaveDebounce()
+    {
+        int token = ++_dragLeaveToken;
+        _pendingLeaveToken = token;
+        if (_dragLeaveTimer == null)
+        {
+            _dragLeaveTimer = _dispatcherQueue.CreateTimer();
+            _dragLeaveTimer.Interval = TimeSpan.FromMilliseconds(100);
+            _dragLeaveTimer.IsRepeating = false;
+            _dragLeaveTimer.Tick += (_, _) =>
+            {
+                if (_dragLeaveToken == _pendingLeaveToken)
+                {
+                    _dragLeaveToken++;
+                    _dispatcherQueue.TryEnqueue(() => FileDragLeft?.Invoke(this, EventArgs.Empty));
+                }
+            };
+        }
+        _dragLeaveTimer.Stop();
+        _dragLeaveTimer.Start();
     }
 
     internal int OnDrop(IntPtr hwnd, IDataObject pDataObj, uint grfKeyState, POINTL pt, ref int pdwEffect)
@@ -335,6 +377,28 @@ internal sealed class OleDropTarget
             if (rect == null) return false;
             return pt.x >= rect.Value.X && pt.x <= rect.Value.X + rect.Value.W
                 && pt.y >= rect.Value.Y && pt.y <= rect.Value.Y + rect.Value.H;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// PASS 15: the drop-target shape is the compact pill (PASS 53 — never
+    /// accept over the expanded dashboard). While the "Drop here" popup is up
+    /// the live region grows to include the band above the pill, and that band
+    /// is a drop target too — so the popup stays open (and drops land) when
+    /// the cursor moves into the DROP HERE area.
+    /// </summary>
+    private bool IsInsideDropTarget(POINTL pt)
+    {
+        if (IsInsidePill(pt)) return true;
+        try
+        {
+            return !App.IslandController.IsExpanded
+                && App.IslandController.IsDropPopupActive
+                && App.Window.IsPointInCurrentRegion(pt.x, pt.y);
         }
         catch
         {

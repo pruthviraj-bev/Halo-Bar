@@ -104,6 +104,26 @@ public sealed partial class MainWindow : Window
         PillBorder.Height = h;
     }
 
+    /// <summary>
+    /// PASS 16: the compact acrylic pill surface is 2 DIP shorter than the strip
+    /// so the taskbar's top border line stays visible above the pill (the strip
+    /// region itself stays full-height — only the painted surface shrinks).
+    /// </summary>
+    private double StripPillHeightDip => Math.Max(_stripHeightDip - 2, 1);
+
+    /// <summary>
+    /// PASS 16: sets the pill's painted acrylic surface for the current stage.
+    /// In the compact strip it is 2 DIP shorter (StripPillHeightDip); while a
+    /// popup/drop-zone is open the surface fills the exposed band so the acrylic
+    /// never leaves a gap behind the popup content.
+    /// </summary>
+    private void SetPillHeightForRegion(double regionHeight)
+    {
+        SetPillHeight(_clipTop >= _dashboardHeightDip - 0.5
+            ? StripPillHeightDip
+            : Math.Max(regionHeight, 1));
+    }
+
     // Hover-state monitor: the per-frame SetWindowRgn updates in the
     // stable-window mode can leave WinUI's PointerExited undelivered, so
     // IslandController's _mouseIsOver can be stuck true — which would block the
@@ -357,7 +377,9 @@ public sealed partial class MainWindow : Window
         // PASS 29: pin the pill's painted surface to the strip height so the
         // acrylic fills the compact region (the content alone is only 28-44 DIPs
         // and left the unpainted window surface exposed as a black band above).
-        SetPillHeight(_stripHeightDip);
+        // PASS 16: 2 DIP shorter than the strip so the taskbar's top border line
+        // stays visible above the pill.
+        SetPillHeight(StripPillHeightDip);
         _revealClip.Rect = new Windows.Foundation.Rect(
             0, _clipTop, _windowWidthDip, _dashboardHeightDip + _stripHeightDip - _clipTop);
         RootGrid.Clip = _revealClip;
@@ -403,8 +425,9 @@ public sealed partial class MainWindow : Window
         _compactPillW = Math.Max(App.WindowService.ResolveProfileSize(WindowProfile.Collapsed).Width, 1);
         // PASS 29: the pill border is content-sized (no Height); its painted acrylic
         // surface must fill the region or the unpainted window surface shows as a
-        // black band. Pin it to the strip height for the very first present.
-        SetPillHeight(_stripHeightDip);
+        // black band. PASS 16: 2 DIP shorter than the strip so the taskbar's top
+        // border line stays visible. Pin it for the very first present.
+        SetPillHeight(StripPillHeightDip);
         IntPtr hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
         double s = GetDpiForWindow(hwnd) / 96.0;
         // Compact first frame is the pill — pill radius (24), unchanged by PASS 1.
@@ -439,7 +462,12 @@ public sealed partial class MainWindow : Window
         double x0 = 0, y0, w, h;
         if (_settledCollapsed)
         {
-            y0 = _dashboardHeightDip; w = _compactPillW; h = _stripHeightDip;
+            // PASS 16: the compact region is 2 DIP shorter than the strip,
+            // BOTTOM-anchored (y0 + 2) so the gap sits at the TOP — the taskbar's
+            // top border line stays visible above the black pill and the pill
+            // stays flush with the taskbar bottom (the window-level acrylic is
+            // region-clipped, so the region IS the visible pill surface).
+            y0 = _dashboardHeightDip + 2; w = _compactPillW; h = Math.Max(_stripHeightDip - 2, 1);
         }
         else if (_settledExpanded)
         {
@@ -638,8 +666,9 @@ public sealed partial class MainWindow : Window
             _settledPopup = false;
             // PASS 29/30/31: the pill stays a full-strip capsule during dashboard
             // transitions — it never lifts (ty=0, taskbar anchor) and never goes
-            // content-sized (its acrylic surface must fill the strip region).
-            SetPillHeight(_stripHeightDip);
+            // content-sized. PASS 16: 2 DIP shorter than the strip so the
+            // taskbar's top border line stays visible above the pill.
+            SetPillHeight(StripPillHeightDip);
             _clipFrom = _clipTop;
             _clipTo = seg.Expanding ? 0 : _dashboardHeightDip;
             double curTy = _pillTranslate?.Y ?? 0;
@@ -679,7 +708,8 @@ public sealed partial class MainWindow : Window
             // PASS 29: the pill grows WITH the region so the acrylic always fills
             // the exposed band (the popup content alone is shorter than the target
             // height and left a black band of unpainted window surface).
-            SetPillHeight(Math.Max(_pillBottomDip - _clipFrom, 1));
+            // PASS 16: compact (pre-popup clip) = strip − 2.
+            SetPillHeightForRegion(_pillBottomDip - _clipFrom);
             Helpers.Logger.Info($"[WINDOW] PopupStart targetH={seg.TargetHeight:F0} clipTop {_popupFrom:F0}->{_popupTo:F0} pillW={_compactPillW:F0}");
         }
         else if (!heightChanged && seg.TargetHeight < _dashboardHeightDip - 100)
@@ -697,9 +727,9 @@ public sealed partial class MainWindow : Window
             // PASS 29: the pill height follows the REGION height, not the strip:
             // a compact-width tweak can arrive while a popup is settled or
             // mid-animation (region still popup-sized) and must keep the acrylic
-            // filling it. Yields 48 in normal compact (643→691, PASS 1) and the
-            // popup height when one is open.
-            SetPillHeight(Math.Max(_pillBottomDip - _clipTop, 1));
+            // filling it. Yields 46 in normal compact (strip − 2, PASS 16) and
+            // the popup height when one is open.
+            SetPillHeightForRegion(_pillBottomDip - _clipTop);
         }
     }
 
@@ -746,8 +776,8 @@ public sealed partial class MainWindow : Window
             _compactPillW = _widthFrom + (_widthTo - _widthFrom) * k;
             PillBorder.Width = _compactPillW;
             // PASS 29: keep the pill filling the region (popup-sized if a popup
-            // is open, strip-height otherwise).
-            SetPillHeight(Math.Max(_pillBottomDip - _clipTop, 1));
+            // is open, strip-height otherwise). PASS 16: compact = strip − 2.
+            SetPillHeightForRegion(_pillBottomDip - _clipTop);
             if (k >= 1.0)
             {
                 _compactPillW = _widthTo;
@@ -770,7 +800,8 @@ public sealed partial class MainWindow : Window
             // region height so the acrylic fills the whole exposed band.
             _clipTop = _popupFrom + (_popupTo - _popupFrom) * k;
             _pillBottomDip = _dashboardHeightDip + _stripHeightDip;
-            SetPillHeight(Math.Max(_pillBottomDip - _clipTop, 1));
+            // PASS 16: popup open → fill the band; popup close → back to strip − 2.
+            SetPillHeightForRegion(_pillBottomDip - _clipTop);
             if (k >= 1.0)
             {
                 _clipTop = _popupTo;
@@ -1047,7 +1078,10 @@ public sealed partial class MainWindow : Window
         if (!ClientToScreen(hwnd, ref origin)) return null;
         double s = GetDpiForWindow(hwnd) / 96.0;
         int px = (int)Math.Round(_compactPillW * s);
-        int py0 = (int)Math.Round(_dashboardHeightDip * s);
+        // PASS 16: match the shrunk, bottom-anchored compact region — the pill
+        // rect spans strip_top + 2 .. strip_bottom (2 DIP gap at the top, flush
+        // at the bottom) so the OLE drop-target acceptance equals the visible pill.
+        int py0 = (int)Math.Round((_dashboardHeightDip + 2) * s);
         int py1 = (int)Math.Round((_dashboardHeightDip + _stripHeightDip) * s);
         return (origin.X, origin.Y + py0, px, py1 - py0);
     }

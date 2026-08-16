@@ -93,6 +93,11 @@ public class IslandController
     /// </summary>
     public bool IsExpanded => _clickExpanded;
 
+    /// <summary>PASS 15: true while the compact pill's floating "Drop here"
+    /// popup is up (a shell-file drag is hovering the pill). Lets the OLE
+    /// drop-target gate accept the popup band above the pill.</summary>
+    public bool IsDropPopupActive => _pillDashboard?.IsDropPopupActive == true;
+
     public IslandController(DispatcherQueue dispatcherQueue)
     {
         _dispatcherQueue = dispatcherQueue;

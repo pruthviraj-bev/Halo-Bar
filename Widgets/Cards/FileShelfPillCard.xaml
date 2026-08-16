@@ -4,39 +4,49 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:controls="using:DynamicIsland.Controls">
 
+    <!-- Shelf icon card: the button sits in a white translucent glass container
+         with the SAME tint as the pomo ring tile and the music card's inner
+         surface (#03FFFFFF — 1% white over the acrylic), rounded to match.
+         The Folder button + Azure count badge keep their behavior. -->
     <Grid Width="48" VerticalAlignment="Center">
-        <Button x:Name="ShelfButton"
-                Background="Transparent"
-                BorderBrush="Transparent"
-                BorderThickness="0"
-                Padding="0"
+        <Border Background="#03FFFFFF"
+                CornerRadius="10"
                 Width="48"
-                Height="32"
-                CornerRadius="8"
-                Click="OnShelfButtonClick"
-                ToolTipService.ToolTip="File Shelf">
-            <Grid>
-                <controls:AppIcon Kind="Folder"
-                                  Width="16" Height="16"
-                                  Fill="{ThemeResource TextPrimaryBrush}"/>
-                <Border x:Name="CountBadge"
-                        Background="{ThemeResource AccentBrush}"
-                        CornerRadius="6"
-                        MinWidth="12"
-                        Height="12"
-                        HorizontalAlignment="Right"
-                        VerticalAlignment="Top"
-                        Margin="0,-2,-2,0"
-                        Visibility="Collapsed">
-                    <TextBlock x:Name="CountText"
-                               FontSize="8"
-                               FontWeight="Bold"
-                               Foreground="White"
-                               HorizontalAlignment="Center"
-                               VerticalAlignment="Center"
-                               Margin="2,0"/>
-                </Border>
-            </Grid>
-        </Button>
+                Height="38"
+                VerticalAlignment="Center">
+            <Button x:Name="ShelfButton"
+                    Background="Transparent"
+                    BorderBrush="Transparent"
+                    BorderThickness="0"
+                    Padding="0"
+                    Width="48"
+                    Height="38"
+                    CornerRadius="10"
+                    Click="OnShelfButtonClick"
+                    ToolTipService.ToolTip="File Shelf">
+                <Grid>
+                    <controls:AppIcon Kind="Folder"
+                                      Width="16" Height="16"
+                                      Fill="{ThemeResource TextPrimaryBrush}"/>
+                    <Border x:Name="CountBadge"
+                            Background="{ThemeResource AccentBrush}"
+                            CornerRadius="6"
+                            MinWidth="12"
+                            Height="12"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Top"
+                            Margin="0,-2,-2,0"
+                            Visibility="Collapsed">
+                        <TextBlock x:Name="CountText"
+                                   FontSize="8"
+                                   FontWeight="Bold"
+                                   Foreground="White"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   Margin="2,0"/>
+                    </Border>
+                </Grid>
+            </Button>
+        </Border>
     </Grid>
 </UserControl>

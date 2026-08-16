@@ -6,6 +6,8 @@ using DynamicIsland.Helpers;
 using DynamicIsland.Interfaces;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
 using Microsoft.UI.Xaml.Media.Imaging;
@@ -17,14 +19,14 @@ namespace DynamicIsland.Widgets;
 
 public sealed partial class PillDashboard : UserControl, IIslandWidget
 {
-    private const double CardGap = 8;
+    private const double CardGap = 5;
     private const uint ThumbnailSize = 64;
-    // PASS 56: floating "Drop here" popup geometry (DIP). These are the single
-    // source of truth for the chip and the popup region target height; the
-    // chip's Height/Margin are applied in the constructor from these.
-    private const double DropPopupChipWidthDip = 200;
-    private const double DropPopupChipHeightDip = 60;
-    private const double DropPopupGapDip = 4;
+    // PASS 15: the floating "Drop here" zone is a large landing surface:
+    // pill-width (StackPanel stretch), ~3× the pill height, flush on the pill's
+    // top edge (no gap). Its height is derived from the live taskbar height at
+    // show time (the pill height is taskbar − 2) — the single source of truth
+    // for the popup region target height.
+    private const double DropPopupZoneHeightMultiplier = 3;
     private bool _shelfExpanded;
     private bool _isDragOver;
 
@@ -61,15 +63,18 @@ public sealed partial class PillDashboard : UserControl, IIslandWidget
     /// <summary>True while the file shelf panel is expanded inline.</summary>
     public bool IsShelfExpanded => _shelfExpanded;
 
+    /// <summary>PASS 15: true while the floating "Drop here" popup is up — the
+    /// OLE drop-target acceptance gate widens to include the popup band above
+    /// the pill so the DROP HERE area accepts files/folders.</summary>
+    public bool IsDropPopupActive => DropHerePopup.Visibility == Visibility.Visible;
+
     // ── Construction ─────────────────────────────────────────────────────────
     public PillDashboard()
     {
         InitializeComponent();
-        // PASS 56: popup chip geometry from the code constants (single source of
-        // truth shared with the region target-height math).
-        DropHerePopup.Width = DropPopupChipWidthDip;
-        DropHerePopup.Height = DropPopupChipHeightDip;
-        DropHerePopup.Margin = new Thickness(0, 0, 0, DropPopupGapDip);
+        // PASS 15: the drop zone fills the pill width (StackPanel stretch)
+        // and sits flush on the pill's top edge; its height is set at show
+        // time (3× the pill height) from the live taskbar measurement.
         MusicCard.StateChanged += OnCardStateChanged;
         ShelfCard.StateChanged += OnCardStateChanged;
         PomoCard.StateChanged += OnCardStateChanged;
@@ -126,24 +131,33 @@ public sealed partial class PillDashboard : UserControl, IIslandWidget
     {
         if (CardStripBorder == null) return;
         double taskbarHeight = Math.Max(App.WindowService.TaskbarHeightDips, 1);
-        CardStripBorder.Height = Math.Max(taskbarHeight - 2, 1);
+        // PASS 16: the main pill shell is 2 DIP shorter — taskbar − 4 (was − 2)
+        // so the taskbar's top border line stays visible above the pill.
+        CardStripBorder.Height = Math.Max(taskbarHeight - 4, 1);
 
-        // PASS 9 (final): content area height = taskbar − 10 DIP
-        //  outer pill  = taskbar − 2
+        // PASS 16: the shell spans the FULL pill width (the same composition
+        // sum the window region is sized to) so the black container equals the
+        // visible pill; the card strip is centered inside it, which puts the
+        // music capsule dead-center instead of left-hugging with a dark band
+        // on the right (the capsule is content-sized ~288 vs the 320 budget).
+        CardStripBorder.Width = ComputeTotalWidth();
+
+        // PASS 9 (final) + 2 DIP: content area height = taskbar − 12 DIP
+        //  outer pill  = taskbar − 4
         //  inner       = outer − 4  (2 DIP padding each side)
         //  content     = inner − 4  (2 DIP inner padding each side)
         // MusicPillCard scales its ContentGrid + album art to this, so the
         // content fills the pill instead of measuring at its tiny desired size
         // (the old StackPanel root cause).
-        double contentHeight = Math.Max(taskbarHeight - 10, 12);
+        double contentHeight = Math.Max(taskbarHeight - 12, 12);
         if (MusicCard != null)
             MusicCard.ContentAreaHeight = contentHeight;
 
         // PASS 10 (pomodoro ring card): square tile matching the MUSIC card's
-        // full capsule height — the inner capsule is taskbar − 8 (outer − 2×3
+        // full capsule height — the inner capsule is taskbar − 10 (outer − 2×3
         // padding), which is what the music card visually fills, so the ring
         // card reads the same size as the music card.
-        double tileSize = Math.Max(taskbarHeight - 8, 24);
+        double tileSize = Math.Max(taskbarHeight - 10, 24);
         if (PomoCard != null)
             PomoCard.TileSize = tileSize;
     }
@@ -212,8 +226,9 @@ public sealed partial class PillDashboard : UserControl, IIslandWidget
     ///    card and always fits the window, so the measure is real. Falls back
     ///    to CardWidth (170) only before the first layout.
     ///  - Shelf: fixed 48 (its root Grid is a fixed width).
-    ///  - Pomo: fixed 40 tile + its 8 DIP left margin (the only card with a
-    ///    margin in the strip).
+    ///  - Pomo: fixed 40 tile.
+    /// Every card carries the same 5 DIP left margin (strip XAML), so the
+    /// composition adds CardGap per visible card (weather is first — no gap).
     /// Plus the outer shell's 3+3 DIP padding.
     /// </summary>
     private double ComputeTotalWidth()
@@ -222,7 +237,7 @@ public sealed partial class PillDashboard : UserControl, IIslandWidget
 
         if (MusicCard.Visibility == Visibility.Visible)
         {
-            total += MusicCard.CardWidth;
+            total += CardGap + MusicCard.CardWidth;
         }
         else if (WeatherCard.Visibility == Visibility.Visible)
         {
@@ -230,11 +245,9 @@ public sealed partial class PillDashboard : UserControl, IIslandWidget
             total += measured > 1 ? measured : WeatherCard.CardWidth;
         }
 
-        // Shelf card has no margin in the strip (sits flush after music).
         if (ShelfCard.Visibility == Visibility.Visible)
-            total += ShelfCard.CardWidth;
+            total += CardGap + ShelfCard.CardWidth;
 
-        // Pomo card carries its own 8 DIP left margin (strip XAML).
         if (PomoCard.Visibility == Visibility.Visible)
             total += CardGap + PomoCard.CardWidth;
 
@@ -341,13 +354,14 @@ public sealed partial class PillDashboard : UserControl, IIslandWidget
         }
     }
 
-    // ── PASS 56: floating "Drop here" popup ──────────────────────────────────
-    // During an external file-drag hover the Halo shows a small popup ABOVE the
-    // compact pill. Geometry uses the existing popup system: the pill region
-    // grows upward from the taskbar strip (StartSizeAnimation → the MainWindow
-    // popup stage) while the compact pill stays anchored and its content stays
-    // visible; the popup chip is an in-flow StackPanel row that occupies the
-    // revealed band. The chip also plays a small in/out animation (opacity
+    // ── PASS 56/10.1: floating "Drop here" popup ────────────────────────────
+    // During an external file-drag hover the Halo shows a large drop-zone
+    // popup ABOVE the compact pill. Geometry uses the existing popup system:
+    // the pill region grows upward from the taskbar strip (StartSizeAnimation
+    // → the MainWindow popup stage) while the compact pill stays anchored and
+    // its content stays visible; the drop zone is an in-flow StackPanel row
+    // (pill-width, ~3× the pill height, flush on the pill) that occupies the
+    // revealed band. The zone also plays a small in/out animation (opacity
     // 0→1, scale 0.92→1, translateY down→0).
 
     /// <summary>
@@ -366,12 +380,17 @@ public sealed partial class PillDashboard : UserControl, IIslandWidget
         // An open shelf occupies the band above the pill — never popup over it.
         if (_shelfExpanded) return;
 
+        // PASS 15: zone height = 3× the pill height (taskbar − 4), flush on
+        // the pill's top edge — no gap. Grows the popup region by exactly the
+        // zone height.
+        double pillHeight = Math.Max(App.WindowService.TaskbarHeightDips - 4, 1);
+        double zoneHeight = DropPopupZoneHeightMultiplier * pillHeight;
+        DropHerePopup.Height = zoneHeight;
         DropHerePopup.Visibility = Visibility.Visible;
         AnimateDropHerePopup(show: true);
 
         var (w, h) = App.WindowService.CompactSize;
-        App.WindowService.StartSizeAnimation(
-            w, h + (int)DropPopupChipHeightDip + (int)DropPopupGapDip);
+        App.WindowService.StartSizeAnimation(w, h + (int)zoneHeight);
     }
 
     /// <summary>
@@ -741,50 +760,52 @@ public sealed partial class PillDashboard : UserControl, IIslandWidget
 
     // ── File list row interactions ───────────────────────────────────────────
 
-    // Row hover highlight; fully transparent brush keeps the row hit-testable
-    // (a null background would let taps fall through in the gaps between children).
-    private static readonly SolidColorBrush RowHoverBrush = new(Windows.UI.Color.FromArgb(0x15, 0xFF, 0xFF, 0xFF));
-    private static readonly SolidColorBrush RowDefaultBrush = new(Windows.UI.Color.FromArgb(0x00, 0xFF, 0xFF, 0xFF));
+    // PASS 16: glass item cards — white translucent tint at rest, stronger white
+    // on hover, Azure ~70% when selected. Non-null brushes keep the card
+    // hit-testable (a null background would let taps fall through in gaps).
+    private static readonly SolidColorBrush RowHoverBrush = new(Windows.UI.Color.FromArgb(0x22, 0xFF, 0xFF, 0xFF));
+    private static readonly SolidColorBrush RowDefaultBrush = new(Windows.UI.Color.FromArgb(0x12, 0xFF, 0xFF, 0xFF));
     private static readonly SolidColorBrush RowSelectedBrush = CreateSelectedBrush();
 
-    /// <summary>Row currently highlighted by single-tap selection; null when none.</summary>
-    private Grid? _selectedRow;
+    /// <summary>Card currently highlighted by single-tap selection; null when none.</summary>
+    private Border? _selectedRow;
 
     private static SolidColorBrush CreateSelectedBrush()
     {
-        // Translucent accent tint for the selected row; neutral fallback when the
+        // PASS 16: the selected card turns Azure ~70% — keeps the item content
+        // readable while making selection unmistakable. Neutral fallback when the
         // accent resource is unavailable.
         if (Application.Current.Resources.TryGetValue("AccentBrush", out var value) && value is SolidColorBrush accent)
-            return new SolidColorBrush(accent.Color) { Opacity = 0.35 };
-        return new SolidColorBrush(Windows.UI.Color.FromArgb(0x40, 0xFF, 0xFF, 0xFF));
+            return new SolidColorBrush(accent.Color) { Opacity = 0.7 };
+        return new SolidColorBrush(Windows.UI.Color.FromArgb(0xB3, 0x5B, 0x9C, 0xFF));
     }
 
     private void OnFileRowPointerEntered(object sender,
-        Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+        PointerRoutedEventArgs e)
     {
-        var row = (Grid)sender;
+        var row = (Border)sender;
         if (!ReferenceEquals(row, _selectedRow))
             row.Background = RowHoverBrush;
     }
 
     private void OnFileRowPointerExited(object sender,
-        Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+        PointerRoutedEventArgs e)
     {
-        var row = (Grid)sender;
+        var row = (Border)sender;
         if (!ReferenceEquals(row, _selectedRow))
             row.Background = RowDefaultBrush;
     }
 
     /// <summary>Single tap selects/highlights the row (open is double-tap or Enter).</summary>
     private void OnFileRowTapped(object sender,
-        Microsoft.UI.Xaml.Input.TappedRoutedEventArgs e)
+        TappedRoutedEventArgs e)
     {
         e.Handled = true;
 
         // Taps that land on the row's remove button belong to the button.
         if (IsInsideButton(e.OriginalSource)) return;
 
-        if (sender is Grid row)
+        if (sender is Border row)
             SelectRow(row);
     }
 
@@ -804,7 +825,7 @@ public sealed partial class PillDashboard : UserControl, IIslandWidget
             await LaunchAndCollapseAsync(file);
     }
 
-    private void SelectRow(Grid row)
+    private void SelectRow(Border row)
     {
         if (ReferenceEquals(_selectedRow, row)) return;
 
@@ -814,6 +835,35 @@ public sealed partial class PillDashboard : UserControl, IIslandWidget
         _selectedRow = row;
         row.Background = RowSelectedBrush;
     }
+
+    // ── Shelf scrollbar thumb (PASS 16) ─────────────────────────────────────
+    // Azure accent on the Halo scrollbar thumb while hovered/dragged; muted
+    // white at rest — same interaction language as the Clipboard/Bluetooth
+    // cards. The thumb's Border binds its Background via TemplateBinding, so
+    // swapping Thumb.Background re-tints the visual instantly.
+    private SolidColorBrush? _shelfScrollThumbRestBrush;
+    private SolidColorBrush? _shelfScrollThumbActiveBrush;
+
+    private void SetShelfScrollThumbActive(object sender, bool active)
+    {
+        if (sender is not Thumb thumb) return;
+        if (active)
+        {
+            _shelfScrollThumbActiveBrush ??= Application.Current.Resources["AccentBrush"] as SolidColorBrush;
+            if (_shelfScrollThumbActiveBrush != null) thumb.Background = _shelfScrollThumbActiveBrush;
+        }
+        else
+        {
+            _shelfScrollThumbRestBrush ??= Application.Current.Resources["Semantic.State.Muted"] as SolidColorBrush;
+            if (_shelfScrollThumbRestBrush != null) thumb.Background = _shelfScrollThumbRestBrush;
+        }
+    }
+
+    private void ShelfScrollThumb_PointerEntered(object sender, PointerRoutedEventArgs e) => SetShelfScrollThumbActive(sender, true);
+    private void ShelfScrollThumb_PointerExited(object sender, PointerRoutedEventArgs e) => SetShelfScrollThumbActive(sender, false);
+    private void ShelfScrollThumb_PointerPressed(object sender, PointerRoutedEventArgs e) => SetShelfScrollThumbActive(sender, true);
+    private void ShelfScrollThumb_PointerReleased(object sender, PointerRoutedEventArgs e) => SetShelfScrollThumbActive(sender, false);
+    private void ShelfScrollThumb_PointerCaptureLost(object sender, PointerRoutedEventArgs e) => SetShelfScrollThumbActive(sender, false);
 
     private async Task LaunchAndCollapseAsync(StashedFile file)
     {

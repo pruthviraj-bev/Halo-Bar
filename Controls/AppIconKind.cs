@@ -41,6 +41,7 @@ public enum AppIconKind
     Clipboard,
     Copy,
     OpenInNew,
+    DragOut,
 
     Battery0,
     Battery1,
