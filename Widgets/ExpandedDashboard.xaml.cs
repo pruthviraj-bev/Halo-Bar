@@ -271,6 +271,7 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
     // start/resume, false on completion (remaining hits 0) and on reset. The
     // pill card must NOT vanish on pause.
     private bool _focusSessionActive = false;
+    private bool _focusSessionCompleted = false;
 
     /// <summary>
     /// Session length (seconds) for the currently selected focus session.
@@ -306,6 +307,21 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
     /// The ring fills up clockwise as the session runs down.
     /// </summary>
     public double FocusProgressFraction => 1.0 - ((double)_focusSecondsRemaining / FocusTotalSeconds);
+
+    /// <summary>
+    /// Ring brush: Azure while a session is in progress; the Success green once
+    /// it completes, so the ring itself signals "done".
+    /// </summary>
+    public Brush FocusRingBrush => _focusSessionCompleted
+        ? GetThemeBrush("Semantic.State.Success")
+        : GetThemeBrush("AccentBrush");
+
+    private void SetFocusCompleted(bool completed)
+    {
+        if (_focusSessionCompleted == completed) return;
+        _focusSessionCompleted = completed;
+        OnPropertyChanged(nameof(FocusRingBrush));
+    }
 
     /// <summary>
     /// Publishes the current focus state to <see cref="Services.FocusSessionBridge"/>
@@ -567,6 +583,7 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
                 {
                     _focusIsRunning = false;          // stop counting; remain at 00:00
                     _focusSessionActive = false;      // session completed — pill ring hides
+                    SetFocusCompleted(true);          // ring turns green — session done
                 }
             }
             OnPropertyChanged(nameof(FocusTimerText));
@@ -1403,6 +1420,7 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
         {
             _focusIsRunning = true;                        // Resume / Start
             _focusSessionActive = true;                    // pill ring stays/returns
+            SetFocusCompleted(false);
         }
         else
         {
@@ -1410,6 +1428,7 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
             FocusPillRotate.Angle = 0;
             _focusIsRunning = true;
             _focusSessionActive = true;
+            SetFocusCompleted(false);
         }
         OnPropertyChanged(nameof(FocusTimerText));
         OnPropertyChanged(nameof(FocusProgressFraction));
@@ -1421,6 +1440,7 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
     {
         _focusIsRunning = false;
         _focusSessionActive = false; // reset cancels the session — pill ring hides
+        SetFocusCompleted(false);
         _focusSecondsRemaining = FocusTotalSeconds; // Reset to the selected session's duration
         FocusPillRotate.Angle = 0;
         OnPropertyChanged(nameof(FocusTimerText));
@@ -1456,6 +1476,7 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
     {
         session.DurationSeconds = seconds;
         _focusSecondsRemaining = seconds;
+        SetFocusCompleted(false); // a new duration means a fresh (not-done) session
         OnPropertyChanged(nameof(FocusTimerText));
         OnPropertyChanged(nameof(FocusDurationText));
         OnPropertyChanged(nameof(FocusProgressFraction));
@@ -1581,6 +1602,7 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
         // Persist the chosen duration once; the pill stays at the angle the drag left
         // it, representing the just-chosen duration, until the running tick moves it.
         FocusSessionStore.SaveAll(_focusSessions);
+        SetFocusCompleted(false); // dragging off 00:00 returns the ring to Azure
         OnPropertyChanged(nameof(FocusProgressFraction));
     }
 
@@ -1598,6 +1620,7 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
         _selectedFocusSessionIndex = index;
         _focusSecondsRemaining = FocusTotalSeconds; // Reads the newly selected session's duration.
         FocusPillRotate.Angle = 0;
+        SetFocusCompleted(false);
         UpdateFocusDotsVisual();
         OnPropertyChanged(nameof(CurrentSessionName));
         OnPropertyChanged(nameof(FocusTimerText));
@@ -1767,6 +1790,7 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
         _selectedFocusSessionIndex = Math.Clamp(index, 0, _focusSessions.Count - 1);
         _focusSecondsRemaining = FocusTotalSeconds;
         FocusPillRotate.Angle = 0;
+        SetFocusCompleted(false);
 
         FocusSessionStore.SaveAll(_focusSessions);
 

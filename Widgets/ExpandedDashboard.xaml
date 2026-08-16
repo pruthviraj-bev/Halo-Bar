@@ -410,7 +410,9 @@
                                 <Grid x:Name="FocusRingGrid" Width="160" Height="160">
                                     <!-- Quiet neutral track — subordinate to the Azure arc. -->
                                     <Ellipse Stroke="{ThemeResource TextSecondaryBrush}" StrokeThickness="14" Opacity="0.18" />
-                                    <Path Data="{x:Bind FocusProgressFraction, Converter={StaticResource FocusProgressToArcConverter}, Mode=OneWay}" Stroke="{ThemeResource AccentBrush}" StrokeThickness="14" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                                    <!-- Progress arc — Azure while a session is in progress,
+                                         green once completed (FocusRingBrush). -->
+                                    <Path Data="{x:Bind FocusProgressFraction, Converter={StaticResource FocusProgressToArcConverter}, Mode=OneWay}" Stroke="{x:Bind FocusRingBrush, Mode=OneWay}" StrokeThickness="14" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
                                     <!-- Pointer: rides the arc tip via rotation about the ring
                                          center (12 o'clock at Angle 0); scale emphasises
                                          hover/drag (driven from code-behind). -->
