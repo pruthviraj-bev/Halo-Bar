@@ -327,10 +327,14 @@
                                         </ItemsControl.ItemsPanel>
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate x:DataType="models:BluetoothDeviceInfo">
-                                                <!-- Device card: [image] name + battery · status -->
+                                                <!-- Device card: [image] name + battery · status.
+                                                     Subtle +1% white hover on the ROW (not the card
+                                                     container) — see ItemRow_PointerEntered/Exited. -->
                                                 <Border Padding="8" Margin="0,0,0,8"
                                                         Background="{StaticResource Semantic.Surface.ClipItem}"
-                                                        CornerRadius="10">
+                                                        CornerRadius="10"
+                                                        PointerEntered="ItemRow_PointerEntered"
+                                                        PointerExited="ItemRow_PointerExited">
                                                     <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
                                                         <!-- 40 DIP asset tile — the ONLY device artwork. PASS 7.1:
                                                              the old Fluent glyph layer was removed (the transparent
@@ -616,12 +620,16 @@
 
                                             <!-- PASS 6: glass row card (white ~5%) — the Border is
                                                  structural and keeps the reveal contract: Tag,
-                                                 TranslateTransform render transform, tap-to-copy. -->
+                                                 TranslateTransform render transform, tap-to-copy.
+                                                 Subtle +1% white hover on the ROW (not the card
+                                                 container) — ItemRow_PointerEntered/Exited. -->
                                             <Border Padding="8" Margin="0,0,0,6"
                                                     Background="{StaticResource Semantic.Surface.ClipItem}"
                                                     CornerRadius="10"
                                                     Tag="ClipboardFrontCard"
-                                                    Tapped="ClipboardItemCard_Tapped">
+                                                    Tapped="ClipboardItemCard_Tapped"
+                                                    PointerEntered="ItemRow_PointerEntered"
+                                                    PointerExited="ItemRow_PointerExited">
                                                 <Border.RenderTransform>
                                                     <TranslateTransform x:Name="FrontCardTranslate" X="0" Y="0" />
                                                 </Border.RenderTransform>

@@ -66,6 +66,10 @@
          inside the glass (subtle raise, never separate windows). -->
     <SolidColorBrush x:Key="Semantic.Surface.ClipItem" Color="#0DFFFFFF" />
 
+    <!-- Item-row hover: +1% white over ClipItem (α 0x0D → 0x10) — a restrained
+         brighten on the Bluetooth/clipboard rows, no elevation edge. -->
+    <SolidColorBrush x:Key="Semantic.Surface.ClipItemHover" Color="#10FFFFFF" />
+
     <!-- PASS 6 (V1 REDESIGN): clipboard search field — black @ ~5% (α 0x0D),
          a recessed glass input on the CardTint surface (inputs recede, items
          raise). -->

@@ -89,6 +89,7 @@ public sealed partial class WidgetCard : UserControl
         set => SetValue(EnableHoverProperty, value);
     }
 
+
     private bool _isPointerOver;
     private bool _isPressed;
     private bool _isFocused;

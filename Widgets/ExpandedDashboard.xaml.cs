@@ -1138,6 +1138,22 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
         return new SolidColorBrush(Microsoft.UI.Colors.Gray);
     }
 
+    // ── Item-row hover (Bluetooth + clipboard rows) ─────────────────────────
+    // Rows rest on Semantic.Surface.ClipItem (~5% white); hovering brightens
+    // them to ClipItemHover (~6%) — a restrained +1% lift, no elevation edge.
+    // The card containers themselves stay static (EnableHover=false).
+    private void ItemRow_PointerEntered(object sender, PointerRoutedEventArgs e)
+    {
+        if (sender is Border border)
+            border.Background = GetThemeBrush("Semantic.Surface.ClipItemHover");
+    }
+
+    private void ItemRow_PointerExited(object sender, PointerRoutedEventArgs e)
+    {
+        if (sender is Border border)
+            border.Background = GetThemeBrush("Semantic.Surface.ClipItem");
+    }
+
     private void ClipboardItemCard_Tapped(object sender, TappedRoutedEventArgs e)
     {
         if (_revealedItem is { } revealed)
