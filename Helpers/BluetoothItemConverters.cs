@@ -104,8 +104,7 @@ public class BluetoothDeviceStatusBrushConverter : IValueConverter
 /// </summary>
 public class BluetoothDeviceImageConverter : IValueConverter
 {
-    private static readonly Uri BudsUri = new("ms-appx:///Assets/BluetoothItemIcons/buds.png");
-    private static readonly Uri SpeakerUri = new("ms-appx:///Assets/BluetoothItemIcons/speaker.png");
+    private static readonly Uri HeadphoneUri = new("ms-appx:///Assets/BluetoothItemIcons/headphone.png");
     private static readonly Uri MobileUri = new("ms-appx:///Assets/BluetoothItemIcons/mobile.png");
     private static readonly Uri MicrophoneUri = new("ms-appx:///Assets/BluetoothItemIcons/microphone.png");
     private static readonly Uri KeyboardUri = new("ms-appx:///Assets/BluetoothItemIcons/keyboard.png");
@@ -117,8 +116,7 @@ public class BluetoothDeviceImageConverter : IValueConverter
     {
         Uri? uri = type switch
         {
-            BluetoothDeviceType.Earbuds => BudsUri,
-            BluetoothDeviceType.Headphones => SpeakerUri,
+            BluetoothDeviceType.Earbuds or BluetoothDeviceType.Headphones => HeadphoneUri,
             BluetoothDeviceType.Phone => MobileUri,
             BluetoothDeviceType.Keyboard => KeyboardUri,
             BluetoothDeviceType.Mouse => MouseUri,
@@ -143,6 +141,28 @@ public class BluetoothDeviceImageConverter : IValueConverter
 
     public object ConvertBack(object value, Type targetType, object parameter, string language)
         => throw new NotImplementedException();
+
+    /// <summary>
+    /// The PNG assets are drawn on canvases with lots of empty padding — the
+    /// artwork occupies only a fraction of the canvas (e.g. headphone.png art
+    /// is ~45% of the 500×500 box, mouse.png ~30%). An Image sized to the
+    /// element box therefore renders the visible glyph much smaller than the
+    /// box. The popup applies this zoom so the visible artwork fills the box
+    /// edge-to-edge (the art then starts at the box's left edge — flush with
+    /// the popup's left column, not drifting inward on the PNG's transparent
+    /// padding). Factors = ~0.95 ÷ measured art coverage, per asset.
+    /// 1.0 = no zoom (fallback glyph path).
+    /// </summary>
+    public static double ArtZoomFor(BluetoothDeviceType type)
+        => type switch
+        {
+            BluetoothDeviceType.Earbuds or BluetoothDeviceType.Headphones => 2.1,  // headphone.png art ~45%
+            BluetoothDeviceType.Phone => 2.9,                                      // mobile.png art ~33%
+            BluetoothDeviceType.Keyboard => 1.6,                                   // keyboard.png art ~60%
+            BluetoothDeviceType.Mouse => 3.2,                                      // mouse.png art ~30%
+            BluetoothDeviceType.Other => 2.9,                                      // microphone.png art ~33%
+            _ => 1.0
+        };
 }
 
 /// <summary>

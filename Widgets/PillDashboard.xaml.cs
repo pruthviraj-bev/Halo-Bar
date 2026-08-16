@@ -2,8 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
+using DynamicIsland.Controls;
 using DynamicIsland.Helpers;
 using DynamicIsland.Interfaces;
+using DynamicIsland.Models;
+using DynamicIsland.Services;
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
@@ -29,6 +33,32 @@ public sealed partial class PillDashboard : UserControl, IIslandWidget
     private const double DropPopupZoneHeightMultiplier = 3;
     private bool _shelfExpanded;
     private bool _isDragOver;
+
+    // ── PASS 18: Bluetooth connected popup ──────────────────────────────────
+    // Transient notification shown when a device transitions into Connected.
+    // Pure presentation: the Bluetooth subsystem (discovery, state, battery)
+    // is untouched. The popup is a temporary extension of Halo Bar — an
+    // in-flow row above the compact pill grown via the same StartSizeAnimation
+    // band the Drop here zone uses — not a separate notification window.
+
+    /// <summary>Popup height = this × the pill height (taskbar − 4).</summary>
+    private const double BluetoothPopupHeightMultiplier = 2.5;
+
+    /// <summary>How long the popup stays up before auto-dismissing.</summary>
+    private static readonly TimeSpan BluetoothPopupHold = TimeSpan.FromSeconds(4);
+
+    /// <summary>
+    /// Last observed connection state per device id. Popup only fires on a
+    /// genuine transition INTO Connected; the first sighting (Added, including
+    /// initial enumeration of already-connected devices) only records the
+    /// baseline. Removed clears the entry so a re-discovered device is treated
+    /// as a fresh baseline (no popup storm after radio toggles).
+    /// </summary>
+    private readonly Dictionary<string, BluetoothConnectionState> _btPrevStates = new();
+    private readonly BluetoothDeviceImageConverter _btImageConverter = new();
+    private DispatcherQueueTimer? _btPopupTimer;
+    private Storyboard? _btPopupStoryboard;
+    private bool _btPopupShowing;
 
     // Pre-resolved storage items for drag-out. Resolved when the shelf contents
     // change (NOT inside the drag handler) so StartDragAsync is invoked
@@ -80,6 +110,9 @@ public sealed partial class PillDashboard : UserControl, IIslandWidget
         PomoCard.StateChanged += OnCardStateChanged;
         ShelfCard.ShelfButtonClicked += OnShelfButtonClicked;
         App.FileShelfStore.ItemsChanged += OnShelfItemsChanged;
+        // PASS 18: connection-transition detection — popup only on genuine
+        // transitions into Connected, never on initial discovery.
+        App.BluetoothService.DeviceChanged += OnBluetoothDeviceChanged;
         UpdateCardVisibility();
         Loaded += OnLoaded;
         // PASS 10: keep the window strip sized to the pill's composition sum
@@ -478,6 +511,219 @@ public sealed partial class PillDashboard : UserControl, IIslandWidget
         _dropPopupStoryboard = null;
         if (!_isDragOver)
             DropHerePopup.Visibility = Visibility.Collapsed;
+    }
+
+    // ── PASS 18: Bluetooth connected popup ─────────────────────────────────
+
+    /// <summary>
+    /// Watches granular device changes and pops the notification only when a
+    /// device transitions INTO Connected. The first sighting of a device
+    /// (Added — including a device already connected when the app starts)
+    /// records the baseline without popping; battery-only updates (a GATT
+    /// refresh republishes Updated with the same Connected state) never
+    /// re-trigger. Removed clears the baseline so a re-discovered device
+    /// starts fresh. All DeviceChanged events arrive on the UI thread
+    /// (BluetoothService dispatches), so no marshaling is needed.
+    ///
+    /// Startup guard: during initial enumeration (AdapterStatus Initializing)
+    /// snapshots are recorded as baselines but never pop — the AEP can report
+    /// an already-connected device as conn=False first and flip it to
+    /// conn=True mid-enumeration, which is NOT a connection event. Pops only
+    /// fire once enumeration has completed (Ready).
+    /// </summary>
+    private void OnBluetoothDeviceChanged(object? sender, BluetoothDeviceChangedEventArgs e)
+    {
+        var device = e.Device;
+
+        if (e.Change == BluetoothDeviceChange.Removed)
+        {
+            _btPrevStates.Remove(device.Id);
+            return;
+        }
+
+        bool wasConnected = _btPrevStates.TryGetValue(device.Id, out var prev)
+            && prev == BluetoothConnectionState.Connected;
+        _btPrevStates[device.Id] = device.ConnectionState;
+
+        if (!wasConnected && device.IsConnected
+            && App.BluetoothService.AdapterStatus == BluetoothAdapterStatus.Ready)
+        {
+            ShowBluetoothPopup(device);
+        }
+    }
+
+    /// <summary>
+    /// Shows (or refreshes) the connected-device popup. A second device
+    /// connecting while the popup is already up updates the content and
+    /// restarts the hold timer — never a stack of overlapping popups.
+    /// Guarded like the Drop here zone: never while the dashboard is expanded,
+    /// the shelf is open, or the drop zone is up (they own the same band).
+    /// </summary>
+    private void ShowBluetoothPopup(BluetoothDeviceInfo device)
+    {
+        if (App.IslandController.IsExpanded) return;
+        if (_shelfExpanded) return;
+        if (DropHerePopup.Visibility == Visibility.Visible) return;
+
+        // Content: device PNG (glyph fallback for types without an asset),
+        // name (ellipsized), green Connected, battery row only when Windows
+        // exposes a level.
+        BluetoothPopupDeviceName.Text = device.Name;
+        var image = _btImageConverter.Convert(device.Type, typeof(BitmapImage), null!, "") as BitmapImage;
+        if (image != null)
+        {
+            BluetoothPopupDeviceImage.Source = image;
+            BluetoothPopupDeviceImage.Visibility = Visibility.Visible;
+            // PASS 18.1: the PNG art sits in a padded canvas (~45% coverage).
+            // Size the Image element up (64 × ArtZoomFor) so the VISIBLE art
+            // fills the 64 DIP box — the art is centered in the canvas, so the
+            // enlarged element's transparent overflow stays invisible and the
+            // artwork lands flush-left in the box. Layout sizing only — no
+            // RenderTransform (that proved unreliable in this popup).
+            double zoom = BluetoothDeviceImageConverter.ArtZoomFor(device.Type);
+            double artBox = 64 * zoom;
+            BluetoothPopupDeviceImage.Width = artBox;
+            BluetoothPopupDeviceImage.Height = artBox;
+            BluetoothPopupFallbackIcon.Visibility = Visibility.Collapsed;
+        }
+        else
+        {
+            BluetoothPopupDeviceImage.Source = null;
+            BluetoothPopupDeviceImage.Visibility = Visibility.Collapsed;
+            BluetoothPopupDeviceImage.Width = 64;
+            BluetoothPopupDeviceImage.Height = 64;
+            BluetoothPopupFallbackIcon.Visibility = Visibility.Visible;
+        }
+
+        int? level = device.Battery?.DeviceLevel;
+        if (level.HasValue)
+        {
+            BluetoothPopupBatteryIcon.Kind =
+                (AppIconKind)new BluetoothBatteryIconConverter().Convert(level.Value, typeof(AppIconKind), null!, "");
+            BluetoothPopupBatteryText.Text = $"{level.Value}%";
+            BluetoothPopupBatteryRow.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            BluetoothPopupBatteryRow.Visibility = Visibility.Collapsed;
+        }
+
+        // Grow the popup band above the pill (same mechanism as the Drop here
+        // zone). Re-showing with a new device keeps the already-grown band.
+        bool firstShow = !_btPopupShowing;
+        if (firstShow)
+        {
+            double pillHeight = Math.Max(App.WindowService.TaskbarHeightDips - 4, 1);
+            double popupHeight = BluetoothPopupHeightMultiplier * pillHeight;
+            BluetoothPopup.Height = popupHeight;
+            BluetoothPopup.Visibility = Visibility.Visible;
+            AnimateBluetoothPopup(show: true);
+            var (w, h) = App.WindowService.CompactSize;
+            App.WindowService.StartSizeAnimation(w, h + (int)popupHeight);
+        }
+        _btPopupShowing = true;
+
+        RestartBluetoothPopupTimer();
+        Logger.Info($"[BLUETOOTH-POPUP] showing '{device.Name}' level={(level.HasValue ? level.Value.ToString() + "%" : "n/a")} firstShow={firstShow}");
+    }
+
+    private void RestartBluetoothPopupTimer()
+    {
+        _btPopupTimer?.Stop();
+        if (_btPopupTimer == null)
+        {
+            _btPopupTimer = DispatcherQueue.GetForCurrentThread().CreateTimer();
+            _btPopupTimer.Tick += OnBluetoothPopupTimerTick;
+        }
+        _btPopupTimer.Interval = BluetoothPopupHold;
+        _btPopupTimer.IsRepeating = false;
+        _btPopupTimer.Start();
+    }
+
+    private void OnBluetoothPopupTimerTick(DispatcherQueueTimer sender, object args)
+        => HideBluetoothPopup();
+
+    /// <summary>
+    /// Auto-dismisses the popup and returns the pill region to the compact
+    /// strip. Never shrinks an expanded dashboard (the popup is only shown
+    /// while compact); the fade-out still runs and collapses the row.
+    /// </summary>
+    private void HideBluetoothPopup()
+    {
+        if (!_btPopupShowing) return;
+        _btPopupShowing = false;
+        _btPopupTimer?.Stop();
+        _btPopupTimer = null;
+
+        AnimateBluetoothPopup(show: false);
+
+        if (App.IslandController.IsExpanded) return;
+        var (w, h) = App.WindowService.CompactSize;
+        App.WindowService.StartSizeAnimation(w, h);
+        Logger.Info("[BLUETOOTH-POPUP] dismissed");
+    }
+
+    /// <summary>
+    /// Subtle Halo Bar entrance/exit: fade + slight upward rise + gentle
+    /// scale-in on show; fade + slight drop on hide. No Windows-notification
+    /// slide, no bounce. The exit storyboard collapses the row on completion.
+    /// </summary>
+    private void AnimateBluetoothPopup(bool show)
+    {
+        _btPopupStoryboard?.Stop();
+        _btPopupStoryboard = null;
+
+        var storyboard = new Storyboard();
+        double ms = 180;
+
+        var opacity = new DoubleAnimation
+        {
+            From = show ? 0.0 : 1.0,
+            To = show ? 1.0 : 0.0,
+            Duration = TimeSpan.FromMilliseconds(ms),
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+        };
+        Storyboard.SetTarget(opacity, BluetoothPopup);
+        Storyboard.SetTargetProperty(opacity, "Opacity");
+        storyboard.Children.Add(opacity);
+
+        foreach (var axis in new[] { "ScaleX", "ScaleY" })
+        {
+            var scale = new DoubleAnimation
+            {
+                From = show ? 0.96 : 1.0,
+                To = show ? 1.0 : 0.96,
+                Duration = TimeSpan.FromMilliseconds(ms),
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+            };
+            Storyboard.SetTarget(scale, BluetoothPopupTransform);
+            Storyboard.SetTargetProperty(scale, axis);
+            storyboard.Children.Add(scale);
+        }
+
+        var translateY = new DoubleAnimation
+        {
+            From = show ? 12.0 : 0.0,
+            To = show ? 0.0 : 8.0,
+            Duration = TimeSpan.FromMilliseconds(ms),
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+        };
+        Storyboard.SetTarget(translateY, BluetoothPopupTransform);
+        Storyboard.SetTargetProperty(translateY, "TranslateY");
+        storyboard.Children.Add(translateY);
+
+        if (!show)
+            storyboard.Completed += OnBluetoothPopupHideCompleted;
+
+        _btPopupStoryboard = storyboard;
+        storyboard.Begin();
+    }
+
+    private void OnBluetoothPopupHideCompleted(object? sender, object e)
+    {
+        _btPopupStoryboard = null;
+        if (!_btPopupShowing)
+            BluetoothPopup.Visibility = Visibility.Collapsed;
     }
 
     /// <summary>

@@ -323,6 +323,115 @@
                 </Border>
             </Border>
 
+            <!-- PASS 18: Bluetooth connected popup — a temporary notification
+                 shown ABOVE the compact pill when a device transitions into
+                 the Connected state (never on initial discovery of an
+                 already-connected device). Same popup-band mechanism as the
+                 Drop here zone: the pill region grows upward via
+                 StartSizeAnimation and this in-flow row occupies the revealed
+                 band, flush on the pill's top edge — a temporary extension of
+                 Halo Bar, not a separate notification window. Two-layer glass
+                 in the Halo Bar language: dark translucent outer surface
+                 (~5% black) with a white translucent inner card (~5% white)
+                 containing the device PNG, prominent name, green Connected
+                 status, and the battery row (only when Windows exposes
+                 battery). Hit-test transparent — the pill keeps its own
+                 click behavior. Entrance/exit choreography + auto-dismiss
+                 live in code-behind (see OnBluetoothDeviceChanged). -->
+            <Border x:Name="BluetoothPopup"
+                    Visibility="Collapsed"
+                    Opacity="0"
+                    IsHitTestVisible="False"
+                    CornerRadius="16"
+                    Background="#0D000000"
+                    Padding="3">
+                <Border.RenderTransform>
+                    <CompositeTransform x:Name="BluetoothPopupTransform"
+                                        CenterX="0.5"
+                                        CenterY="0.5"/>
+                </Border.RenderTransform>
+                <!-- Inner card: white translucent surface, device image left,
+                     name + Connected + battery stacked right.
+                     PASS 18.1: the text stack is an explicit row Grid — every
+                     row is HorizontalAlignment=Left, so "Connected" shares
+                     exactly the device name's left X by construction (no
+                     per-element offsets); the whole stack stays vertically
+                     centered on the device image. -->
+                <Border CornerRadius="13"
+                        Background="#0DFFFFFF"
+                        Padding="12,10">
+                    <Grid ColumnDefinitions="Auto,*">
+                        <!-- Device PNG (fallback Fluent Bluetooth glyph when
+                             the type has no asset). 64 DIP — strong visual
+                             presence while keeping ~10 DIP of padding
+                             above/below in the popup's 84 DIP content area. -->
+                        <Grid Grid.Column="0"
+                              Width="64" Height="64"
+                              VerticalAlignment="Center">
+                            <!-- PASS 18.1: the PNG artwork sits in a padded
+                                 canvas (~45% coverage), so the Image element is
+                                 sized up in code (64 × ArtZoomFor) — the art
+                                 then fills the 64 DIP box flush-left while the
+                                 PNG's transparent padding overflows invisibly.
+                                 Pure layout sizing (no RenderTransform — that
+                                 proved unreliable here); the parent Grid is a
+                                 fixed 64×64 so the text column position is
+                                 unaffected. -->
+                            <Image x:Name="BluetoothPopupDeviceImage"
+                                   Stretch="Uniform"
+                                   Width="64" Height="64"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"/>
+                            <controls:AppIcon x:Name="BluetoothPopupFallbackIcon"
+                                              Kind="Bluetooth"
+                                              Width="36" Height="36"
+                                              Fill="{ThemeResource TextSecondaryBrush}"
+                                              HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              Visibility="Collapsed"/>
+                        </Grid>
+                        <Grid Grid.Column="1"
+                              RowDefinitions="Auto,Auto,Auto"
+                              RowSpacing="3"
+                              VerticalAlignment="Center"
+                              Margin="14,0,0,0">
+                            <TextBlock x:Name="BluetoothPopupDeviceName"
+                                       Grid.Row="0"
+                                       HorizontalAlignment="Left"
+                                       FontSize="14"
+                                       FontWeight="SemiBold"
+                                       Foreground="{ThemeResource TextPrimaryBrush}"
+                                       TextTrimming="CharacterEllipsis"
+                                       MaxWidth="170"/>
+                            <TextBlock x:Name="BluetoothPopupStatusText"
+                                       Grid.Row="1"
+                                       HorizontalAlignment="Left"
+                                       FontSize="11"
+                                       FontWeight="SemiBold"
+                                       Foreground="{ThemeResource Semantic.State.Success}"
+                                       Text="Connected"/>
+                            <!-- Battery row — collapsed unless Windows exposes
+                                 a battery level (never a fake 0%). -->
+                            <StackPanel x:Name="BluetoothPopupBatteryRow"
+                                        Grid.Row="2"
+                                        Orientation="Horizontal"
+                                        HorizontalAlignment="Left"
+                                        Spacing="5"
+                                        Visibility="Collapsed">
+                                <controls:AppIcon x:Name="BluetoothPopupBatteryIcon"
+                                                  Width="13" Height="13"
+                                                  Fill="{ThemeResource TextSecondaryBrush}"
+                                                  VerticalAlignment="Center"/>
+                                <TextBlock x:Name="BluetoothPopupBatteryText"
+                                           FontSize="11"
+                                           Foreground="{ThemeResource TextSecondaryBrush}"
+                                           VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Grid>
+                    </Grid>
+                </Border>
+            </Border>
+
             <!-- PASS 9 (final geometry): outer widget — fully translucent
                  black ~2% tint (#05000000), a MODERATE rounded rectangle
                  (CornerRadius 12 — NOT a capsule; no 999 / half-height
