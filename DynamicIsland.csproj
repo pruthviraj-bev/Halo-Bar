@@ -34,6 +34,22 @@
     <Content Include="Assets\BluetoothItemIcons\mobile.png" />
     <Content Include="Assets\BluetoothItemIcons\mouse.png" />
     <Content Include="Assets\BluetoothItemIcons\speaker.png" />
+    <!-- PASS 17.1: Meteocons weather icons (MIT, Bas Milius — see LICENSE) -->
+    <Content Include="Assets\Meteocons\clear-day.svg" />
+    <Content Include="Assets\Meteocons\clear-night.svg" />
+    <Content Include="Assets\Meteocons\partly-cloudy-day.svg" />
+    <Content Include="Assets\Meteocons\partly-cloudy-night.svg" />
+    <Content Include="Assets\Meteocons\cloudy.svg" />
+    <Content Include="Assets\Meteocons\rain.svg" />
+    <Content Include="Assets\Meteocons\drizzle.svg" />
+    <Content Include="Assets\Meteocons\extreme-rain.svg" />
+    <Content Include="Assets\Meteocons\snow.svg" />
+    <Content Include="Assets\Meteocons\sleet.svg" />
+    <Content Include="Assets\Meteocons\fog-day.svg" />
+    <Content Include="Assets\Meteocons\fog-night.svg" />
+    <Content Include="Assets\Meteocons\thunderstorms.svg" />
+    <Content Include="Assets\Meteocons\wind.svg" />
+    <Content Include="Assets\Meteocons\LICENSE" />
   </ItemGroup>
 
   <ItemGroup>

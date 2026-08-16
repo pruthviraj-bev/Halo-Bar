@@ -269,6 +269,20 @@ public class MediaService
 
             if (props != null)
             {
+                // A dying session can still return its last title from a
+                // stale in-flight read racing the removal — publishing it
+                // would resurrect the widget after the empty state already
+                // hid it. Confirm the session is still live before trusting
+                // the props (mirrors the liveness check on the null-props
+                // path below).
+                RefreshCachedSessions();
+                if (FindSessionIndex(session) < 0)
+                {
+                    Helpers.Logger.Info("MediaService: session removed while state read in flight, publishing empty state");
+                    UpdateState(new MediaState("", "", null, false, sourceAppUserModelId: "", sourceName: "Unknown Source"));
+                    return;
+                }
+
                 UpdateState(new MediaState(
                     props.Title ?? "",
                     props.Artist ?? "",

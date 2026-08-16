@@ -110,6 +110,14 @@ public sealed partial class PillDashboard : UserControl, IIslandWidget
     {
         if (CardStripBorder == null) return;
         double width = ComputeTotalWidth();
+        // Keep the shell width synced to the LIVE composition sum on every
+        // layout pass. ApplyCardStripPillHeight only sets it on card-state
+        // changes — at that moment a just-shown card (e.g. weather) is not
+        // measured yet, so ComputeTotalWidth falls back to its CardWidth
+        // budget (170), the shell gets sized too wide, and the centered
+        // CardStrip pushes the card right with a dark gap on the left. This
+        // converges the shell to the measured width once layout settles.
+        CardStripBorder.Width = width;
         if (Math.Abs(width - _lastReportedStripWidth) < 2.0) return;
         _lastReportedStripWidth = width;
         TotalWidthChanged?.Invoke(this, width);

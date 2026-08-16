@@ -1,29 +1,109 @@
 <UserControl
     x:Class="DynamicIsland.Widgets.Cards.WeatherPillCard"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:controls="using:DynamicIsland.Controls">
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-    <Grid VerticalAlignment="Center" HorizontalAlignment="Center" Height="28">
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="Auto" />
-            <ColumnDefinition Width="*" />
-        </Grid.ColumnDefinitions>
+    <UserControl.Resources>
+        <!-- PASS 17.1: subtle, condition-appropriate Meteocon animations.
+             Contained WITHIN the icon (Image element only — the card never
+             animates). Slow, low-amplitude, GPU-friendly opacity/translate
+             storyboards — no timers, no per-frame loops. Started/stopped in
+             code-behind from the current condition. -->
+        <Storyboard x:Key="SunAnim">
+            <DoubleAnimation Storyboard.TargetName="WeatherIconImage"
+                             Storyboard.TargetProperty="Opacity"
+                             From="0.72" To="1.0" Duration="0:0:3"
+                             AutoReverse="True" RepeatBehavior="Forever"/>
+        </Storyboard>
 
-        <controls:AppIcon Grid.Column="0"
-                          Kind="{x:Bind IconKind, Mode=OneWay}"
-                          Width="16" Height="16"
-                          Fill="#FFFFD700"
-                          Margin="0,0,8,0"
-                          VerticalAlignment="Center"/>
+        <Storyboard x:Key="RainAnim">
+            <DoubleAnimation Storyboard.TargetName="WeatherIconImage"
+                             Storyboard.TargetProperty="Opacity"
+                             From="0.85" To="1.0" Duration="0:0:1.6"
+                             AutoReverse="True" RepeatBehavior="Forever"/>
+        </Storyboard>
 
-        <TextBlock Grid.Column="1"
+        <Storyboard x:Key="SnowAnim">
+            <DoubleAnimation Storyboard.TargetName="WeatherIconImage"
+                             Storyboard.TargetProperty="Opacity"
+                             From="0.8" To="1.0" Duration="0:0:2.4"
+                             AutoReverse="True" RepeatBehavior="Forever"/>
+        </Storyboard>
+
+        <Storyboard x:Key="CloudAnim">
+            <DoubleAnimation Storyboard.TargetName="WeatherIconImage"
+                             Storyboard.TargetProperty="Opacity"
+                             From="0.85" To="1.0" Duration="0:0:4"
+                             AutoReverse="True" RepeatBehavior="Forever"/>
+        </Storyboard>
+
+        <Storyboard x:Key="StormAnim">
+            <!-- Occasional lightning: mostly steady, brief double flicker. -->
+            <DoubleAnimation Storyboard.TargetName="WeatherIconImage"
+                             Storyboard.TargetProperty="Opacity"
+                             From="1.0" To="0.45" Duration="0:0:0.15"
+                             AutoReverse="True" BeginTime="0:0:1.8"
+                             RepeatBehavior="Forever"/>
+        </Storyboard>
+
+        <Storyboard x:Key="FogAnim">
+            <DoubleAnimation Storyboard.TargetName="WeatherIconImage"
+                             Storyboard.TargetProperty="Opacity"
+                             From="0.55" To="0.85" Duration="0:0:3.5"
+                             AutoReverse="True" RepeatBehavior="Forever"/>
+        </Storyboard>
+    </UserControl.Resources>
+
+    <!-- PASS 17: Weather card — the pill shell (PillDashboard CardStripBorder,
+         black 2% rounded rectangle) is its dark outer container, matching the
+         music card. This root is ONLY the white ~1% tinted inner weather
+         surface (matching the music capsule / pomo tile tint).
+
+         PASS 17.1: the icon is a METEOCONS SVG (SvgImageSource, cached per
+         asset — Assets/Meteocons/*.svg, MIT) selected day/night-aware from the
+         existing WeatherService condition state. The temperature/condition
+         stack below is untouched. No borders, no shadows, no layered
+         backgrounds. -->
+    <Border Background="#03FFFFFF"
+            CornerRadius="12"
+            Padding="10,2">
+        <Grid ColumnDefinitions="Auto,*">
+
+            <!-- The Meteocons artwork does not fill its viewBox, so the icon
+                 is zoomed via ScaleTransform (set per-asset in code-behind) to
+                 fill the box; the element stays a fixed 34×34 so the card
+                 layout never jumps between conditions. -->
+            <Image x:Name="WeatherIconImage"
+                   Grid.Column="0"
+                   Width="34" Height="34"
+                   Margin="0,0,10,0"
                    VerticalAlignment="Center"
-                   FontSize="11"
-                   Foreground="{ThemeResource TextPrimaryBrush}">
-            <Run Text="{x:Bind TempText, Mode=OneWay}" FontWeight="SemiBold"/>
-            <Run Text="{x:Bind ConditionText, Mode=OneWay}"
-                 Foreground="{ThemeResource TextSecondaryBrush}"/>
-        </TextBlock>
-    </Grid>
+                   Stretch="Uniform">
+                <Image.RenderTransform>
+                    <ScaleTransform x:Name="WeatherIconZoom"
+                                    ScaleX="1" ScaleY="1"
+                                    CenterX="17" CenterY="17"/>
+                </Image.RenderTransform>
+            </Image>
+
+            <!-- The temp + condition stack is one centered block. Explicit
+                 LineHeight (tighter than the default ~1.33×) keeps the two
+                 lines' boxes below the card's content height, so the block
+                 centers with equal space above the temperature and below the
+                 condition instead of clamping off-center. -->
+            <StackPanel Grid.Column="1"
+                        VerticalAlignment="Center">
+                <TextBlock Text="{x:Bind TempText, Mode=OneWay}"
+                           FontSize="16"
+                           LineHeight="19"
+                           FontWeight="SemiBold"
+                           Foreground="{ThemeResource TextPrimaryBrush}"/>
+                <TextBlock Text="{x:Bind ConditionText, Mode=OneWay}"
+                           FontSize="10"
+                           LineHeight="12"
+                           Foreground="{ThemeResource TextSecondaryBrush}"
+                           Margin="0,1,0,0"/>
+            </StackPanel>
+        </Grid>
+    </Border>
 </UserControl>

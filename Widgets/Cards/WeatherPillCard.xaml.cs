@@ -1,8 +1,9 @@
 using System;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using DynamicIsland.Controls;
+using Microsoft.UI.Xaml.Media.Animation;
 using DynamicIsland.Helpers;
 using DynamicIsland.Interfaces;
 using DynamicIsland.Services;
@@ -30,18 +31,11 @@ public sealed partial class WeatherPillCard : UserControl, IPillCard, INotifyPro
         private set { _tempText = value; OnPropertyChanged(); }
     }
 
-    private string _conditionText = "  Unknown";
+    private string _conditionText = "Unknown";
     public string ConditionText
     {
         get => _conditionText;
         private set { _conditionText = value; OnPropertyChanged(); }
-    }
-
-    private AppIconKind _iconKind = AppIconKind.WeatherPartlyCloudy;
-    public AppIconKind IconKind
-    {
-        get => _iconKind;
-        private set { _iconKind = value; OnPropertyChanged(); }
     }
 
     // ── Construction ─────────────────────────────────────────────────────────
@@ -64,14 +58,55 @@ public sealed partial class WeatherPillCard : UserControl, IPillCard, INotifyPro
         if (service.IsWeatherAvailable)
         {
             TempText = service.CurrentTemp;
-            ConditionText = "  " + service.Condition;
-            IconKind = service.IconKind;
+            ConditionText = service.Condition;
+            ApplyWeatherIcon(service.IconKind, service.Condition);
         }
         else
         {
             TempText = "—";
-            ConditionText = "  Unavailable";
-            IconKind = AppIconKind.WeatherPartlyCloudy;
+            ConditionText = "Unavailable";
+            ApplyWeatherIcon(Controls.AppIconKind.WeatherPartlyCloudy, string.Empty);
+        }
+    }
+
+    // ── PASS 17.1: Meteocon icon + subtle per-condition animation ───────────
+    private Storyboard? _activeAnimation;
+
+    private void ApplyWeatherIcon(Controls.AppIconKind kind, string condition)
+    {
+        // Cached per-asset SvgImageSource — never re-decoded on updates.
+        WeatherIconImage.Source = MeteoconWeatherIcons.GetSource(kind, condition);
+
+        // Stop the previous animation; reset opacity so a new condition starts
+        // at full brightness (Stop() alone leaves the animated value in place).
+        _activeAnimation?.Stop();
+        _activeAnimation = null;
+        WeatherIconImage.Opacity = 1.0;
+
+        string asset = MeteoconWeatherIcons.ResolveAsset(kind, condition);
+
+        // Zoom the artwork to fill the icon box (per-asset factor — the
+        // Meteocons art doesn't fill its viewBox, so without this the visible
+        // icon is much smaller than the 34×34 element).
+        double zoom = MeteoconWeatherIcons.GetZoom(asset);
+        WeatherIconZoom.ScaleX = zoom;
+        WeatherIconZoom.ScaleY = zoom;
+
+        string? animKey = asset switch
+        {
+            "clear-day" => "SunAnim",                       // subtle glow
+            "rain" or "drizzle" or "extreme-rain" => "RainAnim",
+            "snow" or "sleet" => "SnowAnim",
+            "cloudy" or "partly-cloudy-day" or "partly-cloudy-night" => "CloudAnim",
+            "thunderstorms" => "StormAnim",                 // occasional flicker
+            "fog-day" or "fog-night" => "FogAnim",
+            _ => null                                       // clear-night, wind: still
+        };
+
+        if (animKey != null && Resources[animKey] is Storyboard storyboard)
+        {
+            _activeAnimation = storyboard;
+            storyboard.Begin();
         }
     }
 }
