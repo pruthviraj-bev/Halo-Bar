@@ -545,7 +545,12 @@ public sealed partial class MainWindow : Window
         if (!_expanding && _clipTop >= _dashboardHeightDip - 0.5)
             return _dashboardHeightDip + _stripHeightDip;
         // PASS 1: the dashboard band is bottom-anchored at the dashboard's
-        // bottom edge (640) — 3 DIP above the strip/taskbar top (643).
+        // bottom edge (640) — 3 DIP above the strip/taskbar top (643). PASS 19
+        // (flyout): the band bottom stays FIXED at 640 for the whole expand so
+        // the dashboard's bottom edge never steps relative to the taskbar —
+        // the scale (anchored at CenterY=640) grows the surface upward from
+        // that pinned edge and the region is identical at every frame and at
+        // the settle (no snap).
         return HaloGeometry.DashboardHeightDip;
     }
 
@@ -669,16 +674,22 @@ public sealed partial class MainWindow : Window
             // content-sized. PASS 16: 2 DIP shorter than the strip so the
             // taskbar's top border line stays visible above the pill.
             SetPillHeight(StripPillHeightDip);
-            _clipFrom = _clipTop;
+            // PASS 19 (flyout): on expand the clip snaps FULLY OPEN
+            // immediately — the dashboard is ONE coherent surface from frame
+            // one, and the VM's opacity/scale/translate does the arriving
+            // (scale 0.97→1 from the pill anchor + a slight rise). No
+            // progressive upward reveal. On collapse the band still closes
+            // toward the pill (content scales down + fades out), and the
+            // collapse tail extends to the strip so the pill fades back in.
+            _clipFrom = seg.Expanding ? 0 : _clipTop;
             _clipTo = seg.Expanding ? 0 : _dashboardHeightDip;
             double curTy = _pillTranslate?.Y ?? 0;
             _tyFrom = curTy;
             // PASS 30/32 (motion origin): the pill is the TASKBAR anchor — it
-            // never lifts off the taskbar during expansion. The dashboard grows
-            // upward from the pill's top edge (the reveal clip top animates
-            // 664→0, dashboardBottom = pillTop = 664) while the pill stays put
-            // and fades away; the expanded settle region is dashboard-only and
-            // the strip below it returns to the taskbar.
+            // never lifts off the taskbar during expansion. The dashboard is
+            // exposed in full from frame one (PASS 19) while the pill stays
+            // put and fades away; the expanded settle region is dashboard-only
+            // and the strip below it returns to the taskbar.
             _tyTo = 0;
             if (!seg.Expanding)
             {

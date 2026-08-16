@@ -42,8 +42,18 @@ public partial class MainWindowViewModel : ObservableObject
     [ObservableProperty]
     public partial double DashboardOpacity { get; set; } = 0.0;
 
+    // PASS 19 (flyout): the dashboard arrives as ONE coherent surface —
+    // opacity crossfade + scale 0.97→1 anchored at the pill's bottom edge
+    // (CenterY=640), all driven by the shared eased progress. The bottom edge
+    // is pinned by the scale anchor, so the surface grows UPWARD from the
+    // taskbar-top without the bottom stepping during the transition.
+    // DashboardTranslateY stays 0 (a rise made the bottom edge sit below its
+    // final position mid-animation and read as a glitch on desktop).
     [ObservableProperty]
     public partial double DashboardScale { get; set; } = 0.97;
+
+    [ObservableProperty]
+    public partial double DashboardTranslateY { get; set; } = 0.0;
 
     // Choreography state: re-based from the CURRENT rendered values at each
     // segment start so reversals continue without a content jump.
@@ -51,6 +61,7 @@ public partial class MainWindowViewModel : ObservableObject
     private bool _motionExpanding;
     private double _contentFromPill;
     private double _contentFromDash;
+    private double _contentFromScale;
     private bool _motionFirstProgress;
     private bool _motionMidpointLogged;
 
@@ -153,10 +164,11 @@ public partial class MainWindowViewModel : ObservableObject
         _motionExpanding = seg.Expanding;
         _contentFromPill = PillOpacity;
         _contentFromDash = DashboardOpacity;
-        // PASS 36: the reveal is a PURE bottom-anchored clip — no scale
-        // animation (the ScaleTransform stays pinned at 1.0). Only the
-        // dashboard opacity crossfades during the reveal.
-        DashboardScale = 1.0;
+        // PASS 19 (flyout): re-base the surface transform from the CURRENT
+        // rendered values so reversals continue without a jump. The dashboard
+        // arrives as one surface — opacity + scale 0.97→1 (pill anchor) + a
+        // slight rise (TranslateY +10→0), all on the shared eased progress.
+        _contentFromScale = DashboardScale;
         _motionFirstProgress = true;
         _motionMidpointLogged = false;
 
@@ -176,25 +188,25 @@ public partial class MainWindowViewModel : ObservableObject
 
         if (seg.Expanding)
         {
-            // PASS 37: the pill disappears on click. The dashboard reveals
-            // upward as a bottom-anchored band (clip top 664→0, bottom fixed
-            // at the pill's top / taskbar top). The pill fades out during the
-            // transition and is collapsed at full expansion — the expanded
-            // state contains ONLY the dashboard, and the taskbar below is
-            // never covered.
+            // PASS 37: the pill disappears on click. PASS 19 (flyout): the
+            // dashboard is ONE surface from frame one — the clip is snapped
+            // fully open by MainWindow, and this VM animates opacity 0→1,
+            // scale 0.97→1 (pill anchor) and a slight rise. The pill fades
+            // out during the transition and is collapsed at full expansion —
+            // the expanded state contains ONLY the dashboard, and the taskbar
+            // below is never covered.
             PillVisibility = Visibility.Visible;
             ExpandedVisibility = Visibility.Visible;
-            DashboardScale = 1.0;
             Logger.Info("[MOTION-P9] PillExitStarted");
             Logger.Info("[MOTION-P9] DashboardEntranceStarted");
         }
         else
         {
-            // Reverse: the dashboard band closes toward the pill's top edge,
-            // then the pill fades back in at its exact original position.
+            // Reverse: the dashboard flies out (scale down toward the pill,
+            // slight drop, fade), the band closes, then the pill fades back
+            // in at its exact original position.
             PillVisibility = Visibility.Visible;
             ExpandedVisibility = Visibility.Visible;
-            DashboardScale = 1.0;
             Logger.Info("[MOTION-P9] PillEntranceStarted");
             Logger.Info("[MOTION-P9] DashboardExitStarted");
         }
@@ -230,18 +242,20 @@ public partial class MainWindowViewModel : ObservableObject
             if (_motionExpanding)
             {
                 DashboardOpacity = _contentFromDash + (1.0 - _contentFromDash) * k;
-                // PASS 37: the pill fades away as the dashboard takes over
-                // (PASS 36: no scale — pure bottom-anchored clip reveal).
                 PillOpacity = _contentFromPill * (1.0 - k);
-                DashboardScale = 1.0;
+                // PASS 19 (flyout-in): one surface arriving — scale from the
+                // pill anchor to full (bottom edge pinned by the scale center).
+                DashboardScale = _contentFromScale + (1.0 - _contentFromScale) * k;
+                DashboardTranslateY = 0.0;
             }
             else
             {
                 DashboardOpacity = _contentFromDash * (1.0 - k);
-                // PASS 37: the pill fades back in at its exact original
-                // position as the dashboard band closes.
+                // PASS 19 (flyout-out): reverse — slight scale-down toward the
+                // pill, fade.
                 PillOpacity = _contentFromPill + (1.0 - _contentFromPill) * k;
-                DashboardScale = 1.0;
+                DashboardScale = _contentFromScale + (0.97 - _contentFromScale) * k;
+                DashboardTranslateY = 0.0;
             }
         }
 
@@ -261,7 +275,10 @@ public partial class MainWindowViewModel : ObservableObject
             {
                 ExpandedVisibility = Visibility.Collapsed;
                 DashboardOpacity = 0;
-                DashboardScale = 1.0; // pinned — no scale animation (PASS 36)
+                // PASS 19 (flyout): terminal rest state — the next expand
+                // re-bases from these values (0.97 scale, translate pinned 0).
+                DashboardScale = 0.97;
+                DashboardTranslateY = 0.0;
                 Logger.Info("[MOTION-P9] DashboardExitCompleted");
                 Logger.Info("[MOTION-P9] PillEntranceCompleted");
             }

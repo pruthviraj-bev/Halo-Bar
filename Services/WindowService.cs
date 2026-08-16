@@ -82,8 +82,13 @@ public class WindowService
     private double _animFromWidth, _animFromHeight;
     private double _animTargetWidth, _animTargetHeight;
     private long _animStartMs;
-    private const double DefaultExpandAnimMs = 280;
-    private const double DefaultCollapseAnimMs = 230;
+    // PASS 19 (flyout): native Windows flyout timing — open ~240 ms, close
+    // ~190 ms (pass targets 180-240 / 140-200; set near the top of the range
+    // so the settle reads as deliberate rather than rushed). Combined with the
+    // easeOutCubic curve (quick response, gentle settle, zero overshoot) the
+    // dashboard reads as one restrained popup surface arriving from the pill.
+    private const double DefaultExpandAnimMs = 240;
+    private const double DefaultCollapseAnimMs = 190;
     private static readonly double ExpandAnimMs = ParseDurationMs("HALO_P26_EXPAND_MS", DefaultExpandAnimMs);
     private static readonly double CollapseAnimMs = ParseDurationMs("HALO_P26_COLLAPSE_MS", DefaultCollapseAnimMs);
 
