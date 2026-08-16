@@ -15,5 +15,7 @@ public enum BluetoothDeviceType
     Gamepad,
     Watch,
     Phone,
+    Tv,
+    Printer,
     Other
 }

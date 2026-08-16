@@ -41,8 +41,16 @@ public sealed partial class PillDashboard : UserControl, IIslandWidget
     // in-flow row above the compact pill grown via the same StartSizeAnimation
     // band the Drop here zone uses — not a separate notification window.
 
+    // PASS 18.2: the popup's layout follows the pill's current card
+    // composition (ResolveBluetoothPopupLayout). Fewer cards → the popup can
+    // take more vertical space (vertical composition on the narrow
+    // weather-only pill); more cards → compact horizontal card (image left,
+    // text right). Height multipliers are per mode.
+    private enum BluetoothPopupLayout { Vertical, Horizontal }
+
     /// <summary>Popup height = this × the pill height (taskbar − 4).</summary>
     private const double BluetoothPopupHeightMultiplier = 2.5;
+    private const double BluetoothPopupVerticalHeightMultiplier = 3.5;
 
     /// <summary>How long the popup stays up before auto-dismissing.</summary>
     private static readonly TimeSpan BluetoothPopupHold = TimeSpan.FromSeconds(4);
@@ -55,10 +63,10 @@ public sealed partial class PillDashboard : UserControl, IIslandWidget
     /// as a fresh baseline (no popup storm after radio toggles).
     /// </summary>
     private readonly Dictionary<string, BluetoothConnectionState> _btPrevStates = new();
-    private readonly BluetoothDeviceImageConverter _btImageConverter = new();
     private DispatcherQueueTimer? _btPopupTimer;
     private Storyboard? _btPopupStoryboard;
     private bool _btPopupShowing;
+    private BluetoothPopupLayout _btPopupLayout = BluetoothPopupLayout.Horizontal;
 
     // Pre-resolved storage items for drag-out. Resolved when the shelf contents
     // change (NOT inside the drag handler) so StartDragAsync is invoked
@@ -209,6 +217,15 @@ public sealed partial class PillDashboard : UserControl, IIslandWidget
         UpdateCardVisibility();
         ApplyCardStripPillHeight();
         TotalWidthChanged?.Invoke(this, ComputeTotalWidth());
+
+        // PASS 18.2: if the Bluetooth popup is up, re-shape it to the new
+        // composition (e.g. music starts → vertical becomes horizontal).
+        if (_btPopupShowing && !App.IslandController.IsExpanded && !_shelfExpanded)
+        {
+            var layout = ResolveBluetoothPopupLayout();
+            if (layout != _btPopupLayout)
+                ApplyBluetoothPopupLayout(layout, resizeRegion: true);
+        }
     }
 
     private void OnShelfItemsChanged(object? sender, EventArgs e)
@@ -565,66 +582,136 @@ public sealed partial class PillDashboard : UserControl, IIslandWidget
         if (_shelfExpanded) return;
         if (DropHerePopup.Visibility == Visibility.Visible) return;
 
-        // Content: device PNG (glyph fallback for types without an asset),
-        // name (ellipsized), green Connected, battery row only when Windows
-        // exposes a level.
-        BluetoothPopupDeviceName.Text = device.Name;
-        var image = _btImageConverter.Convert(device.Type, typeof(BitmapImage), null!, "") as BitmapImage;
-        if (image != null)
-        {
-            BluetoothPopupDeviceImage.Source = image;
-            BluetoothPopupDeviceImage.Visibility = Visibility.Visible;
-            // PASS 18.1: the PNG art sits in a padded canvas (~45% coverage).
-            // Size the Image element up (64 × ArtZoomFor) so the VISIBLE art
-            // fills the 64 DIP box — the art is centered in the canvas, so the
-            // enlarged element's transparent overflow stays invisible and the
-            // artwork lands flush-left in the box. Layout sizing only — no
-            // RenderTransform (that proved unreliable in this popup).
-            double zoom = BluetoothDeviceImageConverter.ArtZoomFor(device.Type);
-            double artBox = 64 * zoom;
-            BluetoothPopupDeviceImage.Width = artBox;
-            BluetoothPopupDeviceImage.Height = artBox;
-            BluetoothPopupFallbackIcon.Visibility = Visibility.Collapsed;
-        }
-        else
-        {
-            BluetoothPopupDeviceImage.Source = null;
-            BluetoothPopupDeviceImage.Visibility = Visibility.Collapsed;
-            BluetoothPopupDeviceImage.Width = 64;
-            BluetoothPopupDeviceImage.Height = 64;
-            BluetoothPopupFallbackIcon.Visibility = Visibility.Visible;
-        }
+        PopulateBluetoothPopup(device);
 
-        int? level = device.Battery?.DeviceLevel;
-        if (level.HasValue)
-        {
-            BluetoothPopupBatteryIcon.Kind =
-                (AppIconKind)new BluetoothBatteryIconConverter().Convert(level.Value, typeof(AppIconKind), null!, "");
-            BluetoothPopupBatteryText.Text = $"{level.Value}%";
-            BluetoothPopupBatteryRow.Visibility = Visibility.Visible;
-        }
-        else
-        {
-            BluetoothPopupBatteryRow.Visibility = Visibility.Collapsed;
-        }
-
-        // Grow the popup band above the pill (same mechanism as the Drop here
-        // zone). Re-showing with a new device keeps the already-grown band.
+        // PASS 18.2: layout follows the pill's current card composition.
+        var layout = ResolveBluetoothPopupLayout();
         bool firstShow = !_btPopupShowing;
         if (firstShow)
         {
-            double pillHeight = Math.Max(App.WindowService.TaskbarHeightDips - 4, 1);
-            double popupHeight = BluetoothPopupHeightMultiplier * pillHeight;
-            BluetoothPopup.Height = popupHeight;
+            ApplyBluetoothPopupLayout(layout, resizeRegion: true);
             BluetoothPopup.Visibility = Visibility.Visible;
             AnimateBluetoothPopup(show: true);
-            var (w, h) = App.WindowService.CompactSize;
-            App.WindowService.StartSizeAnimation(w, h + (int)popupHeight);
+        }
+        else if (layout != _btPopupLayout)
+        {
+            // The pill composition changed while the popup was up — re-shape it.
+            ApplyBluetoothPopupLayout(layout, resizeRegion: true);
         }
         _btPopupShowing = true;
 
         RestartBluetoothPopupTimer();
-        Logger.Info($"[BLUETOOTH-POPUP] showing '{device.Name}' level={(level.HasValue ? level.Value.ToString() + "%" : "n/a")} firstShow={firstShow}");
+        int? level = device.Battery?.DeviceLevel;
+        Logger.Info($"[BLUETOOTH-POPUP] showing '{device.Name}' level={(level.HasValue ? level.Value.ToString() + "%" : "n/a")} layout={layout} firstShow={firstShow}");
+    }
+
+    /// <summary>
+    /// PASS 18.2: resolves the popup layout from the pill's ACTUAL card
+    /// composition (not arbitrary offsets):
+    ///   • weather only (no music, no pomodoro) → VERTICAL — the pill is
+    ///     narrow, so the device content stacks (image top, name, Connected +
+    ///     battery below) and uses the taller band.
+    ///   • anything else (music and/or pomodoro present) → HORIZONTAL — the
+    ///     pill is wide enough for the image-left / text-right card.
+    /// </summary>
+    private BluetoothPopupLayout ResolveBluetoothPopupLayout()
+    {
+        bool musicVisible = MusicCard.Visibility == Visibility.Visible;
+        bool pomoVisible = PomoCard.Visibility == Visibility.Visible;
+        return (!musicVisible && !pomoVisible)
+            ? BluetoothPopupLayout.Vertical
+            : BluetoothPopupLayout.Horizontal;
+    }
+
+    private double ResolveBluetoothPopupHeightDip(BluetoothPopupLayout layout)
+    {
+        double pillHeight = Math.Max(App.WindowService.TaskbarHeightDips - 4, 1);
+        double multiplier = layout == BluetoothPopupLayout.Vertical
+            ? BluetoothPopupVerticalHeightMultiplier
+            : BluetoothPopupHeightMultiplier;
+        return multiplier * pillHeight;
+    }
+
+    /// <summary>
+    /// Switches the popup between its vertical and horizontal compositions and
+    /// sizes the popup (and, when asked, the popup band above the pill) to the
+    /// resolved mode.
+    /// </summary>
+    private void ApplyBluetoothPopupLayout(BluetoothPopupLayout layout, bool resizeRegion)
+    {
+        bool vertical = layout == BluetoothPopupLayout.Vertical;
+        BluetoothPopupHorizontalLayout.Visibility = vertical ? Visibility.Collapsed : Visibility.Visible;
+        BluetoothPopupVerticalLayout.Visibility = vertical ? Visibility.Visible : Visibility.Collapsed;
+        _btPopupLayout = layout;
+
+        double popupHeight = ResolveBluetoothPopupHeightDip(layout);
+        BluetoothPopup.Height = popupHeight;
+        if (resizeRegion)
+        {
+            var (w, h) = App.WindowService.CompactSize;
+            App.WindowService.StartSizeAnimation(w, h + (int)popupHeight);
+        }
+    }
+
+    /// <summary>
+    /// Fills BOTH layout compositions with the device content (name, art with
+    /// per-asset zoom, green Connected, battery only when Windows exposes a
+    /// level). Only the active layout is visible, so populating both is cheap.
+    /// </summary>
+    private void PopulateBluetoothPopup(BluetoothDeviceInfo device)
+    {
+        BluetoothPopupDeviceName.Text = device.Name;
+        BluetoothPopupVerticalName.Text = device.Name;
+
+        ApplyBluetoothPopupImage(BluetoothPopupDeviceImage, BluetoothPopupFallbackIcon, device.Type);
+        ApplyBluetoothPopupImage(BluetoothPopupVerticalImage, BluetoothPopupVerticalFallback, device.Type);
+
+        int? level = device.Battery?.DeviceLevel;
+        if (level.HasValue)
+        {
+            var kind = (AppIconKind)new BluetoothBatteryIconConverter().Convert(level.Value, typeof(AppIconKind), null!, "");
+            BluetoothPopupBatteryIcon.Kind = kind;
+            BluetoothPopupBatteryText.Text = $"{level.Value}%";
+            BluetoothPopupBatteryRow.Visibility = Visibility.Visible;
+            BluetoothPopupVerticalBatteryIcon.Kind = kind;
+            BluetoothPopupVerticalBatteryText.Text = $"{level.Value}%";
+            BluetoothPopupVerticalBatteryRow.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            BluetoothPopupBatteryRow.Visibility = Visibility.Collapsed;
+            BluetoothPopupVerticalBatteryRow.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    /// <summary>
+    /// Sets the device PNG on an image element with the per-asset art zoom
+    /// (the PNG canvas is padded — the art fills only ~45%; sizing the Image
+    /// element up makes the VISIBLE art fill the 64 DIP box flush-left while
+    /// the transparent padding overflows invisibly). Falls back to the Fluent
+    /// Bluetooth glyph when the type has no asset.
+    /// </summary>
+    private static void ApplyBluetoothPopupImage(Image image, AppIcon fallback, BluetoothDeviceType type)
+    {
+        var source = new BluetoothDeviceImageConverter().Convert(type, typeof(BitmapImage), null!, "") as BitmapImage;
+        if (source != null)
+        {
+            image.Source = source;
+            image.Visibility = Visibility.Visible;
+            double zoom = BluetoothDeviceImageConverter.ArtZoomFor(type);
+            double artBox = 64 * zoom;
+            image.Width = artBox;
+            image.Height = artBox;
+            fallback.Visibility = Visibility.Collapsed;
+        }
+        else
+        {
+            image.Source = null;
+            image.Visibility = Visibility.Collapsed;
+            image.Width = 64;
+            image.Height = 64;
+            fallback.Visibility = Visibility.Visible;
+        }
     }
 
     private void RestartBluetoothPopupTimer()

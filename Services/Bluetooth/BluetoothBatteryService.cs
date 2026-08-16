@@ -25,20 +25,41 @@ public sealed class BluetoothBatteryService
     /// <summary>
     /// Reads the GATT Battery Service (0x180F) / Battery Level (0x2A19)
     /// characteristic of a BLE device. Returns null on any failure — including
-    /// devices that are classic-only or expose no battery service.
+    /// devices that expose no battery service.
+    ///
+    /// BLE devices connect by their AEP id. Classic/dual-mode devices (most
+    /// earbuds pair over classic but STILL expose the 0x180F battery service
+    /// over BLE) connect by the MAC parsed from the AEP id — that is how the
+    /// vendors' companion apps show battery when the AEP store exposes none.
     /// </summary>
-    public async Task<int?> TryReadGattBatteryAsync(string aepDeviceId)
+    public async Task<int?> TryReadGattBatteryAsync(string aepDeviceId, bool isLowEnergy)
     {
         try
         {
-            var leDevice = await BluetoothLEDevice.FromIdAsync(aepDeviceId);
-            if (leDevice == null) return null;
+            var leDevice = isLowEnergy
+                ? await BluetoothLEDevice.FromIdAsync(aepDeviceId)
+                : await BluetoothLEDevice.FromBluetoothAddressAsync(ParseMacFromAepId(aepDeviceId));
+            if (leDevice == null)
+            {
+                // Classic-paired device with no BLE endpoint — a dual-mode
+                // read is impossible (device is classic-only).
+                Logger.Info($"BluetoothBatteryService: '{aepDeviceId}' no BLE endpoint — dual-mode battery unavailable");
+                return null;
+            }
 
             var servicesResult = await leDevice.GetGattServicesAsync(BluetoothCacheMode.Uncached);
-            if (servicesResult.Status != GattCommunicationStatus.Success) return null;
+            if (servicesResult.Status != GattCommunicationStatus.Success)
+            {
+                Logger.Info($"BluetoothBatteryService: '{aepDeviceId}' GATT services query failed ({servicesResult.Status})");
+                return null;
+            }
 
             var batteryService = servicesResult.Services.FirstOrDefault(s => s.Uuid == GattServiceUuids.Battery);
-            if (batteryService == null) return null;
+            if (batteryService == null)
+            {
+                Logger.Info($"BluetoothBatteryService: '{aepDeviceId}' exposes no 0x180F battery service");
+                return null;
+            }
 
             var charsResult = await batteryService.GetCharacteristicsAsync(BluetoothCacheMode.Uncached);
             if (charsResult.Status != GattCommunicationStatus.Success) return null;
@@ -60,5 +81,26 @@ public sealed class BluetoothBatteryService
             Logger.Error("BluetoothBatteryService: GATT battery read failed", ex);
             return null;
         }
+    }
+
+    /// <summary>
+    /// Extracts the device MAC address from an AEP id
+    /// ("Bluetooth#Bluetooth44:a3:bb:69:21:83-b0:38:e2:a4:0b:c3" → the part
+    /// after the last '-') and packs it into the ulong BluetoothLEDevice
+    /// expects. Falls back to 0 (which fails the connect gracefully) when the
+    /// id has no parseable MAC.
+    /// </summary>
+    private static ulong ParseMacFromAepId(string aepDeviceId)
+    {
+        int dash = aepDeviceId.LastIndexOf('-');
+        string mac = dash >= 0 ? aepDeviceId[(dash + 1)..] : aepDeviceId;
+        ulong value = 0;
+        foreach (var part in mac.Split(':'))
+        {
+            if (!byte.TryParse(part, System.Globalization.NumberStyles.HexNumber, null, out var octet))
+                return 0;
+            value = (value << 8) | octet;
+        }
+        return value;
     }
 }

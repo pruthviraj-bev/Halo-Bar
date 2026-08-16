@@ -44,7 +44,12 @@ public sealed class BluetoothDeviceWatcher
         "System.Devices.Aep.IsPaired",
         "System.Devices.Aep.IsPresent",
         "System.Devices.Aep.IsConnected",
-        "System.Devices.BatteryLife"
+        "System.Devices.BatteryLife",
+        // Bluetooth Class of Device (major class) — identifies a phone/watch/
+        // audio device even when the user has renamed it to a custom name
+        // (name-based classification alone cannot see "PRUTHVIRAJ Bevinkatti"
+        // is a phone). Phone = 0x200, Audio/Video = 0x400, Wearable = 0x700.
+        "System.Devices.Aep.Bluetooth.Cod.Major"
     };
 
     private readonly DispatcherQueue _dispatcherQueue;
@@ -174,6 +179,7 @@ public sealed class BluetoothDeviceWatcher
         bool connected = GetBool(info, "System.Devices.Aep.IsConnected");
         bool present = GetBool(info, "System.Devices.Aep.IsPresent");
         bool paired = GetBool(info, "System.Devices.Aep.IsPaired");
+        uint? codMajor = GetCodMajor(info);
 
         info.Properties.TryGetValue("System.Devices.BatteryLife", out var batVal);
         int? battery = batVal is int batInt
@@ -187,13 +193,16 @@ public sealed class BluetoothDeviceWatcher
             $"BluetoothDeviceWatcher: '{name}' id='{info.Id}' " +
             $"proto={protoVal?.GetType().Name}:{protoVal} le={isLowEnergy} " +
             $"conn={connected} present={present} paired={paired} " +
-            $"battery={batVal?.GetType().Name}:{batVal}");
+            $"battery={batVal?.GetType().Name}:{batVal} codMajor={codMajor?.ToString("X") ?? "-"}");
 
+        var nameType = ClassifyDeviceType(name);
+        var type = ClassifyWithCod(nameType, codMajor);
+        Logger.Info($"BluetoothDeviceWatcher: '{name}' type={type} codMajor={codMajor?.ToString("X") ?? "-"}");
         return new BluetoothDeviceInfo
         {
             Id = info.Id,
             Name = name,
-            Type = ClassifyDeviceType(name),
+            Type = type,
             ConnectionState = connected ? BluetoothConnectionState.Connected : BluetoothConnectionState.Disconnected,
             IsPaired = paired,
             IsPresent = present,
@@ -204,6 +213,49 @@ public sealed class BluetoothDeviceWatcher
 
     private static bool GetBool(DeviceInformation info, string key)
         => info.Properties.TryGetValue(key, out var val) && val is bool b && b;
+
+    /// <summary>
+    /// Reads the Bluetooth Class of Device major class from the AEP store.
+    /// Value type varies (uint/int/ushort/string) depending on the store, so
+    /// all common projections are accepted defensively.
+    /// </summary>
+    private static uint? GetCodMajor(DeviceInformation info)
+    {
+        if (!info.Properties.TryGetValue("System.Devices.Aep.Bluetooth.Cod.Major", out var val) || val == null)
+            return null;
+        return val switch
+        {
+            uint u => u,
+            ushort us => us,
+            int i => i >= 0 ? (uint)i : null,
+            long l => l >= 0 ? (uint)l : null,
+            string s when uint.TryParse(s, out var parsed) => parsed,
+            _ => null
+        };
+    }
+
+    /// <summary>
+    /// The name hint wins when it identifies the device; the COD major class
+    /// fills the gap for custom-named devices (e.g. a phone renamed to a
+    /// person's name still reports the Phone major class). Measured on this
+    /// machine: AEP Cod.Major reports the classic major class SHIFTED >> 4
+    /// (phone=0x2, audio=0x4, watch would be 0x7), so the shifted values are
+    /// matched first; the unshifted standard classes (0x20 Phone, 0x40
+    /// Audio/Video, 0x70 Wearable) are accepted too in case another machine
+    /// reports them unshifted.
+    /// </summary>
+    private static BluetoothDeviceType ClassifyWithCod(BluetoothDeviceType nameType, uint? codMajor)
+    {
+        if (nameType != BluetoothDeviceType.Other) return nameType;
+        return codMajor switch
+        {
+            0x2 or 0x20 => BluetoothDeviceType.Phone,      // Phone
+            0x4 or 0x40 => BluetoothDeviceType.Headphones, // Audio/Video — speakers, headsets
+            0x6 or 0x60 => BluetoothDeviceType.Tv,         // Imaging — TVs
+            0x7 or 0x70 => BluetoothDeviceType.Watch,      // Wearable
+            _ => BluetoothDeviceType.Other
+        };
+    }
 
     /// <summary>
     /// Name-based classification (the Windows APIs expose no reliable type for
@@ -219,7 +271,15 @@ public sealed class BluetoothDeviceWatcher
         if (n.Contains("mouse") || n.Contains("trackpad") || n.Contains("pointer")) return BluetoothDeviceType.Mouse;
         if (n.Contains("gamepad") || n.Contains("controller") || n.Contains("joy-") || n.Contains("xbox")) return BluetoothDeviceType.Gamepad;
         if (n.Contains("watch") || n.Contains("band")) return BluetoothDeviceType.Watch;
-        if (n.Contains("phone") || n.Contains("galaxy") || n.Contains("iphone") || n.Contains("pixel")) return BluetoothDeviceType.Phone;
+        // Phone hints include the common Android-brand model names that carry
+        // no literal "phone" (e.g. "Redmi Note 6 Pro") — without them those
+        // fall through to Other and render the generic microphone asset.
+        if (n.Contains("phone") || n.Contains("galaxy") || n.Contains("iphone") || n.Contains("pixel")
+            || n.Contains("redmi") || n.Contains("note") || n.Contains("xiaomi") || n.Contains("oneplus")
+            || n.Contains("oppo") || n.Contains("vivo") || n.Contains("nokia") || n.Contains("huawei")
+            || n.Contains("honor") || n.Contains("poco") || n.Contains("moto")) return BluetoothDeviceType.Phone;
+        if (n.Contains("printer")) return BluetoothDeviceType.Printer;
+        if (n.Contains("tv") || n.Contains("television") || n.Contains("bravia")) return BluetoothDeviceType.Tv;
         return BluetoothDeviceType.Other;
     }
 }

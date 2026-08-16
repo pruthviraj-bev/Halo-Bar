@@ -33,7 +33,10 @@
     <Content Include="Assets\BluetoothItemIcons\microphone.png" />
     <Content Include="Assets\BluetoothItemIcons\mobile.png" />
     <Content Include="Assets\BluetoothItemIcons\mouse.png" />
+    <Content Include="Assets\BluetoothItemIcons\printer.png" />
     <Content Include="Assets\BluetoothItemIcons\speaker.png" />
+    <Content Include="Assets\BluetoothItemIcons\tv.png" />
+    <Content Include="Assets\BluetoothItemIcons\watch.png" />
     <!-- PASS 17.1: Meteocons weather icons (MIT, Bas Milius — see LICENSE) -->
     <Content Include="Assets\Meteocons\clear-day.svg" />
     <Content Include="Assets\Meteocons\clear-night.svg" />

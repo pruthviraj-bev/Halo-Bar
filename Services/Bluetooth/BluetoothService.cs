@@ -145,18 +145,15 @@ public class BluetoothService
             return;
         }
 
-        // GATT battery fallback: connected BLE device without an AEP battery →
-        // attempt once per session (never repeatedly hammer the device).
-        if (device.IsConnected && device.IsLowEnergy && device.Battery == null && _gattAttempted.Add(device.Id))
+        // GATT battery fallback: connected device without an AEP battery →
+        // attempt once per session (never repeatedly hammer the device). BLE
+        // devices connect by AEP id; classic/dual-mode devices (most earbuds
+        // are dual-mode and expose 0x180F over BLE) connect by MAC parsed from
+        // the AEP id. Failure resolves to null — never a fabricated level.
+        if (device.IsConnected && device.Battery == null && _gattAttempted.Add(device.Id))
         {
-            Helpers.Logger.Info($"BluetoothService: attempting GATT battery read for '{device.Name}'");
+            Helpers.Logger.Info($"BluetoothService: attempting GATT battery read for '{device.Name}' (le={device.IsLowEnergy})");
             _ = ResolveGattBatteryAsync(device);
-        }
-        else if (device.IsConnected && device.Battery == null && !device.IsLowEnergy)
-        {
-            // Classic endpoint: GATT fallback is not applicable (BluetoothLEDevice
-            // cannot address a classic id). Logged so battery absence is provable.
-            Helpers.Logger.Info($"BluetoothService: '{device.Name}' connected without battery — classic endpoint, GATT fallback not attempted");
         }
 
         _cache[device.Id] = device;
@@ -177,7 +174,7 @@ public class BluetoothService
 
     private async Task ResolveGattBatteryAsync(BluetoothDeviceInfo device)
     {
-        int? level = await _batteryService.TryReadGattBatteryAsync(device.Id);
+        int? level = await _batteryService.TryReadGattBatteryAsync(device.Id, device.IsLowEnergy);
         if (!level.HasValue) return;
 
         _dispatcherQueue.TryEnqueue(() =>

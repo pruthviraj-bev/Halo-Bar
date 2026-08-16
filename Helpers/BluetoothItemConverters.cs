@@ -43,6 +43,8 @@ public class BluetoothDeviceDetailConverter : IValueConverter
             BluetoothDeviceType.Gamepad => "Gamepad",
             BluetoothDeviceType.Watch => "Watch",
             BluetoothDeviceType.Phone => "Phone",
+            BluetoothDeviceType.Tv => "TV",
+            BluetoothDeviceType.Printer => "Printer",
             _ => "Device"
         };
 
@@ -109,6 +111,9 @@ public class BluetoothDeviceImageConverter : IValueConverter
     private static readonly Uri MicrophoneUri = new("ms-appx:///Assets/BluetoothItemIcons/microphone.png");
     private static readonly Uri KeyboardUri = new("ms-appx:///Assets/BluetoothItemIcons/keyboard.png");
     private static readonly Uri MouseUri = new("ms-appx:///Assets/BluetoothItemIcons/mouse.png");
+    private static readonly Uri TvUri = new("ms-appx:///Assets/BluetoothItemIcons/tv.png");
+    private static readonly Uri PrinterUri = new("ms-appx:///Assets/BluetoothItemIcons/printer.png");
+    private static readonly Uri WatchUri = new("ms-appx:///Assets/BluetoothItemIcons/watch.png");
 
     private static readonly Dictionary<BluetoothDeviceType, BitmapImage> Cache = new();
 
@@ -120,6 +125,9 @@ public class BluetoothDeviceImageConverter : IValueConverter
             BluetoothDeviceType.Phone => MobileUri,
             BluetoothDeviceType.Keyboard => KeyboardUri,
             BluetoothDeviceType.Mouse => MouseUri,
+            BluetoothDeviceType.Tv => TvUri,
+            BluetoothDeviceType.Printer => PrinterUri,
+            BluetoothDeviceType.Watch => WatchUri,
             BluetoothDeviceType.Other => MicrophoneUri,
             _ => null
         };
@@ -160,6 +168,9 @@ public class BluetoothDeviceImageConverter : IValueConverter
             BluetoothDeviceType.Phone => 2.9,                                      // mobile.png art ~33%
             BluetoothDeviceType.Keyboard => 1.6,                                   // keyboard.png art ~60%
             BluetoothDeviceType.Mouse => 3.2,                                      // mouse.png art ~30%
+            BluetoothDeviceType.Tv => 1.6,                                         // tv.png art ~59% of width
+            BluetoothDeviceType.Printer => 2.2,                                     // printer.png art ~43% of canvas
+            BluetoothDeviceType.Watch => 1.8,                                        // watch.png art 30%×52% — height-constrained
             BluetoothDeviceType.Other => 2.9,                                      // microphone.png art ~33%
             _ => 1.0
         };
