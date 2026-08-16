@@ -40,6 +40,20 @@ public sealed partial class WidgetCard : UserControl
         typeof(WidgetCard),
         new PropertyMetadata(null));
 
+    /// <summary>
+    /// Opt-out for the card's surface feedback states — the Hover elevation AND
+    /// the Focus accent ring (default on). Cards that should stay visually static
+    /// (e.g. the Focus/Clipboard/Bluetooth dashboard cards) set this to false;
+    /// both the Hover and Focused states then resolve to Default, so no raised
+    /// surface lights up on hover and no Azure border appears while the card (or
+    /// a control inside it) has focus. Press state is unaffected.
+    /// </summary>
+    public static readonly DependencyProperty EnableHoverProperty = DependencyProperty.Register(
+        nameof(EnableHover),
+        typeof(bool),
+        typeof(WidgetCard),
+        new PropertyMetadata(true));
+
     /// <summary>Top strip of the card (icon + title, ~40px tall).</summary>
     public object HeaderContent
     {
@@ -66,6 +80,13 @@ public sealed partial class WidgetCard : UserControl
     {
         get => (object)GetValue(OverlayContentProperty);
         set => SetValue(OverlayContentProperty, value);
+    }
+
+    /// <summary>Whether the card shows hover elevation / the focus accent ring (default true).</summary>
+    public bool EnableHover
+    {
+        get => (bool)GetValue(EnableHoverProperty);
+        set => SetValue(EnableHoverProperty, value);
     }
 
     private bool _isPointerOver;
@@ -119,9 +140,12 @@ public sealed partial class WidgetCard : UserControl
 
     private void UpdateVisualState(bool useTransitions)
     {
+        // EnableHover=false pins the card to its resting surface: both the Hover
+        // elevation and the Focus accent ring resolve to Default, so the card
+        // stays visually static while hovered or focused (Press still works).
         var state = _isPressed ? "Pressed"
-            : _isFocused ? "Focused"
-            : _isPointerOver ? "Hover"
+            : (_isFocused && EnableHover) ? "Focused"
+            : (_isPointerOver && EnableHover) ? "Hover"
             : "Default";
         VisualStateManager.GoToState(this, state, useTransitions);
     }

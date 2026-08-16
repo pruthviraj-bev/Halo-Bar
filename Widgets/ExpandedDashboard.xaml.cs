@@ -1418,14 +1418,23 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
     // ── Shared duration conversion core (single source of truth) ───────────
     // Used by both the ring (fraction ↔ angle) and the settings H/M/S boxes
     // (fraction ↔ decomposed duration). Both funnel into ApplyDurationSeconds.
-
-    private const int FocusMaxDurationMinutes = 1440; // 1-1440 minutes (24 hours)
+    // PASS: the ring range is 15-120 minutes in 15-minute steps (15, 30, 45,
+    // 60, 75, 90, 105, 120) — a full ring drag snaps through the eight presets
+    // for a quick drag-and-start.
+    private const int FocusMinDurationMinutes = 15;
+    private const int FocusMaxDurationMinutes = 120;
+    private const int FocusDurationStepMinutes = 15;
 
     private static double DurationToFraction(int seconds) =>
-        Math.Clamp(((double)seconds / 60.0 - 1.0) / (FocusMaxDurationMinutes - 1), 0, 1);
+        Math.Clamp(((double)seconds / 60.0 - FocusMinDurationMinutes)
+            / (FocusMaxDurationMinutes - FocusMinDurationMinutes), 0, 1);
 
-    private static int FractionToDurationSeconds(double fraction) =>
-        (1 + (int)Math.Round(fraction * (FocusMaxDurationMinutes - 1))) * 60;
+    private static int FractionToDurationSeconds(double fraction)
+    {
+        int steps = (FocusMaxDurationMinutes - FocusMinDurationMinutes) / FocusDurationStepMinutes;
+        int step = (int)Math.Round(Math.Clamp(fraction, 0, 1) * steps);
+        return (FocusMinDurationMinutes + step * FocusDurationStepMinutes) * 60;
+    }
 
     private void ApplyDurationSeconds(FocusSession session, int seconds)
     {
@@ -1647,7 +1656,9 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
         // Draft-only: update the local seconds and readout, never the live timer state.
         // The H/M/S fields are plain digit TextBoxes (no native spinners) — parse and
         // clamp to the same bounds the old NumberBoxes enforced (H 0-23, M/S 0-59).
-        int h = ParseHmsValue(FocusSettingsHoursBox.Text, 23);
+        // PASS: sessions cap at 120 minutes — the hours field clamps to 2 so the
+        // settings view honors the same bound the ring drag enforces.
+        int h = ParseHmsValue(FocusSettingsHoursBox.Text, FocusMaxDurationMinutes / 60);
         int m = ParseHmsValue(FocusSettingsMinutesBox.Text, 59);
         int s = ParseHmsValue(FocusSettingsSecondsBox.Text, 59);
         _focusSettingsDraftSeconds = h * 3600 + m * 60 + s;
@@ -1695,6 +1706,11 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
 
     private void OpenFocusSettings()
     {
+        // The delete button only applies to an existing session — hidden while
+        // creating a new one.
+        FocusSettingsDeleteButton.Visibility = _focusSettingsEditingSession != null
+            ? Visibility.Visible
+            : Visibility.Collapsed;
         FocusSettingsNameBox.Text = _focusSettingsDraftName;
         FocusSettingsHoursBox.Text = (_focusSettingsDraftSeconds / 3600).ToString();
         FocusSettingsMinutesBox.Text = ((_focusSettingsDraftSeconds % 3600) / 60).ToString();
@@ -1721,6 +1737,32 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
     }
 
     private void FocusSettingsClose_Click(object sender, RoutedEventArgs e) => CloseFocusSettings();
+
+    private void FocusSettingsDelete_Click(object sender, RoutedEventArgs e)
+    {
+        // Only an existing session can be deleted (the button is hidden in New
+        // Session mode); never remove the last remaining session.
+        if (_focusSettingsEditingSession == null || _focusSessions.Count <= 1) return;
+
+        int index = _focusSessions.IndexOf(_focusSettingsEditingSession);
+        _focusSessions.RemoveAt(index);
+
+        // Select a neighbour so the ring/dots stay valid.
+        _selectedFocusSessionIndex = Math.Clamp(index, 0, _focusSessions.Count - 1);
+        _focusSecondsRemaining = FocusTotalSeconds;
+        FocusPillRotate.Angle = 0;
+
+        FocusSessionStore.SaveAll(_focusSessions);
+
+        // Refresh the dots (x:Bind ItemsSource is OneTime — re-assign to re-pull).
+        FocusDotsControl.ItemsSource = null;
+        FocusDotsControl.ItemsSource = _focusSessions;
+        OnPropertyChanged(nameof(CurrentSessionName));
+        OnPropertyChanged(nameof(FocusTimerText));
+        OnPropertyChanged(nameof(FocusProgressFraction));
+        UpdateFocusDotsVisual();
+        CloseFocusSettings();
+    }
 
     private void FocusSettingsSave_Click(object sender, RoutedEventArgs e)
     {

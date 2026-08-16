@@ -290,7 +290,7 @@
                      artwork — the old Fluent glyph layer was removed; the transparent PNGs let
                      it bleed through underneath), name + battery stack, connection state
                      right-aligned. Device-card surface = Pass 6 item glass (5% white). -->
-                <controls:WidgetCard Grid.Row="0" IsTabStop="False">
+                <controls:WidgetCard Grid.Row="0" IsTabStop="False" EnableHover="False">
                     <controls:WidgetCard.HeaderContent>
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <controls:AppIcon Kind="Bluetooth" Width="16" Height="16" Fill="{ThemeResource AccentBrush}"/>
@@ -366,7 +366,7 @@
                 </controls:WidgetCard>
 
                 <!-- Focus Session card – shared WidgetCard shell; stretches to fill remaining left-column height. -->
-                <controls:WidgetCard Grid.Row="1" IsTabStop="False">
+                <controls:WidgetCard Grid.Row="1" IsTabStop="False" EnableHover="False">
                     <controls:WidgetCard.HeaderContent>
                         <!-- Main/settings header pair: in-place Visibility swap (deliberate design; not the overlay slot).
                              PASS 4.1: the wrapper fills the shell's 40 DIP header band so the heading anchors to the
@@ -380,8 +380,6 @@
                                     <controls:AppIcon Kind="Target" Width="12" Height="12" Fill="{ThemeResource AccentBrush}"/>
                                     <TextBlock Text="FOCUS SESSION" FontSize="12" FontWeight="Bold" Foreground="{ThemeResource TextSecondaryBrush}" CharacterSpacing="50"/>
                                 </StackPanel>
-                                <TextBlock Text="{x:Bind CurrentSessionName, Mode=OneWay}" Style="{StaticResource Type.Caption}"
-                                           Foreground="{ThemeResource TextSecondaryBrush}" Margin="18,0,0,0"/>
                             </StackPanel>
                             <Grid x:Name="FocusSettingsHeader" Visibility="Collapsed" ColumnDefinitions="*,Auto" Margin="0,0,0,8">
                                 <TextBlock Grid.Column="0" Text="{x:Bind FocusSettingsHeaderText, Mode=OneWay}" FontSize="12" FontWeight="Bold"
@@ -423,11 +421,13 @@
                                             <Ellipse Fill="{ThemeResource AccentBrush}" Stroke="White" StrokeThickness="1.5" />
                                         </Grid>
                                     </Grid>
-                                    <!-- Central remaining-time (primary) + session duration
-                                         (secondary), optically centered inside the ring. -->
+                                    <!-- Central remaining-time (primary) + session name
+                                         (secondary), optically centered inside the ring. The
+                                         24h-format duration line was removed — the name moved
+                                         here from the header. -->
                                     <StackPanel IsHitTestVisible="False" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="2">
                                         <TextBlock Text="{x:Bind FocusTimerText, Mode=OneWay}" Style="{StaticResource Type.Display}" Foreground="{ThemeResource TextPrimaryBrush}" HorizontalAlignment="Center"/>
-                                        <TextBlock Text="{x:Bind FocusDurationText, Mode=OneWay}" Style="{StaticResource Type.Caption}" Foreground="{ThemeResource TextSecondaryBrush}" HorizontalAlignment="Center"/>
+                                        <TextBlock Text="{x:Bind CurrentSessionName, Mode=OneWay}" Style="{StaticResource Type.Caption}" Foreground="{ThemeResource TextSecondaryBrush}" HorizontalAlignment="Center"/>
                                     </StackPanel>
                                     <!-- Transparent drag surface: full-ring hit target, topmost. -->
                                     <Ellipse Fill="Transparent" x:Name="FocusRingDragSurface"
@@ -519,6 +519,12 @@
                                         Click="FocusSettingsSave_Click" ToolTipService.ToolTip="Save">
                                     <controls:AppIcon Kind="Save" Filled="True" Width="20" Height="20" Fill="White"/>
                                 </Button>
+                                <!-- Delete the session being edited (hidden in New Session
+                                     mode; disabled when it's the last remaining session). -->
+                                <Button x:Name="FocusSettingsDeleteButton" Style="{StaticResource CardButtonStyle}"
+                                        Click="FocusSettingsDelete_Click" ToolTipService.ToolTip="Delete session">
+                                    <controls:AppIcon Kind="Delete" Width="16" Height="16" Fill="{ThemeResource TextSecondaryBrush}"/>
+                                </Button>
                             </StackPanel>
                         </Grid>
                     </controls:WidgetCard.FooterContent>
@@ -527,7 +533,7 @@
 
             <!-- RIGHT column – Clipboard (fills — tall, upper-right) + Music (Auto — wide, lower-right) -->
             <Grid Grid.Column="1" RowDefinitions="*,Auto" RowSpacing="{StaticResource Spacing.M}">
-                <controls:WidgetCard Grid.Row="0" IsTabStop="False">
+                <controls:WidgetCard Grid.Row="0" IsTabStop="False" EnableHover="False">
                 <controls:WidgetCard.HeaderContent>
                     <!-- PASS 6.2: icon + CLIPBOARD as one header group — 16 DIP Azure
                          clipboard glyph (scaled from 24 to match the Focus/Music header
