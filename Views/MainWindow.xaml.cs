@@ -46,6 +46,26 @@ public sealed partial class MainWindow : Window
     private DesktopAcrylicController? _acrylicController;
     private SystemBackdropConfiguration? _configuration;
 
+    // Acrylic capability diagnostics (LogAcrylicCompositionDiagnostics):
+    // RtlGetVersion + DwmIsCompositionEnabled via P/Invoke.
+    [StructLayout(LayoutKind.Sequential)]
+    private struct RTL_OSVERSIONINFOW
+    {
+        public uint dwOSVersionInfoSize;
+        public uint dwMajorVersion;
+        public uint dwMinorVersion;
+        public uint dwBuildNumber;
+        public uint dwPlatformId;
+        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 128)]
+        public char[] szCSDVersion;
+    }
+
+    [DllImport("ntdll.dll", CharSet = CharSet.Unicode)]
+    private static extern int RtlGetVersion(out RTL_OSVERSIONINFOW lpVersionInformation);
+
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmIsCompositionEnabled(out bool pfEnabled);
+
     // ── Stable-window geometry (source of truth: WindowService.ResolveProfileSize) ──
     // The expanded profile defines the fixed HWND envelope; the taskbar strip
     // height is measured by WindowService. Resolved from the service at arm time.
@@ -146,6 +166,10 @@ public sealed partial class MainWindow : Window
     {
         InitializeComponent();
 
+        // Diagnostic-only: report OS build / DWM / transparency / IsSupported
+        // so an installed exe explains its own acrylic degradation in the log.
+        LogAcrylicCompositionDiagnostics();
+
         // Acrylic — PASS 33: the window-level DesktopAcrylicController backdrop
         // is restored as the production glass. Pass 27 removed it because without
         // WS_EX_LAYERED the DWM material ignored SetWindowRgn and frosted the
@@ -167,6 +191,47 @@ public sealed partial class MainWindow : Window
             _acrylicController = null;
             _configuration = null;
         };
+    }
+
+    /// <summary>
+    /// Logs the machine's composition capability before the acrylic decision so
+    /// an installed build can explain itself on any laptop. Covers the reasons a
+    /// DesktopAcrylicController silently degrades to the solid in-app brush:
+    ///  1. Windows 10 vs 11 (build &lt; 22000) — DWM blur is far more permissive on 11
+    ///  2. DWM composition disabled (service stopped / basic display adapter)
+    ///  3. "Transparency effects" off (HKCU EnableTransparency=0)
+    ///  4. IsSupported() false (old GPU, generic Microsoft driver, VM/RDP session)
+    /// RtlGetVersion is used (not Environment.OSVersion) because that can report
+    /// 10.0 for every Win10/11 build unless the app manifest pins a max version.
+    /// </summary>
+    private static void LogAcrylicCompositionDiagnostics()
+    {
+        try
+        {
+            var rtl = new RTL_OSVERSIONINFOW { dwOSVersionInfoSize = (uint)Marshal.SizeOf<RTL_OSVERSIONINFOW>() };
+            int build = RtlGetVersion(out rtl) == 0 ? (int)rtl.dwBuildNumber : -1;
+            string osLabel = build switch
+            {
+                >= 22000 => $"Windows 11 (build {build})",
+                >= 10240 => $"Windows 10 (build {build})",
+                _ => $"unknown (build {build})"
+            };
+
+            bool dwmComposited = DwmIsCompositionEnabled(out bool enabled) == 0 && enabled;
+            bool transparencyOn = (int?)Microsoft.Win32.Registry.GetValue(
+                @"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
+                "EnableTransparency", 1) != 0;
+            bool backdropSupported = DesktopAcrylicController.IsSupported();
+
+            Helpers.Logger.Info(
+                $"[WINDOW] Acrylic capability: OS={osLabel}; DWM composition={dwmComposited}; " +
+                $"TransparencyEffects={transparencyOn}; DesktopAcrylicController.IsSupported={backdropSupported}. " +
+                $"Glass works on a machine where IsSupported=true and DWM+Transparency are on; any NO here explains a solid pill.");
+        }
+        catch (Exception ex)
+        {
+            Helpers.Logger.Info($"[WINDOW] Acrylic capability diagnostics failed: {ex.Message}");
+        }
     }
 
     private void SetAcrylicBackdrop()
