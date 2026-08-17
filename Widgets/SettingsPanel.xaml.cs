@@ -90,11 +90,13 @@ public sealed partial class SettingsPanel : UserControl
 
     private static void SetNavActive(Button button, bool active)
     {
+        // Subtle selected pill (5% white) + accent text — same language as the
+        // dashboard filter pills, instead of a loud solid-accent fill.
         button.Background = active
-            ? Application.Current.Resources["AccentBrush"] as Brush
+            ? Application.Current.Resources["Semantic.Surface.ClipItem"] as Brush
             : null;
         button.Foreground = active
-            ? new SolidColorBrush(Colors.White)
+            ? Application.Current.Resources["AccentBrush"] as Brush
             : Application.Current.Resources["TextSecondaryBrush"] as Brush;
     }
 

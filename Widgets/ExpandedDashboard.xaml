@@ -872,11 +872,11 @@
              RAM → CPU → DISK (Fluent icons + label + value, ~10 DIP compact units).
              RIGHT: weather immediately before the settings gear, anchored to the
              right edge via a star spacer (stable regardless of metric text length). -->
-        <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto" Height="34" Margin="0,8,0,0">
+        <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto" Height="28" Margin="0,8,0,0">
             <!-- LEFT GROUP: RAM | CPU | DISK | network, each cluster in a 2%
                  white-tint chip. -->
             <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="4,0,0,0">
-                <Border Background="{StaticResource Semantic.Surface.Raised05}" CornerRadius="8" Padding="8,3">
+                <Border Background="{StaticResource Semantic.Surface.Raised05}" CornerRadius="8" Padding="8,2">
                     <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
                         <StackPanel x:Name="RamFooterGroup" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
                             <controls:AppIcon Kind="Ram" Width="12" Height="12" Fill="{ThemeResource TextSecondaryBrush}" VerticalAlignment="Center"/>
@@ -900,7 +900,7 @@
                      by the 1 s stats tick. Values sit in fixed-width TextBlocks so
                      digit changes never shift the weather/gear (anchored right via
                      the star spacer). -->
-                <Border Background="{StaticResource Semantic.Surface.Raised05}" CornerRadius="8" Padding="8,3">
+                <Border Background="{StaticResource Semantic.Surface.Raised05}" CornerRadius="8" Padding="8,2">
                     <StackPanel x:Name="NetworkFooterGroup" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
                         <controls:AppIcon Kind="Download" Width="12" Height="12" Fill="{ThemeResource TextSecondaryBrush}" VerticalAlignment="Center"/>
                         <TextBlock Text="{x:Bind NetworkDownloadText, Mode=OneWay}" FontSize="10" FontWeight="SemiBold" Foreground="{ThemeResource TextPrimaryBrush}" VerticalAlignment="Center" MinWidth="40"/>
@@ -912,17 +912,19 @@
 
             <!-- RIGHT GROUP: weather + settings, anchored to the right edge -->
             <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center" Margin="0,0,8,0">
-                <Border Background="{StaticResource Semantic.Surface.Raised05}" CornerRadius="8" Padding="8,3">
+                <Border Background="{StaticResource Semantic.Surface.Raised05}" CornerRadius="8" Padding="8,2">
                     <TextBlock x:Name="WeatherFooterText" Text="{x:Bind WeatherTemp, Mode=OneWay}" FontSize="10"
                                Foreground="{ThemeResource TextSecondaryBrush}" VerticalAlignment="Center"
                                ToolTipService.ToolTip="{x:Bind WeatherCondition, Mode=OneWay}"/>
                 </Border>
-                <Button Width="16" Height="16" Padding="0"
-                        Style="{StaticResource CardButtonStyle}"
-                        VerticalAlignment="Center"
-                        Click="SettingsGear_Click" ToolTipService.ToolTip="Settings">
-                    <controls:AppIcon Kind="Settings" Width="14" Height="14" Fill="{ThemeResource TextSecondaryBrush}"/>
-                </Button>
+                <Border Background="{StaticResource Semantic.Surface.Raised05}" CornerRadius="8" Padding="8,2">
+                    <Button Width="16" Height="16" Padding="0"
+                            Style="{StaticResource CardButtonStyle}"
+                            VerticalAlignment="Center"
+                            Click="SettingsGear_Click" ToolTipService.ToolTip="Settings">
+                        <controls:AppIcon Kind="Settings" Width="14" Height="14" Fill="{ThemeResource TextSecondaryBrush}"/>
+                    </Button>
+                </Border>
             </StackPanel>
         </Grid>
     </Grid>

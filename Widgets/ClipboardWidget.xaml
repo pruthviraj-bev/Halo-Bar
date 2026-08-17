@@ -52,7 +52,13 @@
                 CornerRadius="10"
                 Background="{StaticResource Semantic.Surface.Raised05}"
                 BorderBrush="{StaticResource Semantic.Border.Subtle}"
-                BorderThickness="1">
+                BorderThickness="1"
+                RenderTransformOrigin="0.5,0.5"
+                Loaded="CollapsedRow_Loaded">
+
+            <Border.RenderTransform>
+                <CompositeTransform x:Name="CollapsedRowScale" ScaleX="0.96" ScaleY="0.96" />
+            </Border.RenderTransform>
 
             <Grid ColumnDefinitions="Auto,*,Auto" VerticalAlignment="Center">
 

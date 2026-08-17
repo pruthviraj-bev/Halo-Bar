@@ -3,6 +3,7 @@ using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media.Animation;
 using DynamicIsland.Helpers;
 using DynamicIsland.Interfaces;
 using DynamicIsland.Services;
@@ -139,6 +140,50 @@ public sealed partial class ClipboardWidget : UserControl, IIslandWidget
         {
             e.Handled = true;
         }
+    }
+
+    /// <summary>
+    /// Fade/scale-in micro-animation on the compact pill the moment it appears
+    /// (fresh instance each copy, so Loaded fires exactly once per show).
+    /// </summary>
+    private void CollapsedRow_Loaded(object sender, RoutedEventArgs e)
+    {
+        var sb = new Storyboard { Duration = TimeSpan.FromMilliseconds(150) };
+
+        var fade = new DoubleAnimation
+        {
+            From = 0.0,
+            To = 1.0,
+            Duration = new Duration(TimeSpan.FromMilliseconds(150)),
+            EnableDependentAnimation = true
+        };
+        Storyboard.SetTarget(fade, CollapsedRow);
+        Storyboard.SetTargetProperty(fade, "Opacity");
+        sb.Children.Add(fade);
+
+        var scaleX = new DoubleAnimation
+        {
+            From = 0.96,
+            To = 1.0,
+            Duration = new Duration(TimeSpan.FromMilliseconds(150)),
+            EnableDependentAnimation = true
+        };
+        Storyboard.SetTarget(scaleX, CollapsedRowScale);
+        Storyboard.SetTargetProperty(scaleX, "ScaleX");
+        sb.Children.Add(scaleX);
+
+        var scaleY = new DoubleAnimation
+        {
+            From = 0.96,
+            To = 1.0,
+            Duration = new Duration(TimeSpan.FromMilliseconds(150)),
+            EnableDependentAnimation = true
+        };
+        Storyboard.SetTarget(scaleY, CollapsedRowScale);
+        Storyboard.SetTargetProperty(scaleY, "ScaleY");
+        sb.Children.Add(scaleY);
+
+        sb.Begin();
     }
 
     private void ExpandWidget()

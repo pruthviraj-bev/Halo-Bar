@@ -126,6 +126,52 @@
             </Setter>
         </Style>
 
+        <Style x:Key="AccentActionButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="{ThemeResource AccentBrush}" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="14,6" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="UseSystemFocusVisuals" Value="False" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Grid>
+                            <VisualStateManager.VisualStateGroups>
+                                <VisualStateGroup x:Name="CommonStates">
+                                    <VisualState x:Name="Normal" />
+                                    <VisualState x:Name="PointerOver">
+                                        <Storyboard>
+                                            <ObjectAnimationUsingKeyFrames Storyboard.TargetName="Surface" Storyboard.TargetProperty="Background">
+                                                <DiscreteObjectKeyFrame KeyTime="0" Value="{StaticResource Semantic.Accent.Hover}" />
+                                            </ObjectAnimationUsingKeyFrames>
+                                        </Storyboard>
+                                    </VisualState>
+                                    <VisualState x:Name="Pressed">
+                                        <Storyboard>
+                                            <ObjectAnimationUsingKeyFrames Storyboard.TargetName="Surface" Storyboard.TargetProperty="Background">
+                                                <DiscreteObjectKeyFrame KeyTime="0" Value="{StaticResource Semantic.Accent.Pressed}" />
+                                            </ObjectAnimationUsingKeyFrames>
+                                        </Storyboard>
+                                    </VisualState>
+                                    <VisualState x:Name="Disabled">
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="Surface" Storyboard.TargetProperty="Opacity" To="0.4" Duration="0" />
+                                        </Storyboard>
+                                    </VisualState>
+                                </VisualStateGroup>
+                            </VisualStateManager.VisualStateGroups>
+                            <Border x:Name="Surface" Background="{TemplateBinding Background}" CornerRadius="{TemplateBinding CornerRadius}" />
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center" Margin="{TemplateBinding Padding}" />
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <!-- Section container: all settings live inside the single black-tint
              wrapper below, so individual sections are flat (no per-card tint). -->
         <Style x:Key="SectionCardStyle" TargetType="Border">
@@ -278,8 +324,7 @@
                                         <TextBox Grid.Column="0" x:Name="WeatherSearchBox" PlaceholderText="Search city..."
                                                  Style="{StaticResource SettingsSearchStyle}" KeyDown="WeatherSearchBox_KeyDown" />
                                         <Button Grid.Column="1" x:Name="WeatherSearchButton" Content="Search"
-                                                Background="{ThemeResource AccentBrush}" Foreground="White" BorderThickness="0"
-                                                CornerRadius="8" Padding="14,6" FontSize="12" VerticalAlignment="Center"
+                                                Style="{StaticResource AccentActionButtonStyle}"
                                                 Click="WeatherSearchButton_Click" />
                                     </Grid>
                                     <ListView x:Name="WeatherResultsList" MaxHeight="150" Background="Transparent"
@@ -309,6 +354,7 @@
                                 </StackPanel>
                             </StackPanel>
                         </Border>
+                        <Border Height="1" Background="{StaticResource Semantic.Border.Subtle}" Margin="0,2,0,2" />
                         <Border Style="{StaticResource SectionCardStyle}">
                             <StackPanel Spacing="8">
                                 <TextBlock Text="Footer" Style="{StaticResource SectionTitleStyle}" />
@@ -329,28 +375,40 @@
                             <StackPanel Spacing="8">
                                 <TextBlock Text="Footer Metrics" Style="{StaticResource SectionTitleStyle}" />
                                 <Grid Style="{StaticResource SettingRowStyle}" ColumnDefinitions="*,Auto">
-                                    <TextBlock Grid.Column="0" Text="Show CPU" Style="{StaticResource SettingLabelStyle}" />
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Text="Show CPU" Style="{StaticResource SettingLabelStyle}" />
+                                        <TextBlock Text="Show live CPU usage in the dashboard footer." Style="{StaticResource SettingHintStyle}" />
+                                    </StackPanel>
                                     <ToggleSwitch Grid.Column="1" x:Name="ShowCpuToggle"
                                                   Style="{StaticResource HaloToggleStyle}"
                                                   OnContent="" OffContent=""
                                                   Toggled="ShowCpuToggle_Toggled" />
                                 </Grid>
                                 <Grid Style="{StaticResource SettingRowStyle}" ColumnDefinitions="*,Auto">
-                                    <TextBlock Grid.Column="0" Text="Show Disk" Style="{StaticResource SettingLabelStyle}" />
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Text="Show Disk" Style="{StaticResource SettingLabelStyle}" />
+                                        <TextBlock Text="Show storage used on the selected drive." Style="{StaticResource SettingHintStyle}" />
+                                    </StackPanel>
                                     <ToggleSwitch Grid.Column="1" x:Name="ShowDiskToggle"
                                                   Style="{StaticResource HaloToggleStyle}"
                                                   OnContent="" OffContent=""
                                                   Toggled="ShowDiskToggle_Toggled" />
                                 </Grid>
                                 <Grid Style="{StaticResource SettingRowStyle}" ColumnDefinitions="*,Auto">
-                                    <TextBlock Grid.Column="0" Text="Show RAM" Style="{StaticResource SettingLabelStyle}" />
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Text="Show RAM" Style="{StaticResource SettingLabelStyle}" />
+                                        <TextBlock Text="Show memory usage in the dashboard footer." Style="{StaticResource SettingHintStyle}" />
+                                    </StackPanel>
                                     <ToggleSwitch Grid.Column="1" x:Name="ShowRamToggle"
                                                   Style="{StaticResource HaloToggleStyle}"
                                                   OnContent="" OffContent=""
                                                   Toggled="ShowRamToggle_Toggled" />
                                 </Grid>
                                 <Grid Style="{StaticResource SettingRowStyle}" ColumnDefinitions="*,Auto">
-                                    <TextBlock Grid.Column="0" Text="Show Network Speed" Style="{StaticResource SettingLabelStyle}" />
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Text="Show Network Speed" Style="{StaticResource SettingLabelStyle}" />
+                                        <TextBlock Text="Show live download and upload speed in the footer." Style="{StaticResource SettingHintStyle}" />
+                                    </StackPanel>
                                     <ToggleSwitch Grid.Column="1" x:Name="ShowNetworkToggle"
                                                   Style="{StaticResource HaloToggleStyle}"
                                                   OnContent="" OffContent=""
@@ -358,6 +416,7 @@
                                 </Grid>
                             </StackPanel>
                         </Border>
+                        <Border Height="1" Background="{StaticResource Semantic.Border.Subtle}" Margin="0,2,0,2" />
                         <Border Style="{StaticResource SectionCardStyle}">
                             <StackPanel Spacing="8">
                                 <TextBlock Text="Drive" Style="{StaticResource SectionTitleStyle}" />
