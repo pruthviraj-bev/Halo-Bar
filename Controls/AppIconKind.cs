@@ -20,6 +20,7 @@ public enum AppIconKind
     Settings,
     Dismiss,
     Save,
+    Checkmark,
     MusicNote,
     Music,
     ChevronDown,

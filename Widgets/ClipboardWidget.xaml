@@ -45,47 +45,53 @@
         </VisualStateManager.VisualStateGroups>
 
         <!-- ── COLLAPSED: compact single-line banner ─────────────────────── -->
-        <Grid x:Name="CollapsedRow"
-              ColumnDefinitions="Auto,*"
-              VerticalAlignment="Center"
-              Height="36"
-              Padding="6,0">
+        <Border x:Name="CollapsedRow"
+                VerticalAlignment="Center"
+                Height="36"
+                Padding="10,0"
+                CornerRadius="10"
+                Background="{StaticResource Semantic.Surface.Raised05}"
+                BorderBrush="{StaticResource Semantic.Border.Subtle}"
+                BorderThickness="1">
 
-            <!-- Type-specific Icon (Text/Image/Files) -->
-            <controls:AppIcon Grid.Column="0"
-                              Kind="{x:Bind ViewModel.TypeIconKind, Mode=OneWay}"
-                              Width="12" Height="12"
-                              Fill="{ThemeResource AccentBrush}"
-                              Margin="0,0,8,0"
-                              VerticalAlignment="Center"/>
+            <Grid ColumnDefinitions="Auto,*,Auto" VerticalAlignment="Center">
 
-            <!-- Grid container to ensure correct single-line layout and truncation -->
-            <Grid Grid.Column="1" VerticalAlignment="Center">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                
+                <!-- Type-specific Icon (Text/Image/Files) -->
+                <controls:AppIcon Grid.Column="0"
+                                  Kind="{x:Bind ViewModel.TypeIconKind, Mode=OneWay}"
+                                  Width="14" Height="14"
+                                  Fill="{ThemeResource AccentBrush}"
+                                  Margin="0,0,8,0"
+                                  VerticalAlignment="Center"/>
+
                 <!-- Primary text: inline-truncated content -->
-                <TextBlock Grid.Column="0"
+                <TextBlock Grid.Column="1"
                            Text="{x:Bind ViewModel.Title, Mode=OneWay}"
-                           FontSize="10.5"
-                           FontWeight="Normal"
+                           FontSize="11"
+                           FontWeight="SemiBold"
                            Foreground="{ThemeResource TextPrimaryBrush}"
                            TextTrimming="CharacterEllipsis"
                            MaxLines="1"
                            VerticalAlignment="Center"/>
-                
-                <!-- Secondary tag: "Copied" -->
-                <TextBlock Grid.Column="1"
-                           Text="• Copied"
-                           FontSize="9"
-                           Foreground="{ThemeResource TextSecondaryBrush}"
-                           Opacity="0.6"
-                           Margin="6,0,0,0"
-                           VerticalAlignment="Center"/>
+
+                <!-- Secondary tag: "Copied" — green success chip -->
+                <Border Grid.Column="2"
+                        Background="#1A4ADE80"
+                        CornerRadius="8"
+                        Padding="6,2"
+                        Margin="8,0,0,0"
+                        VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                        <controls:AppIcon Kind="Checkmark" Width="10" Height="10" Fill="{StaticResource Semantic.State.Success}" VerticalAlignment="Center"/>
+                        <TextBlock Text="Copied"
+                                   FontSize="9.5"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource Semantic.State.Success}"
+                                   VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Border>
             </Grid>
-        </Grid>
+        </Border>
 
         <!-- ── EXPANDED: scrollable preview + actions ────────────────── -->
         <Grid x:Name="ExpandedRow"
