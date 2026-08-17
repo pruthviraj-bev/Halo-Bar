@@ -501,10 +501,9 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
         if (!MotionDiagnostics.P16NoData)
             RefreshBluetoothList();
 
-        // Clipboard retention + search: reflect the persisted retention period and
-        // enable typing in the search box (WS_EX_NOACTIVATE requires the temporary
-        // flag-lift, same pattern as the Focus session text fields).
-        SyncRetentionLabel();
+        // Clipboard retention + search: enable typing in the search box
+        // (WS_EX_NOACTIVATE requires the temporary flag-lift, same pattern as
+        // the Focus session text fields). Retention moved to Settings (PASS 21).
         AttachTextInputFocus(ClipboardSearchBox);
 
         // PASS 21: live footer visibility + selected drive from central settings.
@@ -1181,26 +1180,10 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
     }
 
     /// <summary>
-    /// PASS 6: reflects the persisted retention period on the Halo dropdown button
-    /// (replaces the native ComboBox preselection). 0 = "Keep forever".
+    /// PASS 21: the auto-delete retention dropdown moved to the Settings page
+    /// (SettingsPanel AutoDeleteCombo → AppSettings.SetClipboardAutoDelete →
+    /// ClipboardService.SetRetentionDays). The dashboard no longer exposes it.
     /// </summary>
-    private void SyncRetentionLabel()
-    {
-        if (RetentionLabel == null) return;
-        int days = App.ClipboardService.RetentionDays;
-        RetentionLabel.Text = days <= 0 ? "Keep forever" : $"{days} days";
-    }
-
-    private void RetentionMenuItem_Click(object sender, RoutedEventArgs e)
-    {
-        if ((sender as MenuFlyoutItem)?.Tag is string tag
-            && int.TryParse(tag, out int days))
-        {
-            App.ClipboardService.SetRetentionDays(days);
-            SyncRetentionLabel();
-        }
-    }
-
     private void OnClipboardHistoryChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         _dispatcherQueue.TryEnqueue(() => ApplyHistoryChange(e));

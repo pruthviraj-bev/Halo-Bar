@@ -55,6 +55,10 @@
     <!-- NEW — lighter glass tint for insets/scroll surfaces over the acrylic. -->
     <SolidColorBrush x:Key="Semantic.Surface.Glass" Color="#08FFFFFF" />
 
+    <!-- NEW — 2% white chip for the dashboard footer metric/weather clusters
+         (α 0x05) — a barely-there raise over the dashboard surface. -->
+    <SolidColorBrush x:Key="Semantic.Surface.Raised05" Color="#05FFFFFF" />
+
     <!-- PASS 3 (V1 REDESIGN): the unified card surface — black @ ~20% (α 0x33),
          painted over the single Halo backdrop (DesignRules §3.4 Surface.CardTint,
          PROPOSED → landed). Cards read darker/more opaque than the parent
