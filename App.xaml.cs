@@ -172,6 +172,13 @@ public partial class App : Application
         // Capture UI dispatcher before any async work
         DispatcherQueue = DispatcherQueue.GetForCurrentThread();
 
+        // PASS 21: load persisted settings before any window/XAML surface exists so
+        // the startup accent and footer-visibility configs are applied live from
+        // the first frame. AccentManager mutates the shared resource brushes, so
+        // pre-window application means the first painted UI already carries it.
+        Models.AppSettings.Initialize();
+        Helpers.AccentManager.Apply(Models.AppSettings.AccentColor);
+
         // Pass 15 diagnostic: HALO_P15_PROBE=1 + HALO_P15_PROBE_EARLY=1
         // subscribes the P15 probe BEFORE the window's first present — tests
         // whether an early CompositionTarget.Rendering subscription itself

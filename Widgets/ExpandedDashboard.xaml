@@ -328,7 +328,7 @@
              =Top) inside the dashboard's 40 DIP top zone (main grid margin 8,40,8,8 unchanged,
              so 620×640 geometry is untouched). Home is a real Button (CardButtonStyle =
              transparent, no chrome) wired to collapse back to the compact pill. -->
-        <Grid ColumnDefinitions="*,Auto" Height="24" VerticalAlignment="Top" Margin="8,8,8,0">
+        <Grid x:Name="HeaderBar" ColumnDefinitions="*,Auto" Height="24" VerticalAlignment="Top" Margin="8,8,8,0">
             <!-- PASS 8.3: 4 DIP left inset so the identity sits optically aligned with
                  card header content (cards start at the 8 DIP grid margin), Bold weight. -->
             <TextBlock Grid.Column="0" Text="Halo Bar" FontSize="16" FontWeight="Bold"
@@ -343,7 +343,7 @@
         </Grid>
 
         <!-- Main layout grid -->
-        <Grid RowSpacing="0" Margin="8,40,8,8">
+        <Grid x:Name="MainLayoutGrid" RowSpacing="0" Margin="8,40,8,8">
             <Grid.RowDefinitions>
                 <RowDefinition Height="*" MinHeight="320"/>
                 <RowDefinition Height="Auto"/>
@@ -891,17 +891,17 @@
         <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto" Height="30" Margin="0,8,0,0">
             <!-- LEFT GROUP: RAM | CPU | DISK -->
             <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="16" VerticalAlignment="Center" Margin="8,0,0,0">
-                <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                <StackPanel x:Name="RamFooterGroup" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
                     <controls:AppIcon Kind="Ram" Width="12" Height="12" Fill="{ThemeResource TextSecondaryBrush}" VerticalAlignment="Center"/>
                     <TextBlock Text="RAM" FontSize="10" Foreground="{ThemeResource TextSecondaryBrush}" VerticalAlignment="Center"/>
                     <TextBlock Text="{x:Bind RamPercentText, Mode=OneWay}" FontSize="10" FontWeight="SemiBold" Foreground="{ThemeResource TextPrimaryBrush}" VerticalAlignment="Center"/>
                 </StackPanel>
-                <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                <StackPanel x:Name="CpuFooterGroup" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
                     <controls:AppIcon Kind="Cpu" Width="12" Height="12" Fill="{ThemeResource TextSecondaryBrush}" VerticalAlignment="Center"/>
                     <TextBlock Text="CPU" FontSize="10" Foreground="{ThemeResource TextSecondaryBrush}" VerticalAlignment="Center"/>
                     <TextBlock Text="{x:Bind CpuPercentText, Mode=OneWay}" FontSize="10" FontWeight="SemiBold" Foreground="{ThemeResource TextPrimaryBrush}" VerticalAlignment="Center"/>
                 </StackPanel>
-                <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                <StackPanel x:Name="DiskFooterGroup" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
                     <controls:AppIcon Kind="Disk" Width="12" Height="12" Fill="{ThemeResource TextSecondaryBrush}" VerticalAlignment="Center"/>
                     <TextBlock Text="DISK" FontSize="10" Foreground="{ThemeResource TextSecondaryBrush}" VerticalAlignment="Center"/>
                     <TextBlock Text="{x:Bind StoragePercentText, Mode=OneWay}" FontSize="10" FontWeight="SemiBold" Foreground="{ThemeResource TextPrimaryBrush}" VerticalAlignment="Center"/>
@@ -910,7 +910,7 @@
                      ↑ (upload) readouts, updated by the 1 s stats tick. Values sit
                      in fixed-width TextBlocks so digit changes never shift the
                      weather/gear (anchored right via the star spacer). -->
-                <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                <StackPanel x:Name="NetworkFooterGroup" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
                     <controls:AppIcon Kind="Download" Width="12" Height="12" Fill="{ThemeResource TextSecondaryBrush}" VerticalAlignment="Center"/>
                     <TextBlock Text="{x:Bind NetworkDownloadText, Mode=OneWay}" FontSize="10" FontWeight="SemiBold" Foreground="{ThemeResource TextPrimaryBrush}" VerticalAlignment="Center" MinWidth="40"/>
                     <controls:AppIcon Kind="Upload" Width="12" Height="12" Fill="{ThemeResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="6,0,0,0"/>
@@ -920,17 +920,31 @@
 
             <!-- RIGHT GROUP: weather + settings, anchored to the right edge -->
             <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center" Margin="0,0,8,0">
-                <TextBlock Text="{x:Bind WeatherTemp, Mode=OneWay}" FontSize="10"
+                <TextBlock x:Name="WeatherFooterText" Text="{x:Bind WeatherTemp, Mode=OneWay}" FontSize="10"
                            Foreground="{ThemeResource TextSecondaryBrush}" VerticalAlignment="Center"
                            ToolTipService.ToolTip="{x:Bind WeatherCondition, Mode=OneWay}"/>
                 <Button Width="16" Height="16" Padding="0"
                         Style="{StaticResource CardButtonStyle}"
                         VerticalAlignment="Center"
-                        Click="SettingsGear_Click" ToolTipService.ToolTip="Location settings">
+                        Click="SettingsGear_Click" ToolTipService.ToolTip="Settings">
                     <controls:AppIcon Kind="Settings" Width="14" Height="14" Fill="{ThemeResource TextSecondaryBrush}"/>
                 </Button>
             </StackPanel>
         </Grid>
     </Grid>
+
+    <!-- PASS 21: Settings page — a full-surface overlay hosted inside the
+         dashboard (not a separate window). The gear button shows it; its
+         Back button hides it. Covers the dashboard exactly so it reads as
+         another page of the expanded surface. Must be a direct child of
+         RootLayoutGrid (a sibling of MainLayoutGrid) — if it lives inside
+         MainLayoutGrid it collapses to 0x0 whenever the homepage is hidden. -->
+    <local:SettingsPanel x:Name="SettingsPage"
+                         HorizontalAlignment="Stretch"
+                         VerticalAlignment="Stretch"
+                         Width="620"
+                         Height="640"
+                         Visibility="Collapsed"
+                         BackRequested="SettingsPage_BackRequested" />
 </Grid>
 </UserControl>

@@ -507,6 +507,17 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
         SyncRetentionLabel();
         AttachTextInputFocus(ClipboardSearchBox);
 
+        // PASS 21: live footer visibility + selected drive from central settings.
+        // The Settings window mutates AppSettings; this dashboard reflects it
+        // immediately without a restart.
+        Models.AppSettings.Changed += ApplyFooterSettings;
+        ApplyFooterSettings();
+
+        // PASS 21: if the island collapses by any path (Home, hotkey, drag) while
+        // the Settings page overlay is open, hide it and release the awake hold so
+        // it doesn't linger over the dashboard on the next expansion.
+        App.IslandController.IsExpandedChanged += OnIslandExpandedChanged;
+
         // Timer for system stats and play time updates (1s). Keeps ticking even
         // while the dashboard is collapsed (it stays in the tree after the first
         // expansion); UpdateStats gates the sampling work on visibility so a
@@ -604,6 +615,7 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
     // DriveInfo ctor is a Win32 probe; cache the instance and re-query its
     // properties (cheap) instead of constructing it every second.
     private System.IO.DriveInfo? _statsDrive;
+    private string? _statsDriveName;
 
     private void UpdateStats()
     {
@@ -679,7 +691,15 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
         // 7. Storage
         try
         {
-            _statsDrive ??= new System.IO.DriveInfo("C");
+            // PASS 21: the selected drive comes from the central AppSettings
+            // (Settings → System Monitor → Select drive), defaulting to C. Rebuild
+            // the cached DriveInfo only when the selection changes.
+            string driveLetter = Models.AppSettings.SelectedDrive;
+            if (_statsDrive == null || _statsDriveName != driveLetter)
+            {
+                _statsDrive = new System.IO.DriveInfo(driveLetter);
+                _statsDriveName = driveLetter;
+            }
             double totalGB = _statsDrive.TotalSize / (1024.0 * 1024 * 1024);
             double freeGB = _statsDrive.AvailableFreeSpace / (1024.0 * 1024 * 1024);
             double usedGB = totalGB - freeGB;
@@ -1140,6 +1160,27 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
     // ── Clipboard retention ────────────────────────────────────────────────
 
     /// <summary>
+    /// PASS 21: reflects the persisted footer-metric visibility (CPU/RAM/DISK/
+    /// network/weather) from the central AppSettings. Fires once at construction
+    /// and on every AppSettings.Changed so the Settings page updates the footer
+    /// live. Weather visibility only applies to the footer readout — the pill
+    /// weather card is unaffected.
+    /// </summary>
+    private void ApplyFooterSettings()
+    {
+        if (RamFooterGroup == null || CpuFooterGroup == null || DiskFooterGroup == null || NetworkFooterGroup == null || WeatherFooterText == null)
+        {
+            return;
+        }
+
+        RamFooterGroup.Visibility = Models.AppSettings.ShowRam ? Visibility.Visible : Visibility.Collapsed;
+        CpuFooterGroup.Visibility = Models.AppSettings.ShowCpu ? Visibility.Visible : Visibility.Collapsed;
+        DiskFooterGroup.Visibility = Models.AppSettings.ShowDisk ? Visibility.Visible : Visibility.Collapsed;
+        NetworkFooterGroup.Visibility = Models.AppSettings.ShowNetworkSpeed ? Visibility.Visible : Visibility.Collapsed;
+        WeatherFooterText.Visibility = Models.AppSettings.ShowWeather ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary>
     /// PASS 6: reflects the persisted retention period on the Halo dropdown button
     /// (replaces the native ComboBox preselection). 0 = "Keep forever".
     /// </summary>
@@ -1443,20 +1484,35 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
     private void HomeButton_Click(object sender, RoutedEventArgs e)
         => App.IslandController.CollapseToPill();
 
-    // ── Footer settings gear (location) ────────────────────────────────────
+    // ── Footer settings gear (PASS 21: shows the Settings page overlay) ─────
 
     private void SettingsGear_Click(object sender, RoutedEventArgs e)
     {
-        var popup = new LocationSettingsPopup();
-        var flyout = new Flyout
-        {
-            Content = popup,
-            Placement = FlyoutPlacementMode.Top
-        };
-        popup.RequestClose += (_, _) => flyout.Hide();
+        // Keep the island awake while the Settings page is open so pointer
+        // movement inside it doesn't auto-collapse the expanded dashboard.
         App.IslandController.BeginAwake();
-        flyout.Closed += (_, _) => App.IslandController.EndAwake();
-        flyout.ShowAt((FrameworkElement)sender);
+        MainLayoutGrid.Visibility = Visibility.Collapsed;
+        HeaderBar.Visibility = Visibility.Collapsed;
+        SettingsPage.Visibility = Visibility.Visible;
+    }
+
+    private void SettingsPage_BackRequested(object sender, EventArgs e)
+    {
+        SettingsPage.Visibility = Visibility.Collapsed;
+        MainLayoutGrid.Visibility = Visibility.Visible;
+        HeaderBar.Visibility = Visibility.Visible;
+        App.IslandController.EndAwake();
+    }
+
+    private void OnIslandExpandedChanged(object? sender, bool expanded)
+    {
+        if (!expanded && SettingsPage.Visibility == Visibility.Visible)
+        {
+            SettingsPage.Visibility = Visibility.Collapsed;
+            MainLayoutGrid.Visibility = Visibility.Visible;
+            HeaderBar.Visibility = Visibility.Visible;
+            App.IslandController.EndAwake();
+        }
     }
 
     // ── Focus Session click handlers ───────────────────────────────────────

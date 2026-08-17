@@ -482,6 +482,28 @@ public class ClipboardService
         Helpers.Logger.Info("ClipboardService: removed item from history");
     }
 
+    /// <summary>
+    /// Removes every item from the persisted clipboard history (pinned items
+    /// included) and deletes all associated image files. Leaves the OS
+    /// clipboard untouched. Persists the emptied history to disk.
+    /// </summary>
+    public void DeleteAllHistory()
+    {
+        Logger.Info($"[PROFILE] DeleteAllHistory start ms={Environment.TickCount64}");
+        foreach (var item in History)
+        {
+            if (!string.IsNullOrEmpty(item.ImageFilePath))
+            {
+                ClipboardHistoryStore.DeleteImageFile(item.ImageFilePath);
+            }
+        }
+        History.Clear();
+        CurrentItem = null;
+        ClipboardHistoryStore.QueueSave(History);
+        Logger.Info("ClipboardService: deleted all clipboard history");
+        Logger.Info($"[PROFILE] DeleteAllHistory end ms={Environment.TickCount64}");
+    }
+
     public void ReCopy(ClipboardItem item)
     {
         if (item == null) return;

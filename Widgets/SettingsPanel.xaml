@@ -1,0 +1,440 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<UserControl
+    x:Class="DynamicIsland.Widgets.SettingsPanel"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:controls="using:DynamicIsland.Controls"
+    xmlns:helpers="using:DynamicIsland.Helpers"
+    mc:Ignorable="d">
+
+    <UserControl.Resources>
+        <!-- Halo toggle switch: Azure accent fill when enabled, neutral translucent
+             track when disabled. AccentBrush is the same mutated instance the
+             rest of the app resolves, so changing the accent recolors every
+             toggle live. -->
+        <Style x:Key="HaloToggleStyle" TargetType="ToggleSwitch">
+            <Setter Property="MinWidth" Value="0" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="HorizontalAlignment" Value="Right" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="ManipulationMode" Value="System,TranslateX" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleSwitch">
+                        <Grid Width="40" Height="22" Background="Transparent">
+                            <VisualStateManager.VisualStateGroups>
+                                <VisualStateGroup x:Name="CommonStates">
+                                    <VisualState x:Name="Normal" />
+                                    <VisualState x:Name="PointerOver">
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="Track" Storyboard.TargetProperty="Opacity" To="0.9" Duration="0" />
+                                        </Storyboard>
+                                    </VisualState>
+                                    <VisualState x:Name="Disabled">
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="Track" Storyboard.TargetProperty="Opacity" To="0.4" Duration="0" />
+                                        </Storyboard>
+                                    </VisualState>
+                                </VisualStateGroup>
+                                <VisualStateGroup x:Name="ToggleStates">
+                                    <VisualState x:Name="On">
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="TrackFill" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.15" />
+                                            <DoubleAnimation Storyboard.TargetName="KnobTranslate" Storyboard.TargetProperty="X" To="18" Duration="0:0:0.15" />
+                                        </Storyboard>
+                                    </VisualState>
+                                    <VisualState x:Name="Off">
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="TrackFill" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.15" />
+                                            <DoubleAnimation Storyboard.TargetName="KnobTranslate" Storyboard.TargetProperty="X" To="0" Duration="0:0:0.15" />
+                                        </Storyboard>
+                                    </VisualState>
+                                </VisualStateGroup>
+                            </VisualStateManager.VisualStateGroups>
+                            <Border x:Name="Track" Width="40" Height="22" CornerRadius="11"
+                                    Background="{StaticResource Semantic.Surface.Raised}"
+                                    BorderBrush="{StaticResource Semantic.Border.Default}" BorderThickness="1" />
+                            <Border x:Name="TrackFill" Width="40" Height="22" CornerRadius="11"
+                                    Background="{ThemeResource AccentBrush}" Opacity="0" />
+                            <Border Width="18" Height="18" CornerRadius="9" Background="White"
+                                    HorizontalAlignment="Left" Margin="2,0,0,0">
+                                <Border.RenderTransform>
+                                    <TranslateTransform x:Name="KnobTranslate" />
+                                </Border.RenderTransform>
+                            </Border>
+                            <Thumb x:Name="SwitchThumb" AutomationProperties.AccessibilityView="Raw">
+                                <Thumb.Template>
+                                    <ControlTemplate TargetType="Thumb">
+                                        <Rectangle Fill="Transparent" />
+                                    </ControlTemplate>
+                                </Thumb.Template>
+                            </Thumb>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Left-nav item: transparent surface, hover raise, active state set from
+             code-behind (Azure accent fill + white text) exactly like the
+             dashboard's filter pills. -->
+        <Style x:Key="NavButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="{ThemeResource TextSecondaryBrush}" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Padding" Value="14,10" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Left" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="UseSystemFocusVisuals" Value="False" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Grid Background="Transparent">
+                            <VisualStateManager.VisualStateGroups>
+                                <VisualStateGroup x:Name="CommonStates">
+                                    <VisualState x:Name="Normal" />
+                                    <VisualState x:Name="PointerOver">
+                                        <Storyboard>
+                                            <ObjectAnimationUsingKeyFrames Storyboard.TargetName="Surface" Storyboard.TargetProperty="Background">
+                                                <DiscreteObjectKeyFrame KeyTime="0" Value="{StaticResource Semantic.Surface.ClipItem}" />
+                                            </ObjectAnimationUsingKeyFrames>
+                                        </Storyboard>
+                                    </VisualState>
+                                    <VisualState x:Name="Pressed">
+                                        <Storyboard>
+                                            <ObjectAnimationUsingKeyFrames Storyboard.TargetName="Surface" Storyboard.TargetProperty="Background">
+                                                <DiscreteObjectKeyFrame KeyTime="0" Value="{StaticResource Semantic.Surface.ClipItemHover}" />
+                                            </ObjectAnimationUsingKeyFrames>
+                                        </Storyboard>
+                                    </VisualState>
+                                    <VisualState x:Name="Disabled">
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="Surface" Storyboard.TargetProperty="Opacity" To="0.5" Duration="0" />
+                                        </Storyboard>
+                                    </VisualState>
+                                </VisualStateGroup>
+                            </VisualStateManager.VisualStateGroups>
+                            <Border x:Name="Surface" Background="{TemplateBinding Background}" CornerRadius="8" />
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="Center" Margin="{TemplateBinding Padding}" />
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Section container: all settings live inside the single black-tint
+             wrapper below, so individual sections are flat (no per-card tint). -->
+        <Style x:Key="SectionCardStyle" TargetType="Border">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="CornerRadius" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="0" />
+        </Style>
+
+        <!-- One setting row: label left, control right. -->
+        <Style x:Key="SettingRowStyle" TargetType="Grid">
+            <Setter Property="Margin" Value="0,7,0,7" />
+        </Style>
+
+        <Style x:Key="SettingLabelStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Foreground" Value="{ThemeResource TextPrimaryBrush}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+        <Style x:Key="SettingHintStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Foreground" Value="{ThemeResource TextSecondaryBrush}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Margin" Value="0,2,0,0" />
+        </Style>
+
+        <Style x:Key="SectionTitleStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{ThemeResource TextSecondaryBrush}" />
+            <Setter Property="Margin" Value="2,0,0,6" />
+        </Style>
+
+        <!-- Glass ComboBox matching FocusGlassInputStyle. -->
+        <Style x:Key="SettingsComboStyle" TargetType="ComboBox">
+            <Setter Property="Background" Value="{StaticResource Semantic.Surface.SearchInput}" />
+            <Setter Property="BorderBrush" Value="{StaticResource Semantic.Border.Subtle}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="12,6" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Foreground" Value="{ThemeResource TextPrimaryBrush}" />
+            <Setter Property="MinWidth" Value="120" />
+            <Setter Property="HorizontalAlignment" Value="Right" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="UseSystemFocusVisuals" Value="False" />
+        </Style>
+
+        <!-- Search field for the Weather location picker. -->
+        <Style x:Key="SettingsSearchStyle" TargetType="TextBox">
+            <Setter Property="Background" Value="{StaticResource Semantic.Surface.SearchInput}" />
+            <Setter Property="BorderBrush" Value="{StaticResource Semantic.Border.Subtle}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="12,6" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Foreground" Value="{ThemeResource TextPrimaryBrush}" />
+            <Setter Property="UseSystemFocusVisuals" Value="False" />
+        </Style>
+    </UserControl.Resources>
+
+    <Grid RequestedTheme="Dark" Background="{StaticResource Semantic.Surface.Default}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Header: SETTINGS identity + Back action top-right. Matches the main
+             dashboard's HeaderBar (24 DIP band, 8 DIP margin, bold 16 DIP
+             secondary text, 14 DIP Home glyph in a 24×24 transparent button). -->
+        <Grid ColumnDefinitions="*,Auto" Height="24" VerticalAlignment="Top" Margin="8,8,8,8">
+            <TextBlock Grid.Column="0" Text="Settings" FontSize="16" FontWeight="Bold"
+                       Foreground="{ThemeResource TextSecondaryBrush}"
+                       Margin="4,0,0,0" VerticalAlignment="Center" />
+            <Button Grid.Column="1" Width="24" Height="24" Padding="0"
+                    Background="Transparent" BorderThickness="0" BorderBrush="Transparent"
+                    CornerRadius="12" HorizontalAlignment="Right" VerticalAlignment="Center"
+                    Click="BackButton_Click" ToolTipService.ToolTip="Back to dashboard">
+                <controls:AppIcon Kind="Home" Width="14" Height="14" Fill="{ThemeResource TextSecondaryBrush}" />
+            </Button>
+        </Grid>
+
+        <!-- Body: left nav + right content. -->
+        <Grid Grid.Row="1" ColumnDefinitions="160,*" Margin="16,0,16,16">
+            <!-- LEFT NAV -->
+            <StackPanel Grid.Column="0" Spacing="4" Margin="0,4,12,0" VerticalAlignment="Top">
+                <Button x:Name="NavGeneral" Content="General" Style="{StaticResource NavButtonStyle}" Tag="general" Click="NavButton_Click" />
+                <Button x:Name="NavAppearance" Content="Appearance" Style="{StaticResource NavButtonStyle}" Tag="appearance" Click="NavButton_Click" />
+                <Button x:Name="NavWeather" Content="Weather" Style="{StaticResource NavButtonStyle}" Tag="weather" Click="NavButton_Click" />
+                <Button x:Name="NavSystemMonitor" Content="System Monitor" Style="{StaticResource NavButtonStyle}" Tag="systemmonitor" Click="NavButton_Click" />
+                <Button x:Name="NavClipboard" Content="Clipboard" Style="{StaticResource NavButtonStyle}" Tag="clipboard" Click="NavButton_Click" />
+                <Button x:Name="NavBluetooth" Content="Bluetooth" Style="{StaticResource NavButtonStyle}" Tag="bluetooth" Click="NavButton_Click" />
+                <Button x:Name="NavPrivacy" Content="Privacy" Style="{StaticResource NavButtonStyle}" Tag="privacy" Click="NavButton_Click" />
+            </StackPanel>
+
+            <!-- RIGHT CONTENT -->
+            <ScrollViewer x:Name="SettingsScrollViewer" Grid.Column="1" VerticalScrollBarVisibility="Auto" Padding="0,0,4,0">
+                <Border Background="{StaticResource Semantic.Surface.CardTint}"
+                        CornerRadius="12" Padding="16" Margin="0,0,0,12">
+                <StackPanel Spacing="8">
+                    <!-- GENERAL -->
+                    <StackPanel x:Name="GeneralSection" Spacing="8">
+                        <Border Style="{StaticResource SectionCardStyle}">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="Startup" Style="{StaticResource SectionTitleStyle}" />
+                                <Grid Style="{StaticResource SettingRowStyle}" ColumnDefinitions="*,Auto">
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Text="Start Halo Bar with Windows" Style="{StaticResource SettingLabelStyle}" />
+                                        <TextBlock Text="Launch automatically when you sign in." Style="{StaticResource SettingHintStyle}" />
+                                    </StackPanel>
+                                    <ToggleSwitch Grid.Column="1" x:Name="StartWithWindowsToggle"
+                                                  Style="{StaticResource HaloToggleStyle}"
+                                                  OnContent="" OffContent=""
+                                                  Toggled="StartWithWindowsToggle_Toggled" />
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+
+                    <!-- APPEARANCE -->
+                    <StackPanel x:Name="AppearanceSection" Visibility="Collapsed" Spacing="8">
+                        <Border Style="{StaticResource SectionCardStyle}">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="Accent Color" Style="{StaticResource SectionTitleStyle}" />
+                                <TextBlock Text="Pick a color for the Halo Bar accent — applied live across the pill, dashboard and popups." FontSize="12"
+                                           Foreground="{ThemeResource TextSecondaryBrush}" TextWrapping="Wrap" />
+                                <StackPanel x:Name="AccentSwatchRow" Orientation="Horizontal" Spacing="10" Margin="0,6,0,0" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+
+                    <!-- WEATHER -->
+                    <StackPanel x:Name="WeatherSection" Visibility="Collapsed" Spacing="8">
+                        <Border Style="{StaticResource SectionCardStyle}">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="Location" Style="{StaticResource SectionTitleStyle}" />
+                                <Grid Style="{StaticResource SettingRowStyle}" ColumnDefinitions="*,Auto">
+                                    <TextBlock Grid.Column="0" Text="Automatic" Style="{StaticResource SettingLabelStyle}" />
+                                    <ToggleSwitch Grid.Column="1" x:Name="WeatherAutoToggle"
+                                                  Style="{StaticResource HaloToggleStyle}"
+                                                  OnContent="" OffContent=""
+                                                  Toggled="WeatherAutoToggle_Toggled" />
+                                </Grid>
+                                <TextBlock x:Name="WeatherCurrentLabel" Style="{StaticResource SettingHintStyle}" />
+                                <StackPanel x:Name="WeatherSearchPanel" Visibility="Collapsed" Spacing="8">
+                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                        <TextBox Grid.Column="0" x:Name="WeatherSearchBox" PlaceholderText="Search city..."
+                                                 Style="{StaticResource SettingsSearchStyle}" KeyDown="WeatherSearchBox_KeyDown" />
+                                        <Button Grid.Column="1" x:Name="WeatherSearchButton" Content="Search"
+                                                Background="{ThemeResource AccentBrush}" Foreground="White" BorderThickness="0"
+                                                CornerRadius="8" Padding="14,6" FontSize="12" VerticalAlignment="Center"
+                                                Click="WeatherSearchButton_Click" />
+                                    </Grid>
+                                    <ListView x:Name="WeatherResultsList" MaxHeight="150" Background="Transparent"
+                                              SelectionMode="None" IsItemClickEnabled="True" ItemClick="WeatherResultsList_ItemClick">
+                                        <ListView.ItemContainerStyle>
+                                            <Style TargetType="ListViewItem">
+                                                <Setter Property="Padding" Value="0" />
+                                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                            </Style>
+                                        </ListView.ItemContainerStyle>
+                                        <ListView.ItemTemplate>
+                                            <DataTemplate x:DataType="helpers:CityResult">
+                                                <Border Background="Transparent" CornerRadius="8" Padding="8,6">
+                                                    <TextBlock Text="{x:Bind DisplayName}" FontSize="12"
+                                                               Foreground="{ThemeResource TextPrimaryBrush}"
+                                                               TextTrimming="CharacterEllipsis" />
+                                                </Border>
+                                            </DataTemplate>
+                                        </ListView.ItemTemplate>
+                                    </ListView>
+                                    <TextBlock x:Name="WeatherStatusText" Style="{StaticResource SettingHintStyle}" Visibility="Collapsed" />
+                                    <Button x:Name="WeatherRetryButton" Content="Search unavailable — tap to retry"
+                                            FontSize="11" Padding="0" HorizontalAlignment="Left"
+                                            Background="Transparent" BorderThickness="0"
+                                            Foreground="{ThemeResource AccentBrush}"
+                                            Visibility="Collapsed" Click="WeatherRetryButton_Click" />
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                        <Border Style="{StaticResource SectionCardStyle}">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="Footer" Style="{StaticResource SectionTitleStyle}" />
+                                <Grid Style="{StaticResource SettingRowStyle}" ColumnDefinitions="*,Auto">
+                                    <TextBlock Grid.Column="0" Text="Show weather in footer" Style="{StaticResource SettingLabelStyle}" />
+                                    <ToggleSwitch Grid.Column="1" x:Name="ShowWeatherToggle"
+                                                  Style="{StaticResource HaloToggleStyle}"
+                                                  OnContent="" OffContent=""
+                                                  Toggled="ShowWeatherToggle_Toggled" />
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+
+                    <!-- SYSTEM MONITOR -->
+                    <StackPanel x:Name="SystemMonitorSection" Visibility="Collapsed" Spacing="8">
+                        <Border Style="{StaticResource SectionCardStyle}">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="Footer Metrics" Style="{StaticResource SectionTitleStyle}" />
+                                <Grid Style="{StaticResource SettingRowStyle}" ColumnDefinitions="*,Auto">
+                                    <TextBlock Grid.Column="0" Text="Show CPU" Style="{StaticResource SettingLabelStyle}" />
+                                    <ToggleSwitch Grid.Column="1" x:Name="ShowCpuToggle"
+                                                  Style="{StaticResource HaloToggleStyle}"
+                                                  OnContent="" OffContent=""
+                                                  Toggled="ShowCpuToggle_Toggled" />
+                                </Grid>
+                                <Grid Style="{StaticResource SettingRowStyle}" ColumnDefinitions="*,Auto">
+                                    <TextBlock Grid.Column="0" Text="Show Disk" Style="{StaticResource SettingLabelStyle}" />
+                                    <ToggleSwitch Grid.Column="1" x:Name="ShowDiskToggle"
+                                                  Style="{StaticResource HaloToggleStyle}"
+                                                  OnContent="" OffContent=""
+                                                  Toggled="ShowDiskToggle_Toggled" />
+                                </Grid>
+                                <Grid Style="{StaticResource SettingRowStyle}" ColumnDefinitions="*,Auto">
+                                    <TextBlock Grid.Column="0" Text="Show RAM" Style="{StaticResource SettingLabelStyle}" />
+                                    <ToggleSwitch Grid.Column="1" x:Name="ShowRamToggle"
+                                                  Style="{StaticResource HaloToggleStyle}"
+                                                  OnContent="" OffContent=""
+                                                  Toggled="ShowRamToggle_Toggled" />
+                                </Grid>
+                                <Grid Style="{StaticResource SettingRowStyle}" ColumnDefinitions="*,Auto">
+                                    <TextBlock Grid.Column="0" Text="Show Network Speed" Style="{StaticResource SettingLabelStyle}" />
+                                    <ToggleSwitch Grid.Column="1" x:Name="ShowNetworkToggle"
+                                                  Style="{StaticResource HaloToggleStyle}"
+                                                  OnContent="" OffContent=""
+                                                  Toggled="ShowNetworkToggle_Toggled" />
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+                        <Border Style="{StaticResource SectionCardStyle}">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="Drive" Style="{StaticResource SectionTitleStyle}" />
+                                <Grid Style="{StaticResource SettingRowStyle}" ColumnDefinitions="*,Auto">
+                                    <TextBlock Grid.Column="0" Text="Select drive" Style="{StaticResource SettingLabelStyle}" />
+                                    <ComboBox Grid.Column="1" x:Name="DriveCombo"
+                                              Style="{StaticResource SettingsComboStyle}"
+                                              SelectionChanged="DriveCombo_SelectionChanged" />
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+
+                    <!-- CLIPBOARD -->
+                    <StackPanel x:Name="ClipboardSection" Visibility="Collapsed" Spacing="8">
+                        <Border Style="{StaticResource SectionCardStyle}">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="History" Style="{StaticResource SectionTitleStyle}" />
+                                <Grid Style="{StaticResource SettingRowStyle}" ColumnDefinitions="*,Auto">
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Text="Auto delete" Style="{StaticResource SettingLabelStyle}" />
+                                        <TextBlock Text="Remove non-pinned items older than this." Style="{StaticResource SettingHintStyle}" />
+                                    </StackPanel>
+                                    <ComboBox Grid.Column="1" x:Name="AutoDeleteCombo"
+                                              Style="{StaticResource SettingsComboStyle}"
+                                              SelectionChanged="AutoDeleteCombo_SelectionChanged" />
+                                </Grid>
+                                <Grid Style="{StaticResource SettingRowStyle}" ColumnDefinitions="*,Auto">
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Text="Permanently delete history" Style="{StaticResource SettingLabelStyle}" />
+                                        <TextBlock Text="Removes every saved item and image. Pinned items are included." Style="{StaticResource SettingHintStyle}" />
+                                    </StackPanel>
+                                    <Button Grid.Column="1" x:Name="ClearHistoryButton" Content="Delete All"
+                                            Background="Transparent" BorderThickness="0"
+                                            Foreground="{StaticResource Semantic.State.Danger}"
+                                            FontSize="12" Padding="10,6" CornerRadius="8"
+                                            HorizontalAlignment="Right" VerticalAlignment="Center"
+                                            Click="ClearHistoryButton_Click" />
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+
+                    <!-- BLUETOOTH -->
+                    <StackPanel x:Name="BluetoothSection" Visibility="Collapsed" Spacing="8">
+                        <Border Style="{StaticResource SectionCardStyle}">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="Notifications" Style="{StaticResource SectionTitleStyle}" />
+                                <Grid Style="{StaticResource SettingRowStyle}" ColumnDefinitions="*,Auto">
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Text="Show connection popup" Style="{StaticResource SettingLabelStyle}" />
+                                        <TextBlock Text="Show a popup when a device connects to this PC." Style="{StaticResource SettingHintStyle}" />
+                                    </StackPanel>
+                                    <ToggleSwitch Grid.Column="1" x:Name="BluetoothPopupToggle"
+                                                  Style="{StaticResource HaloToggleStyle}"
+                                                  OnContent="" OffContent=""
+                                                  Toggled="BluetoothPopupToggle_Toggled" />
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+
+                    <!-- PRIVACY (informational only — intentionally NOT a toggle) -->
+                    <StackPanel x:Name="PrivacySection" Visibility="Collapsed" Spacing="8">
+                        <Border Style="{StaticResource SectionCardStyle}">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="Clipboard Data" Style="{StaticResource SectionTitleStyle}" />
+                                <TextBlock Text="Clipboard data is stored locally on this device."
+                                           FontSize="13" Foreground="{ThemeResource TextPrimaryBrush}" TextWrapping="Wrap" />
+                                <TextBlock Text="Your clipboard history, images, settings and location stay in %LOCALAPPDATA%\DynamicIsland. Nothing is uploaded to any server."
+                                           FontSize="12" Foreground="{ThemeResource TextSecondaryBrush}" TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </StackPanel>
+                </Border>
+            </ScrollViewer>
+        </Grid>
+    </Grid>
+</UserControl>

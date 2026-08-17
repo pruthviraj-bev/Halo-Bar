@@ -562,8 +562,12 @@ public sealed partial class PillDashboard : UserControl, IIslandWidget
             && prev == BluetoothConnectionState.Connected;
         _btPrevStates[device.Id] = device.ConnectionState;
 
+        // PASS 21: the Settings → Bluetooth "Show connection popup" toggle gates
+        // the popup at the trigger point — disabled means devices connect
+        // silently. The rest of the Bluetooth subsystem is untouched.
         if (!wasConnected && device.IsConnected
-            && App.BluetoothService.AdapterStatus == BluetoothAdapterStatus.Ready)
+            && App.BluetoothService.AdapterStatus == BluetoothAdapterStatus.Ready
+            && Models.AppSettings.ShowBluetoothConnectionPopup)
         {
             ShowBluetoothPopup(device);
         }
