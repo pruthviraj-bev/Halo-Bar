@@ -52,3 +52,7 @@ _ReSharper*/
 # Generated files
 Generated\ Files/
 *_wpftmp.csproj
+
+# Installer build artifacts (runtime installer is a build-time download)
+Installer/runtime/
+Installer/Output/
