@@ -46,18 +46,17 @@ CreateAppDir=yes
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
-[Tasks]
-Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription: "Additional icons:"
-
 [Files]
 ; Windows App SDK 1.8 runtime installer (bundled, run during [Run]).
 Source: "runtime\WindowsAppRuntimeInstall-x64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall
 ; Self-contained published app (includes the .NET 10 runtime).
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
 
+; NOTE: no desktop shortcut on purpose — Halo Bar is a taskbar/dock widget, not
+; a classic app, so only the Start-menu entry is created below.
+
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
-Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
 ; Install the Windows App SDK runtime first. --quiet suppresses the UI; the
