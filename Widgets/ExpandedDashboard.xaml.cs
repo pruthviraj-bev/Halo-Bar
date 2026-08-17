@@ -551,6 +551,45 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
 
     // ── Weather Service handler ────────────────────────────────────────────
 
+    /// <summary>
+    /// Subtle 0.5 s opacity/scale pulse on the footer temp when a weather update
+    /// lands, so a refresh is visible without a jarring flash.
+    /// </summary>
+    private void PulseWeatherFooter()
+    {
+        if (WeatherFooterText == null || WeatherFooterText.Visibility != Visibility.Visible) return;
+        if (WeatherFooterText.RenderTransform is not CompositeTransform) return;
+
+        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+        var pulse = new Storyboard();
+
+        var fade = new DoubleAnimationUsingKeyFrames { EnableDependentAnimation = true };
+        fade.KeyFrames.Add(new EasingDoubleKeyFrame { Value = 1.0, KeyTime = KeyTime.FromTimeSpan(TimeSpan.Zero) });
+        fade.KeyFrames.Add(new EasingDoubleKeyFrame { Value = 0.35, KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(200)) });
+        fade.KeyFrames.Add(new EasingDoubleKeyFrame { Value = 1.0, KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(500)), EasingFunction = ease });
+        Storyboard.SetTarget(fade, WeatherFooterText);
+        Storyboard.SetTargetProperty(fade, "Opacity");
+        pulse.Children.Add(fade);
+
+        var scaleX = new DoubleAnimationUsingKeyFrames { EnableDependentAnimation = true };
+        scaleX.KeyFrames.Add(new EasingDoubleKeyFrame { Value = 1.0, KeyTime = KeyTime.FromTimeSpan(TimeSpan.Zero) });
+        scaleX.KeyFrames.Add(new EasingDoubleKeyFrame { Value = 1.15, KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(200)), EasingFunction = ease });
+        scaleX.KeyFrames.Add(new EasingDoubleKeyFrame { Value = 1.0, KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(500)), EasingFunction = ease });
+        Storyboard.SetTarget(scaleX, WeatherFooterText);
+        Storyboard.SetTargetProperty(scaleX, "(UIElement.RenderTransform).(CompositeTransform.ScaleX)");
+        pulse.Children.Add(scaleX);
+
+        var scaleY = new DoubleAnimationUsingKeyFrames { EnableDependentAnimation = true };
+        scaleY.KeyFrames.Add(new EasingDoubleKeyFrame { Value = 1.0, KeyTime = KeyTime.FromTimeSpan(TimeSpan.Zero) });
+        scaleY.KeyFrames.Add(new EasingDoubleKeyFrame { Value = 1.15, KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(200)), EasingFunction = ease });
+        scaleY.KeyFrames.Add(new EasingDoubleKeyFrame { Value = 1.0, KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(500)), EasingFunction = ease });
+        Storyboard.SetTarget(scaleY, WeatherFooterText);
+        Storyboard.SetTargetProperty(scaleY, "(UIElement.RenderTransform).(CompositeTransform.ScaleY)");
+        pulse.Children.Add(scaleY);
+
+        pulse.Begin();
+    }
+
     private void OnWeatherUpdated(object? sender, EventArgs e)
     {
         _dispatcherQueue.TryEnqueue(() =>
@@ -564,6 +603,7 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
                 WeatherTemp = ws.CurrentTemp;
                 WeatherCondition = ws.Condition;
                 WeatherIconKind = ws.IconKind;
+                PulseWeatherFooter();
 
                 if (ws.Forecast.Length >= 3)
                 {
@@ -1205,10 +1245,69 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
 
     private void UpdateFilterVisual()
     {
-        AllFilterButton.Foreground = GetThemeBrush(_showPinnedOnly ? "TextSecondaryBrush" : "AccentBrush");
-        PinnedFilterButton.Foreground = GetThemeBrush(_showPinnedOnly ? "AccentBrush" : "TextSecondaryBrush");
+        AnimatePillBrush(AllFilterButton, GetThemeBrush(_showPinnedOnly ? "TextSecondaryBrush" : "AccentBrush"),
+            _showPinnedOnly ? null : GetAccentTintBrush());
+        AnimatePillBrush(PinnedFilterButton, GetThemeBrush(_showPinnedOnly ? "AccentBrush" : "TextSecondaryBrush"),
+            _showPinnedOnly ? GetAccentTintBrush() : null);
         AllFilterButton.FontWeight = _showPinnedOnly ? Microsoft.UI.Text.FontWeights.Normal : Microsoft.UI.Text.FontWeights.Bold;
         PinnedFilterButton.FontWeight = _showPinnedOnly ? Microsoft.UI.Text.FontWeights.Bold : Microsoft.UI.Text.FontWeights.Normal;
+    }
+
+    /// <summary>
+    /// 120 ms foreground/background color transitions for the filter pills so
+    /// the active state glides between pills instead of snapping.
+    /// </summary>
+    private void AnimatePillBrush(Button button, Brush? foreground, Brush? background)
+    {
+        var sb = new Storyboard();
+
+        if (foreground is SolidColorBrush fg)
+        {
+            var anim = new ColorAnimation
+            {
+                To = fg.Color,
+                Duration = new Duration(TimeSpan.FromMilliseconds(120))
+            };
+            Storyboard.SetTarget(anim, button);
+            Storyboard.SetTargetProperty(anim, "(Control.Foreground).(SolidColorBrush.Color)");
+            sb.Children.Add(anim);
+        }
+        else
+        {
+            button.Foreground = foreground;
+        }
+
+        if (background is SolidColorBrush bg)
+        {
+            var anim = new ColorAnimation
+            {
+                To = bg.Color,
+                Duration = new Duration(TimeSpan.FromMilliseconds(120))
+            };
+            Storyboard.SetTarget(anim, button);
+            Storyboard.SetTargetProperty(anim, "(Control.Background).(SolidColorBrush.Color)");
+            sb.Children.Add(anim);
+        }
+        else
+        {
+            button.Background = background;
+        }
+
+        sb.Begin();
+    }
+
+    /// <summary>
+    /// A soft accent-tinted chip background for the active filter pill
+    /// (~12 % accent alpha over the 5 % chip surface).
+    /// </summary>
+    private static Brush? GetAccentTintBrush()
+    {
+        if (Application.Current.Resources.TryGetValue("AccentBrush", out var value) &&
+            value is SolidColorBrush accent)
+        {
+            return new SolidColorBrush(Color.FromArgb(0x1F, accent.Color.R, accent.Color.G, accent.Color.B));
+        }
+        return null;
     }
 
     private static Brush GetThemeBrush(string key)
@@ -1469,6 +1568,36 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
 
     // ── Footer settings gear (PASS 21: shows the Settings page overlay) ─────
 
+    /// <summary>
+    /// Hover raise for the gear chip: 100 ms background glide from the 2 % tint
+    /// to the 8 % raised surface so the chip signals it's clickable.
+    /// </summary>
+    private void AnimateGearChip(Brush to)
+    {
+        if (SettingsGearChip.Background is not SolidColorBrush from)
+        {
+            SettingsGearChip.Background = to;
+            return;
+        }
+
+        var anim = new ColorAnimation
+        {
+            To = ((SolidColorBrush)to).Color,
+            Duration = new Duration(TimeSpan.FromMilliseconds(100))
+        };
+        Storyboard.SetTarget(anim, SettingsGearChip);
+        Storyboard.SetTargetProperty(anim, "(Border.Background).(SolidColorBrush.Color)");
+        var sb = new Storyboard();
+        sb.Children.Add(anim);
+        sb.Begin();
+    }
+
+    private void SettingsGearChip_PointerEntered(object sender, PointerRoutedEventArgs e)
+        => AnimateGearChip((Brush)Application.Current.Resources["Semantic.Surface.Raised"]);
+
+    private void SettingsGearChip_PointerExited(object sender, PointerRoutedEventArgs e)
+        => AnimateGearChip((Brush)Application.Current.Resources["Semantic.Surface.Raised05"]);
+
     private void SettingsGear_Click(object sender, RoutedEventArgs e)
     {
         // Keep the island awake while the Settings page is open so pointer
@@ -1477,6 +1606,46 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
         MainLayoutGrid.Visibility = Visibility.Collapsed;
         HeaderBar.Visibility = Visibility.Collapsed;
         SettingsPage.Visibility = Visibility.Visible;
+        AnimateSettingsPageIn();
+    }
+
+    /// <summary>
+    /// Settings page opens with a 200 ms fade + 12 px slide-up so the overlay
+    /// reads as a page gliding over the dashboard rather than a hard cut.
+    /// </summary>
+    private void AnimateSettingsPageIn()
+    {
+        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+        var slide = new TranslateTransform { Y = 12 };
+        SettingsPage.RenderTransform = slide;
+        SettingsPage.Opacity = 0.0;
+
+        var fade = new DoubleAnimation
+        {
+            From = 0.0,
+            To = 1.0,
+            Duration = new Duration(TimeSpan.FromMilliseconds(200)),
+            EnableDependentAnimation = true
+        };
+        fade.EasingFunction = ease;
+        Storyboard.SetTarget(fade, SettingsPage);
+        Storyboard.SetTargetProperty(fade, "Opacity");
+
+        var translate = new DoubleAnimation
+        {
+            From = 12,
+            To = 0,
+            Duration = new Duration(TimeSpan.FromMilliseconds(200)),
+            EnableDependentAnimation = true
+        };
+        translate.EasingFunction = ease;
+        Storyboard.SetTarget(translate, slide);
+        Storyboard.SetTargetProperty(translate, "Y");
+
+        var sb = new Storyboard();
+        sb.Children.Add(fade);
+        sb.Children.Add(translate);
+        sb.Begin();
     }
 
     private void SettingsPage_BackRequested(object sender, EventArgs e)

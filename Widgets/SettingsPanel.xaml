@@ -41,14 +41,30 @@
                                 <VisualStateGroup x:Name="ToggleStates">
                                     <VisualState x:Name="On">
                                         <Storyboard>
-                                            <DoubleAnimation Storyboard.TargetName="TrackFill" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.15" />
-                                            <DoubleAnimation Storyboard.TargetName="KnobTranslate" Storyboard.TargetProperty="X" To="18" Duration="0:0:0.15" />
+                                            <DoubleAnimation Storyboard.TargetName="TrackFill" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.15">
+                                                <DoubleAnimation.EasingFunction>
+                                                    <CubicEase EasingMode="EaseOut" />
+                                                </DoubleAnimation.EasingFunction>
+                                            </DoubleAnimation>
+                                            <DoubleAnimation Storyboard.TargetName="KnobTranslate" Storyboard.TargetProperty="X" To="18" Duration="0:0:0.15">
+                                                <DoubleAnimation.EasingFunction>
+                                                    <CubicEase EasingMode="EaseOut" />
+                                                </DoubleAnimation.EasingFunction>
+                                            </DoubleAnimation>
                                         </Storyboard>
                                     </VisualState>
                                     <VisualState x:Name="Off">
                                         <Storyboard>
-                                            <DoubleAnimation Storyboard.TargetName="TrackFill" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.15" />
-                                            <DoubleAnimation Storyboard.TargetName="KnobTranslate" Storyboard.TargetProperty="X" To="0" Duration="0:0:0.15" />
+                                            <DoubleAnimation Storyboard.TargetName="TrackFill" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.15">
+                                                <DoubleAnimation.EasingFunction>
+                                                    <CubicEase EasingMode="EaseOut" />
+                                                </DoubleAnimation.EasingFunction>
+                                            </DoubleAnimation>
+                                            <DoubleAnimation Storyboard.TargetName="KnobTranslate" Storyboard.TargetProperty="X" To="0" Duration="0:0:0.15">
+                                                <DoubleAnimation.EasingFunction>
+                                                    <CubicEase EasingMode="EaseOut" />
+                                                </DoubleAnimation.EasingFunction>
+                                            </DoubleAnimation>
                                         </Storyboard>
                                     </VisualState>
                                 </VisualStateGroup>
@@ -260,15 +276,21 @@
         <!-- Body: left nav + right content. -->
         <Grid Grid.Row="1" ColumnDefinitions="160,*" Margin="16,0,16,16">
             <!-- LEFT NAV -->
-            <StackPanel Grid.Column="0" Spacing="4" Margin="0,4,12,0" VerticalAlignment="Top">
-                <Button x:Name="NavGeneral" Content="General" Style="{StaticResource NavButtonStyle}" Tag="general" Click="NavButton_Click" />
-                <Button x:Name="NavAppearance" Content="Appearance" Style="{StaticResource NavButtonStyle}" Tag="appearance" Click="NavButton_Click" />
-                <Button x:Name="NavWeather" Content="Weather" Style="{StaticResource NavButtonStyle}" Tag="weather" Click="NavButton_Click" />
-                <Button x:Name="NavSystemMonitor" Content="System Monitor" Style="{StaticResource NavButtonStyle}" Tag="systemmonitor" Click="NavButton_Click" />
-                <Button x:Name="NavClipboard" Content="Clipboard" Style="{StaticResource NavButtonStyle}" Tag="clipboard" Click="NavButton_Click" />
-                <Button x:Name="NavBluetooth" Content="Bluetooth" Style="{StaticResource NavButtonStyle}" Tag="bluetooth" Click="NavButton_Click" />
-                <Button x:Name="NavPrivacy" Content="Privacy" Style="{StaticResource NavButtonStyle}" Tag="privacy" Click="NavButton_Click" />
-            </StackPanel>
+            <Grid Grid.Column="0" Margin="0,4,12,0">
+                <StackPanel Spacing="4" VerticalAlignment="Top">
+                    <Button x:Name="NavGeneral" Content="General" Style="{StaticResource NavButtonStyle}" Tag="general" Click="NavButton_Click" />
+                    <Button x:Name="NavAppearance" Content="Appearance" Style="{StaticResource NavButtonStyle}" Tag="appearance" Click="NavButton_Click" />
+                    <Button x:Name="NavWeather" Content="Weather" Style="{StaticResource NavButtonStyle}" Tag="weather" Click="NavButton_Click" />
+                    <Button x:Name="NavSystemMonitor" Content="System Monitor" Style="{StaticResource NavButtonStyle}" Tag="systemmonitor" Click="NavButton_Click" />
+                    <Button x:Name="NavClipboard" Content="Clipboard" Style="{StaticResource NavButtonStyle}" Tag="clipboard" Click="NavButton_Click" />
+                    <Button x:Name="NavBluetooth" Content="Bluetooth" Style="{StaticResource NavButtonStyle}" Tag="bluetooth" Click="NavButton_Click" />
+                    <Button x:Name="NavPrivacy" Content="Privacy" Style="{StaticResource NavButtonStyle}" Tag="privacy" Click="NavButton_Click" />
+                </StackPanel>
+                <TextBlock Text="Version 1.0.0" FontSize="10"
+                           Foreground="{ThemeResource TextSecondaryBrush}"
+                           HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                           Margin="0,0,4,0" />
+            </Grid>
 
             <!-- RIGHT CONTENT -->
             <ScrollViewer x:Name="SettingsScrollViewer" Grid.Column="1" VerticalScrollBarVisibility="Auto" Padding="0,0,4,0">

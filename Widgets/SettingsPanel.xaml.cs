@@ -8,6 +8,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Animation;
 using DynamicIsland.Helpers;
 using DynamicIsland.Models;
 using Windows.UI;
@@ -86,6 +87,55 @@ public sealed partial class SettingsPanel : UserControl
         SetNavActive(NavClipboard, tag == "clipboard");
         SetNavActive(NavBluetooth, tag == "bluetooth");
         SetNavActive(NavPrivacy, tag == "privacy");
+
+        AnimateSectionIn(tag switch
+        {
+            "general" => GeneralSection,
+            "appearance" => AppearanceSection,
+            "weather" => WeatherSection,
+            "systemmonitor" => SystemMonitorSection,
+            "clipboard" => ClipboardSection,
+            "bluetooth" => BluetoothSection,
+            _ => PrivacySection,
+        });
+    }
+
+    /// <summary>
+    /// 150 ms fade + 8 px slide-up when a nav section becomes visible, so a
+    /// section switch reads as content gliding in rather than a hard pop.
+    /// </summary>
+    private static void AnimateSectionIn(FrameworkElement section)
+    {
+        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+        var slide = new TranslateTransform { Y = 8 };
+        section.RenderTransform = slide;
+
+        var fade = new DoubleAnimation
+        {
+            From = 0.0,
+            To = 1.0,
+            Duration = new Duration(TimeSpan.FromMilliseconds(150)),
+            EnableDependentAnimation = true
+        };
+        fade.EasingFunction = ease;
+        Storyboard.SetTarget(fade, section);
+        Storyboard.SetTargetProperty(fade, "Opacity");
+
+        var translate = new DoubleAnimation
+        {
+            From = 8,
+            To = 0,
+            Duration = new Duration(TimeSpan.FromMilliseconds(150)),
+            EnableDependentAnimation = true
+        };
+        translate.EasingFunction = ease;
+        Storyboard.SetTarget(translate, slide);
+        Storyboard.SetTargetProperty(translate, "Y");
+
+        var sb = new Storyboard();
+        sb.Children.Add(fade);
+        sb.Children.Add(translate);
+        sb.Begin();
     }
 
     private static void SetNavActive(Button button, bool active)
@@ -179,9 +229,47 @@ public sealed partial class SettingsPanel : UserControl
 
     private void SelectAccent(string hex)
     {
+        // Capture the current brush colors so the change can be animated from
+        // the old accent to the new one (the brushes are shared instances every
+        // accent surface resolves, so animating them repaints the whole app).
+        var brushes = new[]
+        {
+            GetAccentBrush("AccentBrush"),
+            GetAccentBrush("Semantic.Accent.Primary"),
+            GetAccentBrush("Semantic.Accent.Hover"),
+            GetAccentBrush("Semantic.Accent.Pressed"),
+        };
+
+        var fromColors = new Color[brushes.Length];
+        for (int i = 0; i < brushes.Length; i++)
+            fromColors[i] = brushes[i]?.Color ?? default;
+
         AppSettings.SetAccentColor(hex);
         HighlightSelectedAccent(hex);
+
+        // Animate each shared brush from its previous color to the new one.
+        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+        var sb = new Storyboard();
+        for (int i = 0; i < brushes.Length; i++)
+        {
+            var brush = brushes[i];
+            if (brush == null) continue;
+            var anim = new ColorAnimation
+            {
+                From = fromColors[i],
+                To = brush.Color,
+                Duration = new Duration(TimeSpan.FromMilliseconds(250))
+            };
+            anim.EasingFunction = ease;
+            Storyboard.SetTarget(anim, brush);
+            Storyboard.SetTargetProperty(anim, "Color");
+            sb.Children.Add(anim);
+        }
+        sb.Begin();
     }
+
+    private static SolidColorBrush? GetAccentBrush(string key)
+        => Application.Current.Resources.TryGetValue(key, out var value) && value is SolidColorBrush b ? b : null;
 
     private void HighlightSelectedAccent(string hex)
     {

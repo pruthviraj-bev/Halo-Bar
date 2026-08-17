@@ -145,18 +145,22 @@ public sealed partial class ClipboardWidget : UserControl, IIslandWidget
     /// <summary>
     /// Fade/scale-in micro-animation on the compact pill the moment it appears
     /// (fresh instance each copy, so Loaded fires exactly once per show).
+    /// EaseOut so the pop decelerates to rest instead of slamming in.
     /// </summary>
     private void CollapsedRow_Loaded(object sender, RoutedEventArgs e)
     {
-        var sb = new Storyboard { Duration = TimeSpan.FromMilliseconds(150) };
+        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+
+        var sb = new Storyboard { Duration = TimeSpan.FromMilliseconds(180) };
 
         var fade = new DoubleAnimation
         {
             From = 0.0,
             To = 1.0,
-            Duration = new Duration(TimeSpan.FromMilliseconds(150)),
+            Duration = new Duration(TimeSpan.FromMilliseconds(180)),
             EnableDependentAnimation = true
         };
+        fade.EasingFunction = ease;
         Storyboard.SetTarget(fade, CollapsedRow);
         Storyboard.SetTargetProperty(fade, "Opacity");
         sb.Children.Add(fade);
@@ -165,9 +169,10 @@ public sealed partial class ClipboardWidget : UserControl, IIslandWidget
         {
             From = 0.96,
             To = 1.0,
-            Duration = new Duration(TimeSpan.FromMilliseconds(150)),
+            Duration = new Duration(TimeSpan.FromMilliseconds(180)),
             EnableDependentAnimation = true
         };
+        scaleX.EasingFunction = ease;
         Storyboard.SetTarget(scaleX, CollapsedRowScale);
         Storyboard.SetTargetProperty(scaleX, "ScaleX");
         sb.Children.Add(scaleX);
@@ -176,9 +181,10 @@ public sealed partial class ClipboardWidget : UserControl, IIslandWidget
         {
             From = 0.96,
             To = 1.0,
-            Duration = new Duration(TimeSpan.FromMilliseconds(150)),
+            Duration = new Duration(TimeSpan.FromMilliseconds(180)),
             EnableDependentAnimation = true
         };
+        scaleY.EasingFunction = ease;
         Storyboard.SetTarget(scaleY, CollapsedRowScale);
         Storyboard.SetTargetProperty(scaleY, "ScaleY");
         sb.Children.Add(scaleY);
@@ -242,7 +248,30 @@ public sealed partial class ClipboardWidget : UserControl, IIslandWidget
         var timer = DispatcherQueue.CreateTimer();
         timer.Interval = NotificationDuration.Short;
         timer.IsRepeating = false;
-        timer.Tick += (s, ev) => App.IslandController.DismissClipboard();
+        timer.Tick += (s, ev) =>
+        {
+            // Quick fade-out before the island collapses so the pill doesn't
+            // "poof" away. Opacity back to 1 afterwards in case it's reused.
+            var ease = new CubicEase { EasingMode = EasingMode.EaseIn };
+            var fadeOut = new DoubleAnimation
+            {
+                From = 1.0,
+                To = 0.0,
+                Duration = new Duration(TimeSpan.FromMilliseconds(120)),
+                EnableDependentAnimation = true
+            };
+            fadeOut.EasingFunction = ease;
+            Storyboard.SetTarget(fadeOut, CollapsedRow);
+            Storyboard.SetTargetProperty(fadeOut, "Opacity");
+            var sb = new Storyboard();
+            sb.Children.Add(fadeOut);
+            sb.Completed += (_, _) =>
+            {
+                CollapsedRow.Opacity = 1.0;
+                App.IslandController.DismissClipboard();
+            };
+            sb.Begin();
+        };
         timer.Start();
     }
 }
