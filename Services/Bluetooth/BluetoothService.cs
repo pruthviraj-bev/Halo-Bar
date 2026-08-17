@@ -27,6 +27,14 @@ public class BluetoothService
     private readonly BluetoothBatteryService _batteryService = new();
     private readonly Dictionary<string, BluetoothDeviceInfo> _cache = new();
     private readonly HashSet<string> _gattAttempted = new();
+    // AEP System.Devices.Aep.IsConnected is unreliable for classic-paired
+    // devices — it can flap back to False while the device stays connected
+    // (observed on a paired phone: the flag asserted True, the popup fired,
+    // then the flag dropped again). Latched Connected sightings keep the UI
+    // honest until the device is genuinely gone or stays silent long enough
+    // that the latch expires.
+    private const long ConnectedLatchMs = 60_000;
+    private readonly Dictionary<string, long> _connectedSince = new();
     private Radio? _radio;
     private bool _initialized;
 
@@ -107,6 +115,7 @@ public class BluetoothService
             _watcher.Stop();
             _cache.Clear();
             _gattAttempted.Clear();
+            _connectedSince.Clear();
             RebuildDevices();
             RaiseUpdated();
         }
@@ -156,10 +165,38 @@ public class BluetoothService
             _ = ResolveGattBatteryAsync(device);
         }
 
+        ApplyConnectedLatch(device);
+
         _cache[device.Id] = device;
         RebuildDevices();
         RaiseUpdated();
         DeviceChanged?.Invoke(this, new BluetoothDeviceChangedEventArgs(device, change));
+    }
+
+    /// <summary>
+    /// AEP IsConnected flapping: once a device is seen Connected, keep it
+    /// Connected while it stays Present and the last Connected sighting is
+    /// fresh (ConnectedLatchMs). A genuine disconnect eventually expires the
+    /// latch and the device reverts to Available. The snapshot is mutated
+    /// before caching, so every consumer (dashboard list/filter, status text,
+    /// popup transitions) sees the latched state.
+    /// </summary>
+    private void ApplyConnectedLatch(BluetoothDeviceInfo device)
+    {
+        long now = Environment.TickCount64;
+        if (device.IsConnected)
+        {
+            _connectedSince[device.Id] = now;
+        }
+        else if (device.IsPresent && _connectedSince.TryGetValue(device.Id, out var last)
+                 && now - last < ConnectedLatchMs)
+        {
+            device.ConnectionState = BluetoothConnectionState.Connected;
+        }
+        else
+        {
+            _connectedSince.Remove(device.Id);
+        }
     }
 
     private void OnDeviceRemoved(string id)
@@ -172,10 +209,18 @@ public class BluetoothService
         DeviceChanged?.Invoke(this, new BluetoothDeviceChangedEventArgs(removed, BluetoothDeviceChange.Removed));
     }
 
+    /// <summary>
+    /// Runs the battery capability investigation off-thread and publishes the
+    /// result through the existing device snapshot (Battery property) when a
+    /// level was obtained — the UI never sees a source, only the level. The
+    /// once-per-session guard lives in the caller (OnDeviceSnapshot's
+    /// _gattAttempted), so a failed investigation is not retried until the
+    /// next session (radio toggle clears the set).
+    /// </summary>
     private async Task ResolveGattBatteryAsync(BluetoothDeviceInfo device)
     {
-        int? level = await _batteryService.TryReadGattBatteryAsync(device.Id, device.IsLowEnergy);
-        if (!level.HasValue) return;
+        var result = await _batteryService.InvestigateAsync(device.Id, device.IsLowEnergy, device.Name);
+        if (!result.IsAvailable || !result.Percentage.HasValue) return;
 
         _dispatcherQueue.TryEnqueue(() =>
         {
@@ -190,7 +235,7 @@ public class BluetoothService
                 IsPaired = cached.IsPaired,
                 IsPresent = cached.IsPresent,
                 IsLowEnergy = cached.IsLowEnergy,
-                Battery = BluetoothBatteryInfo.FromDeviceLevel(level)
+                Battery = BluetoothBatteryInfo.FromDeviceLevel(result.Percentage.Value)
             };
 
             _cache[device.Id] = updated;

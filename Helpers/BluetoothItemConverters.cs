@@ -164,14 +164,20 @@ public class BluetoothDeviceImageConverter : IValueConverter
     public static double ArtZoomFor(BluetoothDeviceType type)
         => type switch
         {
-            BluetoothDeviceType.Earbuds or BluetoothDeviceType.Headphones => 2.1,  // headphone.png art ~45%
-            BluetoothDeviceType.Phone => 2.9,                                      // mobile.png art ~33%
-            BluetoothDeviceType.Keyboard => 1.6,                                   // keyboard.png art ~60%
-            BluetoothDeviceType.Mouse => 3.2,                                      // mouse.png art ~30%
-            BluetoothDeviceType.Tv => 1.6,                                         // tv.png art ~59% of width
-            BluetoothDeviceType.Printer => 2.2,                                     // printer.png art ~43% of canvas
-            BluetoothDeviceType.Watch => 1.8,                                        // watch.png art 30%×52% — height-constrained
-            BluetoothDeviceType.Other => 2.9,                                      // microphone.png art ~33%
+            // Each factor = ~0.95 ÷ the BINDING art fraction — the axis that
+            // fills the 64 DIP box first (max of the art's width/height
+            // coverage). A width-only zoom overflows tall art (phone 33%×63%:
+            // a 2.9 zoom would make the art 117 DIP tall in the 64 box and it
+            // clips top/bottom). Height-constrained factors keep every asset
+            // fully inside the box.
+            BluetoothDeviceType.Earbuds or BluetoothDeviceType.Headphones => 2.1,  // headphone.png art 45%×45%
+            BluetoothDeviceType.Phone => 1.5,                                      // mobile.png art 33%×63% → height-bound
+            BluetoothDeviceType.Keyboard => 1.6,                                   // keyboard.png art 60%×37% → width-bound
+            BluetoothDeviceType.Mouse => 1.8,                                      // mouse.png art 30%×52% → height-bound
+            BluetoothDeviceType.Tv => 1.6,                                         // tv.png art 59%×49% → width-bound
+            BluetoothDeviceType.Printer => 2.0,                                    // printer.png art 43%×46%
+            BluetoothDeviceType.Watch => 1.8,                                      // watch.png art 30%×52% → height-bound
+            BluetoothDeviceType.Other => 1.6,                                      // microphone.png art 33%×60% → height-bound
             _ => 1.0
         };
 }
