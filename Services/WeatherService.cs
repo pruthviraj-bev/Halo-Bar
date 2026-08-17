@@ -10,6 +10,10 @@ namespace DynamicIsland.Services;
 
 public class WeatherService
 {
+    // Shared per-service client — avoids a socket/TLS handshake + port churn on
+    // every 30-min fetch. Timeout set once (HttpClient.DefaultRequestTimeout).
+    private static readonly HttpClient Client = new() { Timeout = TimeSpan.FromSeconds(10) };
+
     private readonly DispatcherQueue _dispatcherQueue;
     private DispatcherQueueTimer? _pollTimer;
     
@@ -68,12 +72,9 @@ public class WeatherService
             double longitude = App.LocationService.Longitude;
 
             // Attempt to fetch weather from free Open-Meteo API
-            using var client = new HttpClient();
-            client.Timeout = TimeSpan.FromSeconds(10);
-            
             string url = $"https://api.open-meteo.com/v1/forecast?latitude={latitude}&longitude={longitude}&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code&daily=temperature_2m_max,temperature_2m_min,weather_code&timezone=auto";
             
-            var response = await client.GetAsync(url);
+            var response = await Client.GetAsync(url);
             if (!response.IsSuccessStatusCode)
             {
                 IsWeatherAvailable = false;

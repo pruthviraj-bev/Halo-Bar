@@ -90,6 +90,13 @@ public sealed partial class MainWindow : Window
     private int _regX0, _regY0, _regW, _regH;
     private bool _regValid;
 
+    // Last region actually pushed to SetWindowRgn + the drop overlay (PASS 54).
+    // Animations spend many frames producing identical rounded-int rects; the
+    // dedup below skips the region-create + SetWindowRgn + overlay update when
+    // nothing changed, cutting per-frame P/Invoke + DWM invalidation churn.
+    private int _appliedRegX0, _appliedRegY0, _appliedRegW, _appliedRegH, _appliedRegRad;
+    private bool _appliedRegAny;
+
     // Last pill height written by SetPillHeight (PASS 29). The pill's painted
     // surface must fill the region or the unpainted window surface shows as a
     // black band; the height is driven to the region height in every stage.
@@ -436,6 +443,8 @@ public sealed partial class MainWindow : Window
         int x1 = (int)Math.Round(_compactPillW * s);
         int y1 = (int)Math.Round((_dashboardHeightDip + _stripHeightDip) * s);
         _regX0 = 0; _regY0 = y0; _regW = x1; _regH = y1 - y0; _regValid = true;
+        _appliedRegX0 = 0; _appliedRegY0 = y0; _appliedRegW = x1; _appliedRegH = y1 - y0; _appliedRegRad = rad;
+        _appliedRegAny = true;
         IntPtr hrgn = CreateRoundRectRgn(0, y0, x1, y1, rad, rad);
         if (hrgn != IntPtr.Zero && !SetWindowRgn(hwnd, hrgn, true))
             DeleteObject(hrgn);
@@ -516,6 +525,22 @@ public sealed partial class MainWindow : Window
         _regW = (int)Math.Round((x0 + w) * s) - _regX0;
         _regH = (int)Math.Round((y0 + h) * s) - _regY0;
         _regValid = true;
+
+        // Dedup: identical rounded rect + radius as the last applied frame →
+        // the region and overlay are already correct; skip the GDI create,
+        // SetWindowRgn and drop-overlay update entirely.
+        if (_appliedRegAny
+            && _appliedRegX0 == _regX0 && _appliedRegY0 == _regY0
+            && _appliedRegW == _regW && _appliedRegH == _regH
+            && _appliedRegRad == rad)
+        {
+            return;
+        }
+
+        _appliedRegX0 = _regX0; _appliedRegY0 = _regY0;
+        _appliedRegW = _regW; _appliedRegH = _regH; _appliedRegRad = rad;
+        _appliedRegAny = true;
+
         IntPtr hrgn = CreateRoundRectRgn(_regX0, _regY0, _regX0 + _regW, _regY0 + _regH, rad, rad);
         if (hrgn != IntPtr.Zero)
         {

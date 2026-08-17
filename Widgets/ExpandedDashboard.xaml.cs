@@ -404,6 +404,8 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
         public int ThreadCount;
     }
 
+    private static readonly int PerformanceInfoSize = Marshal.SizeOf<PERFORMANCE_INFORMATION>();
+
     [DllImport("psapi.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GetPerformanceInfo(out PERFORMANCE_INFORMATION pPerformanceInformation, int cb);
@@ -697,7 +699,7 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
         UpdatePlaybackDisplay();
 
         // 3. RAM
-        if (GetPerformanceInfo(out var info, Marshal.SizeOf<PERFORMANCE_INFORMATION>()))
+        if (GetPerformanceInfo(out var info, PerformanceInfoSize))
         {
             ulong pageSize = info.PageSize.ToUInt64();
             double total = (info.PhysicalTotal.ToUInt64() * pageSize) / (1024.0 * 1024 * 1024);

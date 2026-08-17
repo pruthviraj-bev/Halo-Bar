@@ -67,6 +67,11 @@ public sealed partial class WeatherPillCard : UserControl, IPillCard, INotifyPro
             ConditionText = "Unavailable";
             ApplyWeatherIcon(Controls.AppIconKind.WeatherPartlyCloudy, string.Empty);
         }
+
+        // Content changed (new temp/condition) — the pill strip may need to
+        // re-layout. Harmless if no subscriber (WeatherCard isn't subscribed
+        // today), keeps the IPillCard contract honest for future consumers.
+        StateChanged?.Invoke(this, EventArgs.Empty);
     }
 
     // ── PASS 17.1: Meteocon icon + subtle per-condition animation ───────────

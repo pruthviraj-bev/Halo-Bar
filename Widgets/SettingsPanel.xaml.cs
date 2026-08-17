@@ -434,7 +434,14 @@ public sealed partial class SettingsPanel : UserControl
 
         if (WeatherAutoToggle.IsOn)
         {
-            await App.LocationService.ClearManualCityAsync();
+            try
+            {
+                await App.LocationService.ClearManualCityAsync();
+            }
+            catch
+            {
+                Logger.Error("WeatherAutoToggle: failed to clear manual city");
+            }
             WeatherSearchPanel.Visibility = Visibility.Collapsed;
             WeatherSearchBox.Text = "";
             WeatherResultsList.ItemsSource = null;
@@ -499,7 +506,14 @@ public sealed partial class SettingsPanel : UserControl
     {
         if (e.ClickedItem is not CityResult city) return;
 
-        await App.LocationService.SaveManualCityAsync(city.DisplayName, city.Latitude, city.Longitude);
+        try
+        {
+            await App.LocationService.SaveManualCityAsync(city.DisplayName, city.Latitude, city.Longitude);
+        }
+        catch
+        {
+            Logger.Error("WeatherResults: failed to save manual city");
+        }
         WeatherAutoToggle.IsOn = false; // manual override active
         WeatherSearchPanel.Visibility = Visibility.Visible;
         WeatherSearchBox.Text = "";

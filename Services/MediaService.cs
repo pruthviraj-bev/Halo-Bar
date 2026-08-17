@@ -82,7 +82,7 @@ public class MediaService
 
             if (EffectiveSession != null)
             {
-                TriggerStateUpdate();
+                _ = TriggerStateUpdate();
             }
             else
             {
@@ -193,19 +193,19 @@ public class MediaService
     private void OnMediaPropertiesChanged(GlobalSystemMediaTransportControlsSession sender, MediaPropertiesChangedEventArgs args)
     {
         if (SessionTracing) Logger.Info($"[SESSION] MediaPropertiesChanged: {DescribeSession(sender)}");
-        TriggerStateUpdate();
+        _ = TriggerStateUpdate();
     }
 
     private void OnPlaybackInfoChanged(GlobalSystemMediaTransportControlsSession sender, PlaybackInfoChangedEventArgs args)
     {
         if (SessionTracing) Logger.Info($"[SESSION] PlaybackInfoChanged: {DescribeSession(sender)}");
-        TriggerStateUpdate();
+        _ = TriggerStateUpdate();
     }
 
     private void OnTimelinePropertiesChanged(GlobalSystemMediaTransportControlsSession sender, TimelinePropertiesChangedEventArgs args)
     {
         if (SessionTracing) Logger.Info($"[SESSION] TimelinePropertiesChanged: {DescribeSession(sender)}");
-        TriggerStateUpdate();
+        _ = TriggerStateUpdate();
     }
 
     private void AttachSessionEvents(GlobalSystemMediaTransportControlsSession? session)
@@ -229,7 +229,7 @@ public class MediaService
         }
     }
 
-    private async void TriggerStateUpdate()
+    private async Task TriggerStateUpdate()
     {
         var session = EffectiveSession;
         if (session == null) return;
@@ -441,7 +441,7 @@ public class MediaService
         DetachSessionEvents(effective);
         _selectedSession = target;
         AttachSessionEvents(_selectedSession);
-        TriggerStateUpdate();
+        _ = TriggerStateUpdate();
     }
 
     public async Task PlayAsync()
@@ -488,7 +488,7 @@ public class MediaService
         try
         {
             await session.TryChangePlaybackPositionAsync(position.Ticks);
-            TriggerStateUpdate();
+            _ = TriggerStateUpdate();
         }
         catch (Exception ex)
         {
@@ -512,7 +512,7 @@ public class MediaService
                 _ => MediaPlaybackAutoRepeatMode.None,
             };
             await session.TryChangeAutoRepeatModeAsync(next);
-            TriggerStateUpdate();
+            _ = TriggerStateUpdate();
         }
         catch (Exception ex)
         {

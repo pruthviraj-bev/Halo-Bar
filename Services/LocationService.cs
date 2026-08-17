@@ -33,6 +33,9 @@ public sealed class LocationService
         WriteIndented = true
     };
 
+    // Shared per-service client — avoids socket/port churn on the 30-min resolve.
+    private static readonly HttpClient Client = new() { Timeout = TimeSpan.FromSeconds(10) };
+
     private readonly object _gate = new();
     private DispatcherQueueTimer? _pollTimer;
     private bool _isResolving;
@@ -117,10 +120,7 @@ public sealed class LocationService
     {
         try
         {
-            using var client = new HttpClient();
-            client.Timeout = TimeSpan.FromSeconds(10);
-
-            using var response = await client.GetAsync("https://ipwho.is/");
+            using var response = await Client.GetAsync("https://ipwho.is/");
             if (!response.IsSuccessStatusCode) return false;
 
             string json = await response.Content.ReadAsStringAsync();
