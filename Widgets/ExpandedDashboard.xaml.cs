@@ -1247,10 +1247,11 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
 
     private void UpdateFilterVisual()
     {
-        AnimatePillBrush(AllFilterButton, GetThemeBrush(_showPinnedOnly ? "TextSecondaryBrush" : "AccentBrush"),
-            _showPinnedOnly ? null : GetAccentTintBrush());
-        AnimatePillBrush(PinnedFilterButton, GetThemeBrush(_showPinnedOnly ? "AccentBrush" : "TextSecondaryBrush"),
-            _showPinnedOnly ? GetAccentTintBrush() : null);
+        // Active pill = accent text only (no tinted container). The pills keep
+        // their resting clip-item background so the selection is signaled purely
+        // by the text color + weight.
+        AnimatePillBrush(AllFilterButton, GetThemeBrush(_showPinnedOnly ? "TextSecondaryBrush" : "AccentBrush"), null);
+        AnimatePillBrush(PinnedFilterButton, GetThemeBrush(_showPinnedOnly ? "AccentBrush" : "TextSecondaryBrush"), null);
         AllFilterButton.FontWeight = _showPinnedOnly ? Microsoft.UI.Text.FontWeights.Normal : Microsoft.UI.Text.FontWeights.Bold;
         PinnedFilterButton.FontWeight = _showPinnedOnly ? Microsoft.UI.Text.FontWeights.Bold : Microsoft.UI.Text.FontWeights.Normal;
     }
@@ -1263,15 +1264,27 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
     {
         var sb = new Storyboard();
 
+        // IMPORTANT: never animate a shared theme brush in place. The pills'
+        // initial Foreground/Background ARE shared resources (TextSecondaryBrush,
+        // Semantic.Surface.ClipItem, AccentBrush); animating the sub-property
+        // path (Control.Foreground).(SolidColorBrush.Color) mutates the shared
+        // brush for EVERY consumer — TextSecondaryBrush turned accent app-wide,
+        // and both pills stayed highlighted, so the filter looked dead.
+        // Instead, snapshot the current color, install a fresh SolidColorBrush
+        // on the button, and animate that private brush's Color directly.
+
         if (foreground is SolidColorBrush fg)
         {
+            var start = (button.Foreground as SolidColorBrush)?.Color ?? fg.Color;
+            var target = new SolidColorBrush(start);
+            button.Foreground = target;
             var anim = new ColorAnimation
             {
                 To = fg.Color,
                 Duration = new Duration(TimeSpan.FromMilliseconds(120))
             };
-            Storyboard.SetTarget(anim, button);
-            Storyboard.SetTargetProperty(anim, "(Control.Foreground).(SolidColorBrush.Color)");
+            Storyboard.SetTarget(anim, target);
+            Storyboard.SetTargetProperty(anim, "Color");
             sb.Children.Add(anim);
         }
         else
@@ -1281,35 +1294,26 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
 
         if (background is SolidColorBrush bg)
         {
+            var start = (button.Background as SolidColorBrush)?.Color ?? bg.Color;
+            var target = new SolidColorBrush(start);
+            button.Background = target;
             var anim = new ColorAnimation
             {
                 To = bg.Color,
                 Duration = new Duration(TimeSpan.FromMilliseconds(120))
             };
-            Storyboard.SetTarget(anim, button);
-            Storyboard.SetTargetProperty(anim, "(Control.Background).(SolidColorBrush.Color)");
+            Storyboard.SetTarget(anim, target);
+            Storyboard.SetTargetProperty(anim, "Color");
             sb.Children.Add(anim);
         }
         else
         {
-            button.Background = background;
+            // No tint wanted → restore the resting clip-item surface so the
+            // pill never loses its container background.
+            button.Background = GetThemeBrush("Semantic.Surface.ClipItem");
         }
 
         sb.Begin();
-    }
-
-    /// <summary>
-    /// A soft accent-tinted chip background for the active filter pill
-    /// (~12 % accent alpha over the 5 % chip surface).
-    /// </summary>
-    private static Brush? GetAccentTintBrush()
-    {
-        if (Application.Current.Resources.TryGetValue("AccentBrush", out var value) &&
-            value is SolidColorBrush accent)
-        {
-            return new SolidColorBrush(Color.FromArgb(0x1F, accent.Color.R, accent.Color.G, accent.Color.B));
-        }
-        return null;
     }
 
     private static Brush GetThemeBrush(string key)
@@ -1582,13 +1586,19 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
             return;
         }
 
+        // Snapshot + install a fresh brush: the chip's resting background is a
+        // SHARED theme resource (Semantic.Surface.Raised05). Animating the
+        // sub-property path in place would mutate that resource for every
+        // consumer, so we copy the current color onto a private brush first.
+        var target = new SolidColorBrush(from.Color);
+        SettingsGearChip.Background = target;
         var anim = new ColorAnimation
         {
             To = ((SolidColorBrush)to).Color,
             Duration = new Duration(TimeSpan.FromMilliseconds(100))
         };
-        Storyboard.SetTarget(anim, SettingsGearChip);
-        Storyboard.SetTargetProperty(anim, "(Border.Background).(SolidColorBrush.Color)");
+        Storyboard.SetTarget(anim, target);
+        Storyboard.SetTargetProperty(anim, "Color");
         var sb = new Storyboard();
         sb.Children.Add(anim);
         sb.Begin();
