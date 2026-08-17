@@ -18,41 +18,16 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Content Include="Assets\SplashScreen.scale-200.png" />
-    <Content Include="Assets\LockScreenLogo.scale-200.png" />
-    <Content Include="Assets\Square150x150Logo.scale-200.png" />
-    <Content Include="Assets\Square44x44Logo.scale-200.png" />
-    <Content Include="Assets\Square44x44Logo.targetsize-24_altform-unplated.png" />
-    <Content Include="Assets\Square44x44Logo.targetsize-48_altform-lightunplated.png" />
-    <Content Include="Assets\StoreLogo.png" />
-    <Content Include="Assets\AppIcon.ico" />
-    <Content Include="Assets\Wide310x150Logo.scale-200.png" />
-    <!-- PASS 7: Bluetooth device imagery (device-row PNG assets) -->
-    <Content Include="Assets\BluetoothItemIcons\headphone.png" />
-    <Content Include="Assets\BluetoothItemIcons\keyboard.png" />
-    <Content Include="Assets\BluetoothItemIcons\microphone.png" />
-    <Content Include="Assets\BluetoothItemIcons\mobile.png" />
-    <Content Include="Assets\BluetoothItemIcons\mouse.png" />
-    <Content Include="Assets\BluetoothItemIcons\printer.png" />
-    <Content Include="Assets\BluetoothItemIcons\speaker.png" />
-    <Content Include="Assets\BluetoothItemIcons\tv.png" />
-    <Content Include="Assets\BluetoothItemIcons\watch.png" />
-    <!-- PASS 17.1: Meteocons weather icons (MIT, Bas Milius — see LICENSE) -->
-    <Content Include="Assets\Meteocons\clear-day.svg" />
-    <Content Include="Assets\Meteocons\clear-night.svg" />
-    <Content Include="Assets\Meteocons\partly-cloudy-day.svg" />
-    <Content Include="Assets\Meteocons\partly-cloudy-night.svg" />
-    <Content Include="Assets\Meteocons\cloudy.svg" />
-    <Content Include="Assets\Meteocons\rain.svg" />
-    <Content Include="Assets\Meteocons\drizzle.svg" />
-    <Content Include="Assets\Meteocons\extreme-rain.svg" />
-    <Content Include="Assets\Meteocons\snow.svg" />
-    <Content Include="Assets\Meteocons\sleet.svg" />
-    <Content Include="Assets\Meteocons\fog-day.svg" />
-    <Content Include="Assets\Meteocons\fog-night.svg" />
-    <Content Include="Assets\Meteocons\thunderstorms.svg" />
-    <Content Include="Assets\Meteocons\wind.svg" />
-    <Content Include="Assets\Meteocons\LICENSE" />
+    <!-- All runtime assets (Meteocons SVGs, Bluetooth device PNGs, app logos,
+         splash/icon) are loaded at runtime via ms-appx:///Assets/... paths.
+         Explicit CopyToOutputDirectory + CopyToPublishDirectory ensure they
+         reach BOTH bin (dev/F5) and the publish folder (installer). Without
+         this, dotnet publish silently drops the whole Assets tree and the
+         installed exe shows no weather/Bluetooth icons. -->
+    <Content Include="Assets\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
   </ItemGroup>
 
   <ItemGroup>
