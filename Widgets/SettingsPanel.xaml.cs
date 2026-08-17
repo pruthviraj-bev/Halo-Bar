@@ -68,6 +68,23 @@ public sealed partial class SettingsPanel : UserControl
     private void BackButton_Click(object sender, RoutedEventArgs e)
         => BackRequested?.Invoke(this, EventArgs.Empty);
 
+    /// <summary>
+    /// "Check for updates" — opens the Halo Bar GitHub repository in the
+    /// default browser (release page lives on the main repo URL).
+    /// </summary>
+    private async void CheckForUpdates_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            await Windows.System.Launcher.LaunchUriAsync(
+                new Uri("https://github.com/pruthviraj-bev/Halo-Bar"));
+        }
+        catch (Exception ex)
+        {
+            Logger.Error("CheckForUpdates: failed to open repository", ex);
+        }
+    }
+
     // ── Nav ─────────────────────────────────────────────────────────────────
 
     private void SelectNav(string tag)

@@ -256,6 +256,7 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <!-- Header: SETTINGS identity + Back action top-right. Matches the main
@@ -286,10 +287,6 @@
                     <Button x:Name="NavBluetooth" Content="Bluetooth" Style="{StaticResource NavButtonStyle}" Tag="bluetooth" Click="NavButton_Click" />
                     <Button x:Name="NavPrivacy" Content="Privacy" Style="{StaticResource NavButtonStyle}" Tag="privacy" Click="NavButton_Click" />
                 </StackPanel>
-                <TextBlock Text="Version 1.0.0" FontSize="10"
-                           Foreground="{ThemeResource TextSecondaryBrush}"
-                           HorizontalAlignment="Right" VerticalAlignment="Bottom"
-                           Margin="0,0,4,0" />
             </Grid>
 
             <!-- RIGHT CONTENT -->
@@ -516,6 +513,25 @@
                 </StackPanel>
                 </Border>
             </ScrollViewer>
+        </Grid>
+
+        <!-- FOOTER: check for updates + version, pinned to the settings page bottom -->
+        <Grid Grid.Row="2" ColumnDefinitions="Auto,*" Margin="16,0,16,12" VerticalAlignment="Bottom">
+            <Button Grid.Column="0" Click="CheckForUpdates_Click"
+                    Background="{StaticResource Semantic.Surface.Raised05}"
+                    BorderThickness="0" CornerRadius="8" Padding="12,8"
+                    HorizontalAlignment="Left" VerticalAlignment="Center"
+                    UseSystemFocusVisuals="False"
+                    ToolTipService.ToolTip="Open the Halo Bar GitHub page">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <controls:AppIcon Kind="Link" Width="14" Height="14" Fill="{ThemeResource AccentBrush}" VerticalAlignment="Center"/>
+                    <TextBlock Text="Check for updates" FontSize="12" FontWeight="SemiBold"
+                               Foreground="{ThemeResource TextSecondaryBrush}" />
+                </StackPanel>
+            </Button>
+            <TextBlock Grid.Column="1" Text="Version 1.0.0" FontSize="13" Opacity="0.55"
+                       Foreground="{ThemeResource TextSecondaryBrush}"
+                       HorizontalAlignment="Right" VerticalAlignment="Center" />
         </Grid>
     </Grid>
 </UserControl>

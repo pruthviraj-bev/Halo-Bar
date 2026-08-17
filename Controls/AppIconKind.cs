@@ -41,6 +41,7 @@ public enum AppIconKind
     Image,
     Clipboard,
     Copy,
+    Link,
     OpenInNew,
     DragOut,
 
