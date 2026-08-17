@@ -134,6 +134,41 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
         set { if (_cpuPercentText == value) return; _cpuPercentText = value; OnPropertyChanged(); }
     }
 
+    // PASS 20: footer live network throughput (bytes/s → MB/s text).
+    private string _networkDownloadText = "0 MB/s";
+    public string NetworkDownloadText
+    {
+        get => _networkDownloadText;
+        set { if (_networkDownloadText == value) return; _networkDownloadText = value; OnPropertyChanged(); }
+    }
+
+    private string _networkUploadText = "0 MB/s";
+    public string NetworkUploadText
+    {
+        get => _networkUploadText;
+        set { if (_networkUploadText == value) return; _networkUploadText = value; OnPropertyChanged(); }
+    }
+
+    /// <summary>
+    /// Formats a throughput in bytes/s for the footer as MB/s (decimal megabytes,
+    /// /1,000,000 — never bits). One decimal place below 100 MB/s keeps low
+    /// activity visible (0.2 MB/s, 1.2 MB/s); a trailing ".0" is trimmed so
+    /// whole values stay compact (10 MB/s, not 10.0 MB/s). GB/s is only used
+    /// above 1,000 MB/s so normal network usage never switches units/jitters.
+    /// </summary>
+    public static string FormatNetworkRate(long bytesPerSecond)
+    {
+        if (bytesPerSecond >= 1_000_000_000)
+            return $"{FormatValue(bytesPerSecond / 1_000_000_000.0)} GB/s";
+        return $"{FormatValue(bytesPerSecond / 1_000_000.0)} MB/s";
+    }
+
+    private static string FormatValue(double value)
+    {
+        string text = value.ToString("F1");
+        return text.EndsWith(".0") ? text[..^2] : text;
+    }
+
     private string _batteryPercentText = "—";
     public string BatteryPercentText
     {
@@ -655,6 +690,12 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
             StoragePercentText = $"{StoragePercent}%";
         }
         catch { }
+
+        // PASS 20: network throughput — read the service's 1 s cached state
+        // (the service keeps it fresh; no per-tick interface enumeration here).
+        var net = App.NetworkService.CurrentState;
+        NetworkDownloadText = FormatNetworkRate(net.DownloadBytesPerSecond);
+        NetworkUploadText = FormatNetworkRate(net.UploadBytesPerSecond);
 
         // 6. Live clipboard
         var clip = App.ClipboardService.CurrentItem;
@@ -1369,6 +1410,16 @@ public sealed partial class ExpandedDashboard : UserControl, INotifyPropertyChan
     }
 
     // ── Mute toggle click ──────────────────────────────────────────────────
+
+    private void MusicCard_PointerWheelChanged(object sender, PointerRoutedEventArgs e)
+    {
+        e.Handled = true;
+        int delta = e.GetCurrentPoint(MusicCardBorder).Properties.MouseWheelDelta;
+        int current = App.VolumeService.CurrentState.VolumePercent;
+        App.VolumeService.SetVolume(Math.Clamp(current + (delta > 0 ? 3 : -3), 0, 100));
+        OnPropertyChanged(nameof(VolumePercentValue));
+        OnPropertyChanged(nameof(VolumeIconKind));
+    }
 
     private void VolumeSlider_ValueChanged(object sender, RangeBaseValueChangedEventArgs e)
     {

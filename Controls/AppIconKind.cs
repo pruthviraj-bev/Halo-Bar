@@ -76,4 +76,8 @@ public enum AppIconKind
     Cpu,
     Ram,
     Disk,
+
+    // PASS 20: footer live network throughput
+    Download,
+    Upload,
 }

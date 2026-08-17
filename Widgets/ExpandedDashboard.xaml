@@ -198,7 +198,7 @@
                                 <primitives:Thumb.Template>
                                     <ControlTemplate TargetType="primitives:Thumb">
                                         <Border x:Name="ThumbVisual" CornerRadius="2" Margin="3,0,3,0"
-                                                Background="{TemplateBinding Background}" />
+                                                Background="{TemplateBinding Background}" Opacity="0.1" />
                                     </ControlTemplate>
                                 </primitives:Thumb.Template>
                             </primitives:Thumb>
@@ -280,7 +280,7 @@
                                 <primitives:Thumb.Template>
                                     <ControlTemplate TargetType="primitives:Thumb">
                                         <Border x:Name="ThumbVisual" CornerRadius="2" Margin="3,0,3,0"
-                                                Background="{TemplateBinding Background}" />
+                                                Background="{TemplateBinding Background}" Opacity="0.1" />
                                     </ControlTemplate>
                                 </primitives:Thumb.Template>
                             </primitives:Thumb>
@@ -778,10 +778,12 @@
                      + Radius.Large like the other cards. Padding = Spacing.M (12)
                      materialized — Thickness cannot consume the x:Double token.
                      Content untouched. -->
-                <Border Grid.Row="1"
+                <Border x:Name="MusicCardBorder"
+                        Grid.Row="1"
                         Background="{StaticResource Semantic.Surface.CardTint}"
                         CornerRadius="{StaticResource Radius.Large}"
-                        Padding="12">
+                        Padding="12"
+                        PointerWheelChanged="MusicCard_PointerWheelChanged">
             <Grid RowDefinitions="Auto,*,Auto">
                 <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,6">
                     <!-- PASS 5.4: VerticalAlignment=Top (same as the Focus header group) — the
@@ -903,6 +905,16 @@
                     <controls:AppIcon Kind="Disk" Width="12" Height="12" Fill="{ThemeResource TextSecondaryBrush}" VerticalAlignment="Center"/>
                     <TextBlock Text="DISK" FontSize="10" Foreground="{ThemeResource TextSecondaryBrush}" VerticalAlignment="Center"/>
                     <TextBlock Text="{x:Bind StoragePercentText, Mode=OneWay}" FontSize="10" FontWeight="SemiBold" Foreground="{ThemeResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+                </StackPanel>
+                <!-- PASS 20: live network throughput — separate ↓ (download) and
+                     ↑ (upload) readouts, updated by the 1 s stats tick. Values sit
+                     in fixed-width TextBlocks so digit changes never shift the
+                     weather/gear (anchored right via the star spacer). -->
+                <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                    <controls:AppIcon Kind="Download" Width="12" Height="12" Fill="{ThemeResource TextSecondaryBrush}" VerticalAlignment="Center"/>
+                    <TextBlock Text="{x:Bind NetworkDownloadText, Mode=OneWay}" FontSize="10" FontWeight="SemiBold" Foreground="{ThemeResource TextPrimaryBrush}" VerticalAlignment="Center" MinWidth="40"/>
+                    <controls:AppIcon Kind="Upload" Width="12" Height="12" Fill="{ThemeResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="6,0,0,0"/>
+                    <TextBlock Text="{x:Bind NetworkUploadText, Mode=OneWay}" FontSize="10" FontWeight="SemiBold" Foreground="{ThemeResource TextPrimaryBrush}" VerticalAlignment="Center" MinWidth="40"/>
                 </StackPanel>
             </StackPanel>
 

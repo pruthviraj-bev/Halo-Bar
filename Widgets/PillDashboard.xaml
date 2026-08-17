@@ -50,7 +50,7 @@
                                 <primitives:Thumb.Template>
                                     <ControlTemplate TargetType="primitives:Thumb">
                                         <Border x:Name="ThumbVisual" CornerRadius="2" Margin="3,0,3,0"
-                                                Background="{TemplateBinding Background}"/>
+                                                Background="{TemplateBinding Background}" Opacity="0.1"/>
                                     </ControlTemplate>
                                 </primitives:Thumb.Template>
                             </primitives:Thumb>
