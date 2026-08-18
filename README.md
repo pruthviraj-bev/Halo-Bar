@@ -89,9 +89,7 @@ Key design principles:
 Watch Halo Bar in action:
 
 <p align="center">
-  <a href="showcase/demo-video.mp4">
-    <img src="showcase/demo-screenshot-1.png" alt="Play demo video" width="70%">
-  </a>
+  <video src="https://raw.githubusercontent.com/pruthviraj-bev/Halo-Bar/main/showcase/demo-video.mp4" controls width="80%"></video>
 </p>
 
 Demo screenshots:
