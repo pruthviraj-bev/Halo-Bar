@@ -46,6 +46,7 @@
     <li>
       <a href="#about-the-project">About The Project</a>
       <ul>
+        <li><a href="#showcase">Showcase</a></li>
         <li><a href="#built-with">Built With</a></li>
       </ul>
     </li>
@@ -80,6 +81,27 @@ Key design principles:
 - **Live & real** — real CPU/RAM/disk/network metrics, real weather, real clipboard history, real media session metadata.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+
+
+### Showcase
+
+Watch Halo Bar in action:
+
+<p align="center">
+  <video src="showcase/demo-video.mp4" controls width="100%"></video>
+</p>
+
+Demo screenshots:
+
+<p align="center">
+  <img src="showcase/demo-screenshot-1.png" alt="Demo screenshot 1" width="45%">
+  <img src="showcase/demo-screenshot-2.png" alt="Demo screenshot 2" width="45%">
+  <img src="showcase/demo-screenshot-3.png" alt="Demo screenshot 3" width="45%">
+  <img src="showcase/demo-screenshot-4.png" alt="Demo screenshot 4" width="45%">
+  <img src="showcase/demo-screenshot-5.png" alt="Demo screenshot 5" width="45%">
+  <img src="showcase/demo-screenshot-6.png" alt="Demo screenshot 6" width="45%">
+</p>
 
 
 
