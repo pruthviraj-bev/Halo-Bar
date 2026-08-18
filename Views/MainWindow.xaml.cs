@@ -321,19 +321,25 @@ public sealed partial class MainWindow : Window
             // wallpaper. Tune these two floats only if the glass reads too
             // light/dark on the user's desktop.
             // PASS 9 (pill transparency): lowered the window tint so the pill
-            // (and dashboard) bleed the wallpaper — black 0.04 tint + 0.25
+            // (and dashboard) bleed the wallpaper — black 0.35 tint + 0.12
             // luminosity. Iterated from 0.15/0.55 (solid slab) → 0.08/0.35
-            // (bleeding, still blackish) → 0.04/0.25 (more translucent).
+            // (bleeding, still blackish) → 0.10/0.25 (still too much wallpaper
+            // bleed, unreadable) → 0.35/0.12 (user-feedback dark, readable).
             _acrylicController.TintColor = Windows.UI.Color.FromArgb(255, 0, 0, 0);
-            _acrylicController.TintOpacity = 0.04f;
-            _acrylicController.LuminosityOpacity = 0.25f;
+            _acrylicController.TintOpacity = 0.35f;
+            _acrylicController.LuminosityOpacity = 0.12f;
 
             var supportsSystemBackdrop = this.As<ICompositionSupportsSystemBackdrop>();
             _acrylicController.AddSystemBackdropTarget(supportsSystemBackdrop);
             _acrylicController.SetSystemBackdropConfiguration(_configuration);
+            // The container (DashboardBorder) gets its own dark translucent fill so
+            // the wallpaper bleed behind/between the cards is tamed. The cards keep
+            // their own CardTint on top, so the container is the layer that must be
+            // dark enough to keep the expanded dashboard readable. The compact pill
+            // stays pure acrylic (wallpaper-bleeding) — it has no cards on top.
             PillBorder.Background = null;
-            DashboardBorder.Background = null;
-            Helpers.Logger.Info("[WINDOW] Acrylic: window-level DesktopAcrylicController (PASS 38 default — region-clipped glass under WS_EX_LAYERED, dark translucent).");
+            DashboardBorder.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(0x80, 0, 0, 0)); // 50% black
+            Helpers.Logger.Info("[WINDOW] Acrylic: window-level DesktopAcrylicController (PASS 38 default — region-clipped glass under WS_EX_LAYERED, dark translucent). Container = 50% black fill for readability; pill = pure acrylic.");
             return;
         }
 
@@ -345,13 +351,13 @@ public sealed partial class MainWindow : Window
         // backdrop because there is nothing behind it to blur inside the
         // layered window.
         // PASS 9 (pill transparency): fallback brush follows the same intent
-        // as the window-level backdrop — black @ 0.04, matching the lowered
+        // as the window-level backdrop — black @ 0.35, matching the lowered
         // global tint.
         var shaped = new AcrylicBrush
         {
             TintColor = Windows.UI.Color.FromArgb(255, 0, 0, 0),
-            TintOpacity = 0.04,
-            TintLuminosityOpacity = 0.25,
+            TintOpacity = 0.35,
+            TintLuminosityOpacity = 0.12,
         };
         PillBorder.Background = shaped;
         DashboardBorder.Background = shaped;

@@ -765,6 +765,8 @@
                 <Border x:Name="MusicCardBorder"
                         Grid.Row="1"
                         Background="{StaticResource Semantic.Surface.CardTint}"
+                        BorderBrush="{StaticResource Semantic.Border.Default}"
+                        BorderThickness="1"
                         CornerRadius="{StaticResource Radius.Large}"
                         Padding="12"
                         PointerWheelChanged="MusicCard_PointerWheelChanged">

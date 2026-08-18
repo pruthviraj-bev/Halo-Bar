@@ -65,14 +65,14 @@
          dashboard (~15% tint) but stay translucent — never opaque black. -->
     <SolidColorBrush x:Key="Semantic.Surface.CardTint" Color="#33000000" />
 
-    <!-- PASS 6 (V1 REDESIGN): clipboard item cards + filter pills — white @ ~5%
-         (α 0x0D) over the CardTint surface, so rows read as content sitting
+    <!-- PASS 6 (V1 REDESIGN): clipboard item cards + filter pills — white @ ~10%
+         (α 0x1A) over the CardTint surface, so rows read as content sitting
          inside the glass (subtle raise, never separate windows). -->
-    <SolidColorBrush x:Key="Semantic.Surface.ClipItem" Color="#0DFFFFFF" />
+    <SolidColorBrush x:Key="Semantic.Surface.ClipItem" Color="#1AFFFFFF" />
 
-    <!-- Item-row hover: +1% white over ClipItem (α 0x0D → 0x10) — a restrained
+    <!-- Item-row hover: +2% white over ClipItem (α 0x1A → 0x1D) — a restrained
          brighten on the Bluetooth/clipboard rows, no elevation edge. -->
-    <SolidColorBrush x:Key="Semantic.Surface.ClipItemHover" Color="#10FFFFFF" />
+    <SolidColorBrush x:Key="Semantic.Surface.ClipItemHover" Color="#1DFFFFFF" />
 
     <!-- PASS 6 (V1 REDESIGN): clipboard search field — black @ ~5% (α 0x0D),
          a recessed glass input on the CardTint surface (inputs recede, items
@@ -80,7 +80,7 @@
     <SolidColorBrush x:Key="Semantic.Surface.SearchInput" Color="#0D000000" />
 
     <!-- NEW — default card border, visible against the transparent taskbar. -->
-    <SolidColorBrush x:Key="Semantic.Border.Default" Color="#26FFFFFF" />
+    <SolidColorBrush x:Key="Semantic.Border.Default" Color="#14FFFFFF" />
 
     <!-- NEW — subtler divider/hairline border. -->
     <SolidColorBrush x:Key="Semantic.Border.Subtle" Color="#14FFFFFF" />

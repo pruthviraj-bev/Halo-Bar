@@ -62,6 +62,7 @@
                 Style="{StaticResource Elevation.Flat}"
                 Background="{StaticResource Semantic.Surface.CardTint}"
                 BorderBrush="{StaticResource Semantic.Border.Default}"
+                BorderThickness="1"
                 CornerRadius="{StaticResource Radius.Large}">
             <Grid>
                 <Grid.RowDefinitions>
