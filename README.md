@@ -20,7 +20,7 @@
 <br />
 <div align="center">
   <a href="https://github.com/pruthviraj-bev/Halo-Bar">
-    <img src="Assets/logo/halo-bar-logo-1080x1080.png" alt="Logo" width="120" height="120">
+    <img src="Assets/logo/halo-bar-logo-1080x1080.png" alt="Logo" width="200" height="200">
   </a>
 
   <h3 align="center">Halo Bar</h3>
