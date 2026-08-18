@@ -18,7 +18,7 @@
   <Properties>
     <DisplayName>DynamicIsland</DisplayName>
     <PublisherDisplayName>AppPublisher</PublisherDisplayName>
-    <Logo>Assets\StoreLogo.png</Logo>
+    <Logo>Assets\logo\halo-bar-logo.png</Logo>
   </Properties>
 
   <Dependencies>
@@ -38,9 +38,9 @@
         DisplayName="DynamicIsland"
         Description="DynamicIsland"
         BackgroundColor="transparent"
-        Square150x150Logo="Assets\Square150x150Logo.png"
-        Square44x44Logo="Assets\Square44x44Logo.png">
-        <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" />
+        Square150x150Logo="Assets\logo\halo-bar-logo.png"
+        Square44x44Logo="Assets\logo\halo-bar-logo.png">
+        <uap:DefaultTile Wide310x150Logo="Assets\logo\halo-bar-logo.png" />
         <uap:SplashScreen Image="Assets\SplashScreen.png" />
       </uap:VisualElements>
     </Application>
