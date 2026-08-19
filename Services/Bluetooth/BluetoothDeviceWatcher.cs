@@ -69,6 +69,14 @@ public sealed class BluetoothDeviceWatcher
 
     public bool IsRunning => _started;
 
+    /// <summary>
+    /// Re-fetches one device's full snapshot and raises <see cref="DeviceUpdated"/>.
+    /// Used by the service to re-verify a device whose connection latch expired
+    /// (see BluetoothService): it distinguishes "genuinely still connected" from
+    /// "disconnected but present" without waiting for a spontaneous watcher event.
+    /// </summary>
+    public void Refresh(string id) => _ = RefreshAndRaiseUpdatedAsync(id);
+
     public void Start()
     {
         if (_started) return;

@@ -237,6 +237,18 @@ public class MediaService
         try
         {
             var props = await session.TryGetMediaPropertiesAsync();
+
+            // The effective session may have changed while the async read was in
+            // flight (user switched source with the arrow buttons, or auto-follow
+            // moved to another player). Publishing these stale props would show
+            // the wrong track/art — or blank the correct art — so drop the read
+            // and let the freshly-selected source's own update win.
+            if (!ReferenceEquals(session, EffectiveSession))
+            {
+                Helpers.Logger.Info("MediaService: effective session changed during state read, dropping stale props");
+                return;
+            }
+
             var playbackInfo = session.GetPlaybackInfo();
             bool isPlaying = playbackInfo?.PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
             var timeline = session.GetTimelineProperties();

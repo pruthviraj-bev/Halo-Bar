@@ -32,9 +32,13 @@ public class BluetoothService
     // (observed on a paired phone: the flag asserted True, the popup fired,
     // then the flag dropped again). Latched Connected sightings keep the UI
     // honest until the device is genuinely gone or stays silent long enough
-    // that the latch expires.
-    private const long ConnectedLatchMs = 60_000;
+    // that the latch expires. The latch is expired by a periodic timer (not
+    // only by the next watcher event) so a device that disconnects and then
+    // stays silent — buds powered off in the case — cannot linger as
+    // "Connected" forever in the cache.
+    private const long ConnectedLatchMs = 5_000;
     private readonly Dictionary<string, long> _connectedSince = new();
+    private readonly DispatcherQueueTimer _latchExpiryTimer;
     private Radio? _radio;
     private bool _initialized;
 
@@ -59,12 +63,22 @@ public class BluetoothService
         _watcher.DeviceRemoved += (_, id) => OnDeviceRemoved(id);
         _watcher.EnumerationCompleted += (_, _) => OnEnumerationCompleted();
         _watcher.WatcherStopped += OnWatcherStopped;
+
+        // Ticks on the UI thread (same dispatcher as the watcher events), so the
+        // latch bookkeeping it touches (_connectedSince, the cache) stays on one
+        // thread. Fires well below the latch window so an expired latch is
+        // reverted within a few seconds of aging out.
+        _latchExpiryTimer = _dispatcherQueue.CreateTimer();
+        _latchExpiryTimer.Interval = TimeSpan.FromMilliseconds(ConnectedLatchMs / 3);
+        _latchExpiryTimer.IsRepeating = true;
+        _latchExpiryTimer.Tick += OnLatchExpiryTick;
     }
 
     public void Initialize()
     {
         if (_initialized) return;
         _initialized = true;
+        _latchExpiryTimer.Start();
         _ = DiscoverRadioAsync();
     }
 
@@ -196,6 +210,32 @@ public class BluetoothService
         else
         {
             _connectedSince.Remove(device.Id);
+        }
+    }
+
+    /// <summary>
+    /// Expires connection latches even when the device goes silent. A latched
+    /// device (disconnected but still present) that stops sending watcher
+    /// events would otherwise stay "Connected" forever — the latch was only
+    /// ever released by the next event. On expiry the device is re-queried:
+    /// a genuinely connected device re-latches (fresh timestamp), a genuinely
+    /// disconnected one reverts to Disconnected.
+    /// </summary>
+    private void OnLatchExpiryTick(DispatcherQueueTimer sender, object args)
+    {
+        long now = Environment.TickCount64;
+        List<string>? expired = null;
+        foreach (var (id, last) in _connectedSince)
+        {
+            if (now - last >= ConnectedLatchMs)
+                (expired ??= new List<string>()).Add(id);
+        }
+        if (expired == null) return;
+
+        foreach (var id in expired)
+        {
+            _connectedSince.Remove(id);
+            _watcher.Refresh(id);
         }
     }
 

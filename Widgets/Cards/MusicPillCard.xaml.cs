@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices.WindowsRuntime;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -119,8 +120,10 @@ public sealed partial class MusicPillCard : UserControl, IPillCard, INotifyPrope
     // changes or the previous decode is older than the cooldown.
     private string _lastThumbKey = string.Empty;
     private DateTime _lastThumbDecodeUtc = DateTime.MinValue;
+    private long _thumbGen; // bumped on every LoadThumbnailAsync — stale decodes are dropped
     private const double ThumbDecodeCooldownSeconds = 10;
     private const int ThumbDecodePixelWidth = 160;
+    private const double ThumbDecodeMaxWaitMs = 5000;
 
     // ── Construction ─────────────────────────────────────────────────────────
     public MusicPillCard()
@@ -168,7 +171,7 @@ public sealed partial class MusicPillCard : UserControl, IPillCard, INotifyPrope
         _dispatcherQueue.TryEnqueue(async () =>
         {
             ApplyState(state);
-            await LoadThumbnailAsync(state.Thumbnail);
+            await LoadThumbnailAsync(state.Thumbnail, state.SourceAppUserModelId, state.SourceName);
         });
     }
 
@@ -182,35 +185,60 @@ public sealed partial class MusicPillCard : UserControl, IPillCard, INotifyPrope
     }
 
     private async System.Threading.Tasks.Task LoadThumbnailAsync(
-        IRandomAccessStreamReference? thumbRef)
+        IRandomAccessStreamReference? thumbRef, string sourceAumid, string sourceName)
     {
+        // Generation guard: fast source switches start many async decodes; a slow
+        // read for an OLD source must not overwrite the new source's art when it
+        // finishes late. Only the latest generation may apply its result.
+        long gen = ++_thumbGen;
+
         if (thumbRef == null)
         {
             _lastThumbKey = string.Empty;
-            Thumbnail = null;
+            if (gen == _thumbGen) Thumbnail = null;
             return;
         }
 
-        string key = $"{Title}|{Artist}";
-        if (key == _lastThumbKey
+        // Key includes the source AUMID so switching between two players on the
+        // same track always re-decodes. Reserved only on success; blank art always
+        // retries.
+        string key = $"{sourceAumid}|{Title}|{Artist}";
+        if (Thumbnail != null
+            && key == _lastThumbKey
             && (DateTime.UtcNow - _lastThumbDecodeUtc).TotalSeconds < ThumbDecodeCooldownSeconds)
         {
-            return; // Same track, recently decoded — skip the redundant re-decode.
+            return; // Same track from the same source, recently decoded.
         }
-        _lastThumbKey = key;
-        _lastThumbDecodeUtc = DateTime.UtcNow;
 
         try
         {
-            var stream = await thumbRef.OpenReadAsync();
+            // Bound the stream-open wait: during a source switch the old session's
+            // in-flight stream can hang; a bounded wait lets the new art win.
+            var openTask = thumbRef.OpenReadAsync().AsTask();
+            if (await Task.WhenAny(openTask, System.Threading.Tasks.Task.Delay(TimeSpan.FromMilliseconds(ThumbDecodeMaxWaitMs))) != openTask)
+            {
+                return;
+            }
+            var stream = await openTask;
             var bitmap = new BitmapImage { DecodePixelWidth = ThumbDecodePixelWidth };
             using (stream)
                 await bitmap.SetSourceAsync(stream);
+            // A newer decode has started — this result is stale.
+            if (gen != _thumbGen) return;
+            // Reserve the throttle key only on success so failed decodes stay retryable.
+            _lastThumbKey = key;
+            _lastThumbDecodeUtc = DateTime.UtcNow;
             Thumbnail = bitmap;
         }
         catch
         {
-            Thumbnail = null;
+            // A newer decode is in flight — leave the current art alone.
+            if (gen != _thumbGen) return;
+            // Keep art that still matches the current track; only clear on a real change.
+            if (_lastThumbKey != key)
+            {
+                Thumbnail = null;
+            }
         }
     }
 
